@@ -1,15 +1,36 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { CheckCircle, Download, UserPlus, ArrowRight } from 'lucide-react';
+import { CheckCircle, Download, UserPlus, ArrowRight, Calendar, MapPin, Car, ShieldCheck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { bookingService } from '../../services/bookingService';
 
 export function BookingConfirmation() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const navigate = useNavigate();
+  const [booking, setBooking] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  useEffect(() => {
+    async function fetchBooking() {
+      if (!bookingId) return;
+      try {
+        const data = await bookingService.getBookingById(bookingId);
+        setBooking(data);
+        if (data?.metadata?.guest_info?.email) {
+          setEmail(data.metadata.guest_info.email);
+        }
+      } catch (error) {
+        console.error('Error fetching booking:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchBooking();
+  }, [bookingId]);
 
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,75 +38,151 @@ export function BookingConfirmation() {
       toast.error('Passwords do not match');
       return;
     }
-    // Logic to create account and link guest data
-    toast.success('Account created successfully!');
+    // In a real app, you'd call an auth service here to register the guest
+    toast.success('Account created successfully! Welcome to the family.');
     navigate('/client');
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="animate-spin text-primary" size={48} />
+      </div>
+    );
+  }
+
   return (
     <div className="pt-32 pb-20 bg-background min-h-screen">
-      <div className="max-w-3xl mx-auto px-6">
+      <div className="max-w-4xl mx-auto px-6 space-y-12">
+        {/* Success Header */}
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-12 rounded-[40px] bg-card border border-white/5 text-center"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="relative p-12 rounded-[48px] bg-card border border-white/5 text-center overflow-hidden"
         >
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
           <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-8">
             <CheckCircle className="text-primary" size={48} />
           </div>
-          <h1 className="text-4xl font-serif font-black italic text-white mb-4">Booking Confirmed! Your Adventure Awaits.</h1>
-          <p className="text-muted-foreground mb-8">Booking ID: {bookingId}</p>
+          <h1 className="text-5xl font-serif font-black italic text-white mb-4 tracking-tight">Booking Confirmed!</h1>
+          <p className="text-primary font-black uppercase tracking-[0.3em] text-sm mb-8">Your Adventure Awaits</p>
           
-          <button className="px-8 py-4 bg-white/5 rounded-2xl text-white font-bold flex items-center gap-2 mx-auto hover:bg-white/10 transition-all">
-            <Download size={18} /> Download Contract (PDF)
+          <div className="flex flex-wrap justify-center gap-4 mb-8">
+            <div className="px-6 py-3 bg-white/5 rounded-full border border-white/10 text-xs font-bold text-white/60">
+              Booking ID: <span className="text-white">{bookingId}</span>
+            </div>
+            <div className="px-6 py-3 bg-white/5 rounded-full border border-white/10 text-xs font-bold text-white/60">
+              Status: <span className="text-primary uppercase">{booking?.status?.replace('_', ' ')}</span>
+            </div>
+          </div>
+
+          <button className="px-10 py-5 bg-white text-black font-black uppercase tracking-widest text-xs rounded-full flex items-center gap-3 mx-auto hover:bg-primary transition-all hover:scale-105 active:scale-95 shadow-xl shadow-white/5">
+            <Download size={18} /> Download Rental Contract
           </button>
         </motion.div>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mt-12 p-12 rounded-[40px] bg-card border border-white/5"
-        >
-          <div className="flex items-center gap-4 mb-6">
-            <UserPlus className="text-primary" size={32} />
-            <h2 className="text-2xl font-serif font-black italic text-white">Want to make your next booking even faster?</h2>
-          </div>
-          <p className="text-muted-foreground mb-8">Create an account now and save your details for 1-click bookings, track past rentals, and unlock exclusive discounts.</p>
-          
-          <form onSubmit={handleCreateAccount} className="space-y-4">
-            <input 
-              type="email" 
-              placeholder="Email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm text-white focus:ring-2 focus:ring-primary/50 outline-none"
-            />
-            <input 
-              type="password" 
-              placeholder="Set Password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm text-white focus:ring-2 focus:ring-primary/50 outline-none"
-            />
-            <input 
-              type="password" 
-              placeholder="Confirm Password"
-              required
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm text-white focus:ring-2 focus:ring-primary/50 outline-none"
-            />
-            <button 
-              type="submit"
-              className="w-full py-6 bg-primary rounded-2xl text-black font-black uppercase tracking-widest flex items-center justify-center gap-4 hover:bg-primary/90 transition-all"
-            >
-              Create My Account <ArrowRight size={18} />
-            </button>
-          </form>
-        </motion.div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          {/* Booking Summary */}
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            className="p-10 rounded-[40px] bg-card border border-white/5 space-y-8"
+          >
+            <h2 className="text-2xl font-serif font-black italic text-white">Trip Summary</h2>
+            
+            <div className="space-y-6">
+              <div className="flex gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-primary shrink-0">
+                  <Car size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Vehicle</p>
+                  <p className="text-sm font-bold text-white">{booking?.cars?.make} {booking?.cars?.model} ({booking?.cars?.year})</p>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-primary shrink-0">
+                  <Calendar size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Rental Period</p>
+                  <p className="text-sm font-bold text-white">{booking?.start_date} — {booking?.end_date}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-primary shrink-0">
+                  <MapPin size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Pickup Location</p>
+                  <p className="text-sm font-bold text-white">{booking?.pickup_location}</p>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-white/5 flex justify-between items-center">
+                <div className="flex items-center gap-2 text-primary">
+                  <ShieldCheck size={16} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Fully Insured</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Total Paid</p>
+                  <p className="text-2xl font-black text-white">${booking?.total_amount?.toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Account Creation */}
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3 }}
+            className="p-10 rounded-[40px] bg-primary/5 border border-primary/10 space-y-8"
+          >
+            <div className="space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                <UserPlus size={24} />
+              </div>
+              <h2 className="text-2xl font-serif font-black italic text-white">Unlock VIP Access</h2>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Convert your guest booking into a permanent account to track your rentals, manage documents, and unlock exclusive loyalty rewards.
+              </p>
+            </div>
+            
+            <form onSubmit={handleCreateAccount} className="space-y-4">
+              <input 
+                type="email" placeholder="Email" required
+                value={email} onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-[20px] text-sm text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <input 
+                  type="password" placeholder="Password" required
+                  value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-[20px] text-sm text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                />
+                <input 
+                  type="password" placeholder="Confirm" required
+                  value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-[20px] text-sm text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                />
+              </div>
+              <button 
+                type="submit"
+                className="w-full py-5 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-xs flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group"
+              >
+                Create My Account <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </button>
+            </form>
+
+            <p className="text-[10px] text-center text-white/40 font-bold uppercase tracking-widest">
+              Already have an account? <Link to="/login" className="text-primary hover:underline">Sign In</Link>
+            </p>
+          </motion.div>
+        </div>
       </div>
     </div>
   );

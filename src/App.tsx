@@ -16,6 +16,7 @@ import { Contact } from './components/public/Contact';
 import { BrowseCars } from './components/public/BrowseCars';
 import { CarDetails } from './components/public/CarDetails';
 import { BookingConfirmation } from './components/public/BookingConfirmation';
+import { SunsetRays } from './components/SunsetRays';
 
 export default function App() {
   const { subdomain } = useSubdomain();
@@ -29,6 +30,7 @@ export default function App() {
         <AuthProvider>
           <div className="relative min-h-screen">
             <Toaster position="top-right" richColors />
+            <SunsetRays />
             
             {subdomain === 'www' && (
             <PublicLayout>

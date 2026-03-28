@@ -219,9 +219,10 @@ export function AdminHeroContent() {
         media_url: publicUrl,
         media_type: file.type.startsWith('video') ? 'video' : 'image'
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      toast.error('Failed to upload file');
+      const message = error.message || 'Failed to upload file';
+      toast.error(`Upload error: ${message}`);
     } finally {
       setUploading(false);
     }
@@ -245,10 +246,12 @@ export function AdminHeroContent() {
     }
 
     const promise = (async () => {
-      await adminService.createHeroContent({
+      const payload = {
         ...formData,
+        car_id: formData.car_id === "" ? null : formData.car_id,
         display_order: content.length
-      });
+      };
+      await adminService.createHeroContent(payload);
       setIsAdding(false);
       setFormData({
         car_id: '',

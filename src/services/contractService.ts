@@ -1,6 +1,26 @@
+import { supabase, handleSupabaseError } from '../lib/supabase';
+
 export const contractService = {
+  getMasterContract: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('contracts_master')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error fetching master contract:', error);
+      return null;
+    }
+  },
+
   generateContract: async (data: any) => {
-    // Simulate PDF generation
-    return 'https://example.com/contract.pdf';
+    const masterContract = await contractService.getMasterContract();
+    return masterContract?.contract_url || 'https://example.com/contract.pdf';
   }
 };

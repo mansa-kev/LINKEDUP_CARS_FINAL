@@ -1024,9 +1024,17 @@ export const adminService = {
   },
 
   createHeroContent: async (content: any) => {
+    // Sanitize payload to ensure correct types for Supabase
+    const sanitizedContent = {
+      ...content,
+      car_id: (content.car_id === "" || !content.car_id) ? null : content.car_id,
+      display_order: parseInt(content.display_order) || 0,
+      is_active: Boolean(content.is_active)
+    };
+
     const { data, error } = await supabase
       .from('hero_content')
-      .insert([content])
+      .insert([sanitizedContent])
       .select();
     if (error) return handleSupabaseError(error, 'createHeroContent');
     return data;

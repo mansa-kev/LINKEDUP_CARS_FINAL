@@ -812,7 +812,7 @@ export function AdminCars() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Year *</label>
-                      <input type="number" required value={formData.year} onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
+                      <input type="number" required value={formData.year || ''} onChange={(e) => setFormData({ ...formData, year: e.target.value === '' ? undefined : parseInt(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">License Plate *</label>
@@ -847,15 +847,15 @@ export function AdminCars() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Daily Rate ($) *</label>
-                      <input type="number" required min="1" value={formData.daily_rate} onChange={(e) => setFormData({ ...formData, daily_rate: parseFloat(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
+                      <input type="number" required min="1" value={formData.daily_rate || ''} onChange={(e) => setFormData({ ...formData, daily_rate: e.target.value === '' ? undefined : parseFloat(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Overtime Rate ($/hr) *</label>
-                      <input type="number" required min="0" value={formData.overtime_rate} onChange={(e) => setFormData({ ...formData, overtime_rate: parseFloat(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
+                      <input type="number" required min="0" value={formData.overtime_rate || ''} onChange={(e) => setFormData({ ...formData, overtime_rate: e.target.value === '' ? undefined : parseFloat(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Security Deposit ($) *</label>
-                      <input type="number" required min="0" value={formData.security_deposit} onChange={(e) => setFormData({ ...formData, security_deposit: parseFloat(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
+                      <input type="number" required min="0" value={formData.security_deposit || ''} onChange={(e) => setFormData({ ...formData, security_deposit: e.target.value === '' ? undefined : parseFloat(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
                     </div>
                     <div className="col-span-1 md:col-span-3 space-y-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Current Status *</label>
@@ -960,11 +960,57 @@ export function AdminCars() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Seats *</label>
-                      <input type="number" required min="1" value={formData.seats} onChange={(e) => setFormData({ ...formData, seats: parseInt(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
+                      <input type="number" required min="1" value={formData.seats || ''} onChange={(e) => setFormData({ ...formData, seats: e.target.value === '' ? undefined : parseInt(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
                     </div>
-                    <div className="col-span-1 md:col-span-3 space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Features Checklist (Comma separated)</label>
-                      <textarea rows={2} value={formData.features?.join(', ')} onChange={(e) => setFormData({ ...formData, features: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" placeholder="Leather Seats, Sunroof, Apple CarPlay"></textarea>
+                    <div className="col-span-1 md:col-span-3 space-y-4">
+                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Luxury Features</label>
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {formData.features?.map((feature, idx) => (
+                          <span key={idx} className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full flex items-center gap-2 group">
+                            {feature}
+                            <button 
+                              type="button" 
+                              onClick={() => setFormData({ ...formData, features: formData.features?.filter((_, i) => i !== idx) })}
+                              className="hover:text-red-500 transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          id="new-feature-input"
+                          className="flex-1 px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" 
+                          placeholder="Add a feature (e.g. Leather Seats) and press Enter or comma"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ',') {
+                              e.preventDefault();
+                              const val = (e.target as HTMLInputElement).value.trim().replace(/,$/, '');
+                              if (val && !formData.features?.includes(val)) {
+                                setFormData({ ...formData, features: [...(formData.features || []), val] });
+                                (e.target as HTMLInputElement).value = '';
+                              }
+                            }
+                          }}
+                        />
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const input = document.getElementById('new-feature-input') as HTMLInputElement;
+                            const val = input.value.trim();
+                            if (val && !formData.features?.includes(val)) {
+                              setFormData({ ...formData, features: [...(formData.features || []), val] });
+                              input.value = '';
+                            }
+                          }}
+                          className="px-4 py-2 bg-primary/10 text-primary rounded-xl text-xs font-bold hover:bg-primary/20 transition-all"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Tip: Press Enter or use a comma to add multiple features quickly.</p>
                     </div>
                   </div>
                 </div>

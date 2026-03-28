@@ -12,7 +12,8 @@ import {
   Calendar,
   Star,
   ArrowRight,
-  Heart
+  Heart,
+  X
 } from 'lucide-react';
 import { fleetService } from '../../services/fleetService';
 import { Car } from '../../types';
@@ -24,6 +25,7 @@ export function CarDetails() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState(0);
+  const [showBooking, setShowBooking] = useState(false);
 
   useEffect(() => {
     async function fetchCar() {
@@ -44,112 +46,210 @@ export function CarDetails() {
     fetchCar();
   }, [id]);
 
-  if (loading || !car) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading || !car) return <div className="min-h-screen flex items-center justify-center bg-background">Loading...</div>;
 
   const images = (car.images && car.images.length > 0) ? car.images : (car.photos && car.photos.length > 0 ? car.photos : [`https://picsum.photos/seed/${car.id}/1200/800`]);
 
   return (
-    <div className="pt-32 pb-20 bg-background">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
-          {/* Hero Image Gallery */}
-          <div className="space-y-6">
-            <div className="relative aspect-[16/10] rounded-[60px] overflow-hidden border border-white/5 bg-card group">
-              <img 
-                src={images[activeImage]} 
-                alt={`${car.make} ${car.model}`}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                referrerPolicy="no-referrer"
-              />
-              <button className="absolute top-6 right-6 p-4 glass rounded-full text-white hover:text-primary transition-all">
-                <Heart size={24} />
-              </button>
-            </div>
-            {images.length > 1 && (
-              <div className="flex gap-4">
-                {images.map((img, idx) => (
-                  <button key={idx} onClick={() => setActiveImage(idx)} className={`w-20 h-20 rounded-2xl overflow-hidden border-2 ${activeImage === idx ? 'border-primary' : 'border-transparent'}`}>
-                    <img src={img} alt="thumbnail" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Car Overview & Booking */}
-          <div className="flex flex-col">
-            <h1 className="text-5xl font-serif font-black italic text-white mb-6">
-              {car.make} <span className="text-primary">{car.model}</span>
-            </h1>
-            <p className="text-lg text-muted-foreground mb-8">{car.description}</p>
-            <p className="text-2xl font-bold mb-8">${car.daily_rate}<span className="text-sm text-muted-foreground">/day</span></p>
-            
-            <div className="grid grid-cols-2 gap-4 mb-8">
-              <div className="p-4 bg-card rounded-2xl border border-white/5 flex items-center gap-3">
-                <Users className="text-primary" size={20} />
-                <span className="text-sm font-bold">{car.seats} Seats</span>
-              </div>
-              <div className="p-4 bg-card rounded-2xl border border-white/5 flex items-center gap-3">
-                <Fuel className="text-primary" size={20} />
-                <span className="text-sm font-bold">{car.fuel_type}</span>
-              </div>
-              <div className="p-4 bg-card rounded-2xl border border-white/5 flex items-center gap-3">
-                <Settings className="text-primary" size={20} />
-                <span className="text-sm font-bold">{car.transmission}</span>
-              </div>
-            </div>
-            
-            <BookingFlow car={car} />
-          </div>
-        </div>
-
-        {/* Detailed Specifications */}
-        <div className="mt-20">
-          <h2 className="text-3xl font-serif font-black italic text-white mb-8">Specifications</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-8 bg-card rounded-3xl border border-white/5">
-              <h4 className="font-bold text-white mb-4">Features</h4>
-              <ul className="grid grid-cols-2 gap-2">
-                {car.features.map((feature, idx) => (
-                  <li key={idx} className="text-muted-foreground text-sm flex items-center gap-2">
-                    <ShieldCheck size={14} className="text-primary" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="p-8 bg-card rounded-3xl border border-white/5">
-              <h4 className="font-bold text-white mb-4">Vehicle Details</h4>
-              <p className="text-muted-foreground text-sm">License Plate: {car.license_plate}</p>
-              <p className="text-muted-foreground text-sm">Category: {car.category}</p>
-              <p className="text-muted-foreground text-sm">Year: {car.year}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Reviews */}
-        <div className="mt-20">
-          <h2 className="text-3xl font-serif font-black italic text-white mb-8">Customer Reviews</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {reviews.map((review) => (
-              <div key={review.id} className="p-8 bg-card rounded-3xl border border-white/5">
-                <div className="flex items-center gap-2 mb-4">
-                  <Star size={16} className="text-amber-500" fill="currentColor" />
-                  <span className="font-bold text-white">{review.rating}</span>
-                </div>
-                <p className="text-muted-foreground text-sm italic">"{review.comment}"</p>
-                <p className="text-xs font-bold text-primary mt-4">- {review.user_profiles?.full_name}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+    <div className="relative bg-background min-h-screen overflow-hidden">
+      {/* Immersive Background with Gradient Overlay */}
+      <div className="fixed inset-0 z-0">
+        <img 
+          src={images[activeImage]} 
+          alt="Background"
+          className="w-full h-full object-cover blur-3xl opacity-20"
+          referrerPolicy="no-referrer"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/40 to-background" />
+        <div className="absolute inset-0 bg-gradient-to-r from-amber-900/10 via-transparent to-orange-900/10" />
       </div>
 
-      {/* Sticky CTA */}
-      <div className="fixed bottom-0 left-0 w-full bg-background border-t border-white/10 p-6 flex justify-center z-50">
-        <button className="px-12 py-4 bg-primary text-black font-black uppercase tracking-widest rounded-full hover:bg-primary/90 transition-all">
-          Book Now
-        </button>
+      {/* Content */}
+      <div className="relative z-10 pt-32 pb-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
+            {/* Hero Image Gallery */}
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-6"
+            >
+              <div className="relative aspect-[16/10] rounded-[60px] overflow-hidden border border-white/10 bg-card/50 backdrop-blur-xl group">
+                <img 
+                  src={images[activeImage]} 
+                  alt={`${car.make} ${car.model}`}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  referrerPolicy="no-referrer"
+                />
+                <button className="absolute top-6 right-6 p-4 glass rounded-full text-white hover:text-primary hover:scale-110 transition-all">
+                  <Heart size={24} />
+                </button>
+              </div>
+              {images.length > 1 && (
+                <div className="flex gap-4 overflow-x-auto pb-2">
+                  {images.map((img, idx) => (
+                    <motion.button 
+                      key={idx} 
+                      onClick={() => setActiveImage(idx)} 
+                      whileHover={{ scale: 1.05 }}
+                      className={`w-20 h-20 rounded-2xl overflow-hidden border-2 shrink-0 transition-all ${activeImage === idx ? 'border-primary shadow-lg shadow-primary/20' : 'border-white/10'}`}
+                    >
+                      <img src={img} alt="thumbnail" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </motion.button>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+
+            {/* Car Overview & Booking */}
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex flex-col justify-between"
+            >
+              <div>
+                <h1 className="text-6xl font-serif font-black italic text-white mb-4 tracking-tight">
+                  {car.make} <span className="text-primary">{car.model}</span>
+                </h1>
+                <p className="text-lg text-muted-foreground mb-8 leading-relaxed">{car.description}</p>
+                <p className="text-4xl font-black mb-8 text-white">
+                  <span className="text-primary">${car.daily_rate}</span>
+                  <span className="text-sm text-muted-foreground font-bold">/day</span>
+                </p>
+                
+                <div className="grid grid-cols-3 gap-4 mb-12">
+                  <motion.div 
+                    whileHover={{ scale: 1.05 }}
+                    className="p-5 bg-card/50 backdrop-blur-xl rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex items-center gap-3"
+                  >
+                    <Users className="text-primary" size={20} />
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Seats</p>
+                      <span className="text-sm font-bold text-white">{car.seats}</span>
+                    </div>
+                  </motion.div>
+                  <motion.div 
+                    whileHover={{ scale: 1.05 }}
+                    className="p-5 bg-card/50 backdrop-blur-xl rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex items-center gap-3"
+                  >
+                    <Fuel className="text-primary" size={20} />
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Fuel</p>
+                      <span className="text-sm font-bold text-white">{car.fuel_type}</span>
+                    </div>
+                  </motion.div>
+                  <motion.div 
+                    whileHover={{ scale: 1.05 }}
+                    className="p-5 bg-card/50 backdrop-blur-xl rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex items-center gap-3"
+                  >
+                    <Settings className="text-primary" size={20} />
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Trans</p>
+                      <span className="text-sm font-bold text-white">{car.transmission}</span>
+                    </div>
+                  </motion.div>
+                </div>
+              </div>
+
+              {/* CTA Buttons */}
+              <div className="flex gap-4">
+                <motion.button 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowBooking(!showBooking)}
+                  className="flex-1 py-6 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-sm shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all"
+                >
+                  {showBooking ? 'Close' : 'Book Now'} <ArrowRight className="inline ml-2" size={20} />
+                </motion.button>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Booking Flow Modal */}
+          <AnimatePresence>
+            {showBooking && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="mt-12 relative"
+              >
+                <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-orange-500/10 to-primary/20 rounded-[48px] blur-2xl" />
+                <div className="relative p-12 bg-card/50 backdrop-blur-xl rounded-[48px] border border-primary/20">
+                  <button 
+                    onClick={() => setShowBooking(false)}
+                    className="absolute top-6 right-6 p-2 hover:bg-white/10 rounded-full transition-all"
+                  >
+                    <X size={24} className="text-white" />
+                  </button>
+                  <BookingFlow car={car} />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Detailed Specifications */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            className="mt-20"
+          >
+            <h2 className="text-3xl font-serif font-black italic text-white mb-8">Specifications</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-8 bg-card/50 backdrop-blur-xl rounded-3xl border border-white/10 hover:border-primary/20 transition-all">
+                <h4 className="font-black text-white mb-4 uppercase tracking-widest text-sm">Features</h4>
+                <ul className="grid grid-cols-2 gap-3">
+                  {car.features.map((feature, idx) => (
+                    <li key={idx} className="text-muted-foreground text-sm flex items-center gap-2">
+                      <ShieldCheck size={14} className="text-primary shrink-0" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="p-8 bg-card/50 backdrop-blur-xl rounded-3xl border border-white/10 hover:border-primary/20 transition-all">
+                <h4 className="font-black text-white mb-4 uppercase tracking-widest text-sm">Vehicle Details</h4>
+                <div className="space-y-3 text-sm">
+                  <p className="text-muted-foreground">License Plate: <span className="text-white font-bold">{car.license_plate}</span></p>
+                  <p className="text-muted-foreground">Category: <span className="text-white font-bold">{car.category}</span></p>
+                  <p className="text-muted-foreground">Year: <span className="text-white font-bold">{car.year}</span></p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Reviews */}
+          {reviews.length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              className="mt-20"
+            >
+              <h2 className="text-3xl font-serif font-black italic text-white mb-8">Customer Reviews</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {reviews.map((review) => (
+                  <motion.div 
+                    key={review.id}
+                    whileHover={{ scale: 1.02 }}
+                    className="p-8 bg-card/50 backdrop-blur-xl rounded-3xl border border-white/10 hover:border-primary/20 transition-all"
+                  >
+                    <div className="flex items-center gap-2 mb-4">
+                      {[...Array(5)].map((_, i) => (
+                        <Star 
+                          key={i}
+                          size={16} 
+                          className={i < review.rating ? 'text-amber-500 fill-amber-500' : 'text-white/20'}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-muted-foreground text-sm italic">"{review.comment}"</p>
+                    <p className="text-xs font-bold text-primary mt-4">- {review.user_profiles?.full_name}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -73,9 +73,10 @@ export function AdminContractManager() {
         .getPublicUrl(filePath);
 
       setFormData(prev => ({ ...prev, pdf_url: publicUrl }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      toast.error('Failed to upload PDF');
+      const message = error.message || 'Failed to upload PDF';
+      toast.error(`Upload error: ${message}`);
     } finally {
       setUploading(false);
     }

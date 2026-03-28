@@ -195,6 +195,12 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE broadcasts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can read broadcasts" ON broadcasts;
+CREATE POLICY "Anyone can read broadcasts" ON broadcasts FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can manage broadcasts" ON broadcasts;
+CREATE POLICY "Admins can manage broadcasts" ON broadcasts FOR ALL USING (is_admin());
+
 -- 9. Settings
 CREATE TABLE IF NOT EXISTS settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -278,6 +284,18 @@ CREATE TABLE IF NOT EXISTS reports (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- RLS POLICIES FOR CARS
+ALTER TABLE cars ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can view cars" ON cars;
+CREATE POLICY "Public can view cars" ON cars FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage cars" ON cars;
+CREATE POLICY "Admins can manage cars" ON cars FOR ALL USING (is_admin());
+
+DROP POLICY IF EXISTS "Fleet owners can manage their own cars" ON cars;
+CREATE POLICY "Fleet owners can manage their own cars" ON cars FOR ALL USING (auth.uid() = fleet_owner_id);
+
 -- 16. Driver Profiles
 CREATE TABLE IF NOT EXISTS driver_profiles (
   id UUID PRIMARY KEY REFERENCES user_profiles(id) ON DELETE CASCADE,
@@ -342,7 +360,13 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 DROP POLICY IF EXISTS "Admins can view all profiles" ON user_profiles;
 CREATE POLICY "Admins can view all profiles" ON user_profiles FOR SELECT USING (is_admin() OR auth.uid() = id);
 DROP POLICY IF EXISTS "Users can update their own profile" ON user_profiles;
-CREATE POLICY "Users can update their own profile" ON user_profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users can update their own profile" ON user_profiles FOR UPDATE USING (auth.uid() = id)
+WITH CHECK (
+  auth.uid() = id AND 
+  (role = (SELECT role FROM user_profiles WHERE id = auth.uid())) AND
+  (loyalty_tier = (SELECT loyalty_tier FROM user_profiles WHERE id = auth.uid())) AND
+  (referral_credits = (SELECT referral_credits FROM user_profiles WHERE id = auth.uid()))
+);
 DROP POLICY IF EXISTS "Admins can update any profile" ON user_profiles;
 CREATE POLICY "Admins can update any profile" ON user_profiles FOR UPDATE USING (is_admin());
 
@@ -661,3 +685,29 @@ VALUES
 ('Weekend Flash Sale', 'Get 25% off on all SUV rentals this weekend only.', 25, 'Bronze', 'active', 'https://picsum.photos/seed/suv/800/400'),
 ('Personal Concierge Service', 'Complimentary personal concierge for all your travel needs.', 0, 'Platinum', 'active', 'https://picsum.photos/seed/concierge/800/400')
 ON CONFLICT DO NOTHING;
+
+-- ===============================================================
+-- Storage Configuration
+-- ===============================================================
+
+-- Create the public_assets bucket if it doesn't exist
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('public_assets', 'public_assets', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Storage Policies for public_assets
+-- 1. Allow public read access
+DROP POLICY IF EXISTS "Public Access" ON storage.objects;
+CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING (bucket_id = 'public_assets');
+
+-- 2. Allow authenticated users to upload
+DROP POLICY IF EXISTS "Authenticated users can upload" ON storage.objects;
+CREATE POLICY "Authenticated users can upload" ON storage.objects FOR INSERT WITH CHECK (
+  bucket_id = 'public_assets' AND auth.role() = 'authenticated'
+);
+
+-- 3. Allow admins to delete
+DROP POLICY IF EXISTS "Admins can delete" ON storage.objects;
+CREATE POLICY "Admins can delete" ON storage.objects FOR DELETE USING (
+  bucket_id = 'public_assets' AND (SELECT role FROM public.user_profiles WHERE id = auth.uid()) = 'admin'
+);

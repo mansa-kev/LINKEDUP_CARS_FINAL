@@ -27,8 +27,8 @@ export function BookingFlow({ car }: BookingFlowProps) {
     switch (step) {
       case 1: return <Step1 car={car} onNext={nextStep} />;
       case 2: return <Step2 car={car} onNext={nextStep} onPrev={prevStep} />;
-      case 3: return <Step3 car={car} onNext={nextStep} onPrev={prevStep} />;
-      case 4: return <Step4 car={car} onPrev={prevStep} />;
+      case 3: return <Step3 car={car} bookingData={bookingData} onNext={nextStep} onPrev={prevStep} />;
+      case 4: return <Step4 car={car} bookingData={bookingData} onPrev={prevStep} />;
       default: return null;
     }
   };
