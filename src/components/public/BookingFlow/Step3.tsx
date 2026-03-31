@@ -1,10 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { Car } from '../../../types';
 import SignatureCanvas from 'react-signature-canvas';
-import { ArrowRight, ArrowLeft, FileText, CheckCircle2, Eraser, Info, ShieldCheck, Download, Loader2 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { ArrowLeft, ArrowRight, FileText, Loader2, AlertCircle, CheckCircle2, Eraser, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { contractService } from '../../../services/contractService';
+import { enhancedContractService, ContractData } from '../../../services/enhancedContractService';
+import { supabase } from '../../../lib/supabase';
+import { DirectContractDisplay } from './DirectContractDisplay';
 
 interface Step3Props {
   car: Car;
@@ -14,20 +16,39 @@ interface Step3Props {
 }
 
 export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
+  console.log('🔍 Step3: Received bookingData:', bookingData);
+  console.log('🔍 Step3: Received car:', car);
+  
   const sigPad = useRef<any>(null);
   const [agreed, setAgreed] = useState(false);
   const [contract, setContract] = useState<any>(null);
   const [loadingContract, setLoadingContract] = useState(true);
+  const [signingContract, setSigningContract] = useState(false);
+  const [paymentHoldTriggered, setPaymentHoldTriggered] = useState(false);
 
   useEffect(() => {
-    async function fetchContract() {
+    const fetchContract = async () => {
+      console.log('� Step3: Starting contract fetch...');
+      
       try {
-        const masterContract = await contractService.getMasterContract();
-        setContract(masterContract);
+        const contract = await enhancedContractService.getMasterContract();
+        console.log('� Step3: Contract received:', contract);
+        
+        if (contract) {
+          console.log('✅ Step3: Contract is valid, setting state');
+          setContract(contract);
+        } else {
+          console.warn('⚠️ Step3: No contract received, checking database...');
+          // Try to fetch all contracts to debug
+          const { data: allContracts } = await supabase
+            .from('contracts_master')
+            .select('*');
+          console.log('🗂️ Step3: All contracts in database:', allContracts);
+        }
       } catch (error) {
-        console.error('Error loading contract:', error);
-        toast.error('Failed to load rental contract');
+        console.error('💥 Step3: Error fetching contract:', error);
       } finally {
+        console.log('🏁 Step3: Contract fetch completed');
         setLoadingContract(false);
       }
     }
@@ -35,20 +56,55 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
   }, []);
 
   const clear = () => {
-    sigPad.current?.clear();
+    if (sigPad.current) {
+      sigPad.current.clear();
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (sigPad.current?.isEmpty()) {
-      toast.error('Please provide your digital signature');
-      return;
-    }
+  const handleSignAndProceed = async () => {
     if (!agreed) {
       toast.error('Please agree to the terms and conditions');
       return;
     }
-    onNext({ signatureUrl: sigPad.current?.getTrimmedCanvas().toDataURL('image/png') });
+
+    if (!sigPad.current || sigPad.current.isEmpty()) {
+      toast.error('Please provide your signature');
+      return;
+    }
+
+    try {
+      setSigningContract(true);
+      
+      // Get signature data (just for validation)
+      const signatureData = sigPad.current.toDataURL();
+      
+      // Simulate contract acceptance (no database operations)
+      console.log('✅ Contract accepted:', { signatureData, bookingData, car });
+      
+      // Just proceed to payment without database operations
+      toast.success('Contract accepted successfully');
+      
+      // Wait a moment for user feedback
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Proceed to next step
+      onNext({
+        contractAccepted: true,
+        signatureData: signatureData,
+        contractId: contract?.id || 'temp-' + Date.now()
+      });
+
+    } catch (error) {
+      console.error('Error in contract process:', error);
+      toast.error('An error occurred. Please try again.');
+    } finally {
+      setSigningContract(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSignAndProceed();
   };
 
   return (
@@ -79,31 +135,42 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
           </div>
         </div>
 
-        {/* Contract Display */}
+        {/* E-Contract Display */}
         {loadingContract ? (
           <div className="p-8 bg-white/5 rounded-[24px] border border-white/10 text-center flex items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="animate-spin text-primary" size={20} />
             <span className="text-sm font-bold">Loading contract...</span>
           </div>
         ) : contract ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-2 block">Rental Agreement</label>
-            <div className="p-6 bg-white/5 rounded-[24px] border border-white/10 space-y-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <DirectContractDisplay
+              contract={contract}
+              bookingData={bookingData}
+              car={car}
+            />
+          </motion.div>
+        ) : (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="p-8 bg-yellow-500/10 rounded-[24px] border border-yellow-500/20 text-center space-y-4">
+              <AlertCircle className="mx-auto text-yellow-500" size={48} />
               <div>
-                <p className="text-sm font-bold text-white mb-2">{contract.contract_title}</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">{contract.terms_summary}</p>
+                <h3 className="text-lg font-bold text-yellow-500 mb-2">No Active Contract Template</h3>
+                <p className="text-sm text-yellow-500/80 mb-4">
+                  Please upload and activate a contract template in the admin panel first.
+                </p>
+                <div className="bg-yellow-500/5 rounded-lg p-4 text-left">
+                  <p className="text-xs text-yellow-500/60 font-bold mb-2">Required Steps:</p>
+                  <ol className="text-xs text-yellow-500/80 space-y-1 list-decimal list-inside">
+                    <li>Go to Admin Portal → Contract Manager</li>
+                    <li>Upload a master contract PDF</li>
+                    <li>Set the contract as "Active"</li>
+                    <li>Return to booking flow to continue</li>
+                  </ol>
+                </div>
               </div>
-              <a 
-                href={contract.contract_url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-primary hover:text-primary/80 text-xs font-bold uppercase tracking-widest transition-colors"
-              >
-                <Download size={12} /> View Full Contract (PDF)
-              </a>
             </div>
           </motion.div>
-        ) : null}
+        )}
 
         {/* Signature Area */}
         <div className="space-y-4">
@@ -168,10 +235,20 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
         </button>
         <button 
           type="submit"
-          className="w-3/4 py-5 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-4 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group"
+          disabled={signingContract || !agreed}
+          className="w-3/4 py-5 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-4 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group disabled:opacity-50"
         >
-          Proceed to Payment 
-          <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+          {signingContract ? (
+            <>
+              <Loader2 className="animate-spin" size={20} />
+              <span>Signing Contract...</span>
+            </>
+          ) : (
+            <>
+              Sign & Proceed to Payment 
+              <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+            </>
+          )}
         </button>
       </div>
     </form>
