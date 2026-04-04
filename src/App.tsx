@@ -5,6 +5,8 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { useSubdomain } from './contexts/SubdomainContext';
 import { SubdomainSwitcher } from './components/SubdomainSwitcher';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { ContractDebug } from './components/debug/ContractDebug';
 import { AdminPortal } from './components/AdminPortal';
 import { DriverOnboardingForm } from './components/public/DriverOnboardingForm';
 import { FleetLayout } from './components/fleet/FleetLayout';
@@ -17,34 +19,52 @@ import { BrowseCars } from './components/public/BrowseCars';
 import { CarDetails } from './components/public/CarDetails';
 import { BookingConfirmation } from './components/public/BookingConfirmation';
 import { SunsetRays } from './components/SunsetRays';
+import { Analytics } from '@vercel/analytics/react';
 
 export default function App() {
   const { subdomain } = useSubdomain();
 
   // Debug log for subdomain detection
   console.log('Current Subdomain:', subdomain);
+  
+  // Add error handling for refresh issues
+  React.useEffect(() => {
+    const handleRefreshError = (event: Event) => {
+      console.error('🔄 Refresh error detected:', event);
+    };
+    
+    window.addEventListener('error', handleRefreshError);
+    window.addEventListener('unhandledrejection', handleRefreshError);
+    
+    return () => {
+      window.removeEventListener('error', handleRefreshError);
+      window.removeEventListener('unhandledrejection', handleRefreshError);
+    };
+  }, []);
 
   return (
-    <BrowserRouter>
-      <ThemeProvider>
-        <AuthProvider>
-          <div className="relative min-h-screen">
-            <Toaster position="top-right" richColors />
-            <SunsetRays />
-            
-            {subdomain === 'www' && (
-            <PublicLayout>
-              <Routes>
-                <Route path="/" element={<PublicHome />} />
-                <Route path="/about" element={<AboutUs />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/cars" element={<BrowseCars />} />
-                <Route path="/cars/:id" element={<CarDetails />} />
-                <Route path="/booking-confirmation/:bookingId" element={<BookingConfirmation />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </PublicLayout>
-          )}
+    <ErrorBoundary>
+      <BrowserRouter>
+        <ThemeProvider>
+          <AuthProvider>
+            <div className="relative min-h-screen">
+              <Toaster position="top-right" richColors />
+              <SunsetRays />
+              
+              {subdomain === 'www' && (
+              <PublicLayout>
+                <Routes>
+                  <Route path="/" element={<PublicHome />} />
+                  <Route path="/about" element={<AboutUs />} />
+                  <Route path="/contact" element={<Contact />} />
+                  <Route path="/cars" element={<BrowseCars />} />
+                  <Route path="/cars/:id" element={<CarDetails />} />
+                  <Route path="/booking-confirmation/:bookingId" element={<BookingConfirmation />} />
+                  <Route path="/debug-contracts" element={<ContractDebug />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </PublicLayout>
+            )}
           
           {subdomain === 'onboarding' && (
             <Routes>
@@ -86,5 +106,7 @@ export default function App() {
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
+    <Analytics />
+    </ErrorBoundary>
   );
 }
