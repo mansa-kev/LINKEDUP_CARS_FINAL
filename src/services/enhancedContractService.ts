@@ -27,10 +27,7 @@ export interface SignedContract {
 }
 
 export const enhancedContractService = {
-  // Get active master contract template
   getMasterContract: async () => {
-    console.log('🔍 Enhanced Contract Service: Fetching master contract...');
-    
     try {
       const { data, error } = await supabase
         .from('contracts_master')
@@ -40,71 +37,21 @@ export const enhancedContractService = {
         .limit(1)
         .single();
 
-      console.log('📊 Database response:', { data, error });
-
       if (error) {
-        console.log('❌ Database error:', error);
-        
-        // If no contract found, create a test one for demonstration
         if (error.code === 'PGRST116') {
-          console.log('🔧 No contract found, creating test contract...');
-          await enhancedContractService.createTestContract();
-          // Try again after creating
-          const { data: retryData, error: retryError } = await supabase
-            .from('contracts_master')
-            .select('*')
-            .eq('is_active', true)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-          
-          console.log('🔄 Retry response:', { retryData, retryError });
-          
-          if (retryError) throw retryError;
-          return retryData;
+          // No active contract found
+          return null;
         }
         throw error;
       }
-      
-      console.log('✅ Contract found successfully:', data);
+
       return data;
     } catch (error) {
-      console.error('💥 Error in getMasterContract:', error);
+      console.error('Error in getMasterContract:', error);
       return null;
     }
   },
 
-  // Create test contract for demonstration
-  createTestContract: async () => {
-    try {
-      const testContract = {
-        version: '1.0.0',
-        contract_title: 'Standard Rental Agreement',
-        terms_summary: 'This is a standard rental agreement template for vehicle rentals.',
-        pdf_url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        is_active: true,
-        uploaded_by: 'system-demo'
-      };
-
-      const { data, error } = await supabase
-        .from('contracts_master')
-        .insert([testContract])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error creating test contract:', error);
-        return;
-      }
-
-      console.log('✅ Test contract created successfully:', data);
-      return data;
-    } catch (error) {
-      console.error('❌ Error creating test contract:', error);
-    }
-  },
-
-  // Generate dynamic contract with booking data overlay
   generateDynamicContract: async (contractData: ContractData): Promise<string> => {
     try {
       const masterContract = await enhancedContractService.getMasterContract();
@@ -112,8 +59,6 @@ export const enhancedContractService = {
         throw new Error('No active master contract found');
       }
 
-      // In a real implementation, you would use a PDF library like jsPDF or PDFKit
-      // For now, we'll simulate dynamic data replacement
       const contractContent = {
         ...masterContract,
         dynamic_data: {
@@ -128,22 +73,16 @@ export const enhancedContractService = {
         }
       };
 
-      // Store the generated contract data (gracefully handle if table doesn't exist)
       try {
-        const { data, error } = await supabase
+        await supabase
           .from('signed_contracts')
           .insert([contractContent])
           .select()
           .single();
-
-        if (error) {
-          console.warn('Could not store generated contract (table may not exist):', error);
-        }
       } catch (insertError) {
-        console.warn('Contract storage skipped - table may not exist:', insertError);
+        // Gracefully handle if signed_contracts table doesn't exist yet
       }
 
-      // Return the master contract URL (in real implementation, this would be the generated PDF URL)
       return masterContract.pdf_url || masterContract.contract_url || '';
     } catch (error) {
       console.error('Error generating dynamic contract:', error);
@@ -151,17 +90,14 @@ export const enhancedContractService = {
     }
   },
 
-  // Save signed contract with digital signature
   saveSignedContract: async (
     bookingId: string,
     signatureData: string,
     contractData: ContractData
   ): Promise<SignedContract> => {
     try {
-      // Generate the dynamic contract
       const contractUrl = await enhancedContractService.generateDynamicContract(contractData);
 
-      // Save the signed contract
       const { data, error } = await supabase
         .from('signed_contracts')
         .insert([{
@@ -177,10 +113,9 @@ export const enhancedContractService = {
 
       if (error) throw error;
 
-      // Update booking status to reflect signed contract
       await supabase
         .from('bookings')
-        .update({ 
+        .update({
           contract_signed: true,
           contract_id: data.id,
           status: 'contract_signed'
@@ -194,7 +129,6 @@ export const enhancedContractService = {
     }
   },
 
-  // Get signed contracts for a user
   getSignedContracts: async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -217,9 +151,8 @@ export const enhancedContractService = {
     }
   },
 
-  // Update contract status
   updateContractStatus: async (
-    contractId: string, 
+    contractId: string,
     status: 'pending' | 'signed' | 'rejected'
   ): Promise<void> => {
     try {
@@ -235,49 +168,40 @@ export const enhancedContractService = {
     }
   },
 
-  // Trigger payment authorization hold
   triggerPaymentHold: async (contractId: string): Promise<void> => {
     try {
       const { error } = await supabase
         .from('signed_contracts')
-        .update({ 
+        .update({
           payment_hold_status: 'authorized',
           payment_hold_triggered_at: new Date().toISOString()
         })
         .eq('id', contractId);
 
       if (error) throw error;
-
-      // In a real implementation, this would integrate with payment processor
-      // to place an actual hold on the payment method
-      console.log(`Payment authorization hold triggered for contract ${contractId}`);
     } catch (error) {
       console.error('Error triggering payment hold:', error);
       throw error;
     }
   },
 
-  // Release payment hold
   releasePaymentHold: async (contractId: string): Promise<void> => {
     try {
       const { error } = await supabase
         .from('signed_contracts')
-        .update({ 
+        .update({
           payment_hold_status: 'released',
           payment_hold_released_at: new Date().toISOString()
         })
         .eq('id', contractId);
 
       if (error) throw error;
-
-      console.log(`Payment hold released for contract ${contractId}`);
     } catch (error) {
       console.error('Error releasing payment hold:', error);
       throw error;
     }
   },
 
-  // Get contract by booking ID
   getContractByBooking: async (bookingId: string) => {
     try {
       const { data, error } = await supabase

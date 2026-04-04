@@ -1,24 +1,41 @@
 import { supabase, handleSupabaseErrorWrapper as handleSupabaseError } from '../lib/supabase';
 
+const DEFAULT_COMMISSION_RATE = 0.15; // 15% platform commission
+
 export const bookingService = {
   createBooking: async (bookingData: any) => {
     try {
       // 1. Get current user if logged in
       const { data: { user } } = await supabase.auth.getUser();
-      
-      // 2. Prepare the booking record
+
+      // 2. Look up the car to get fleet_owner_id
+      const { data: car, error: carError } = await supabase
+        .from('cars')
+        .select('fleet_owner_id')
+        .eq('id', bookingData.carId)
+        .single();
+
+      if (carError || !car) {
+        throw new Error('Could not find the selected car. Please try again.');
+      }
+
+      // 3. Calculate platform commission
+      const totalAmount = bookingData.totalAmount;
+      const platformCommission = Math.round(totalAmount * DEFAULT_COMMISSION_RATE * 100) / 100;
+
+      // 4. Prepare the booking record
       const payload = {
         car_id: bookingData.carId,
-        client_id: user?.id || null, // Allow guest bookings
+        client_id: user?.id || null,
+        fleet_owner_id: car.fleet_owner_id,
         start_date: bookingData.startDate,
         end_date: bookingData.endDate,
         pickup_location: bookingData.location,
-        total_amount: bookingData.totalAmount,
-        status: bookingData.paymentMethod === 'mpesa' ? 'pending_verification' : 'confirmed',
+        total_amount: totalAmount,
+        platform_commission: platformCommission,
+        status: bookingData.paymentMethod === 'mpesa' ? 'pending_payment_verification' : 'confirmed',
         payment_status: bookingData.paymentMethod === 'mpesa' ? 'pending' : 'paid',
         payment_method: bookingData.paymentMethod,
-        // Store guest details in a JSONB field or separate guest_profiles table if needed
-        // For now, we'll use metadata or comments for guest info if not logged in
         metadata: {
           guest_info: !user ? {
             full_name: bookingData.fullName,
@@ -39,14 +56,14 @@ export const bookingService = {
 
       if (error) throw error;
 
-      // 3. If M-Pesa, also log to pending_payments
+      // 5. If M-Pesa, also log to pending_payments
       if (bookingData.paymentMethod === 'mpesa' && bookingData.mpesaCode) {
         await supabase.from('pending_payments').insert([{
           booking_id: data.id,
+          client_id: user?.id || null,
           amount: bookingData.totalAmount,
           transaction_code: bookingData.mpesaCode,
-          method: 'mpesa',
-          status: 'pending'
+          status: 'submitted'
         }]);
       }
 

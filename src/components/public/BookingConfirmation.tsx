@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Car, CheckCircle2, Download, Calendar, MapPin, CreditCard, FileText, ShieldCheck, Clock, AlertCircle, UserPlus, ArrowRight, Loader2 } from 'lucide-react';
 import { bookingService } from '../../services/bookingService';
-import { enhancedContractService } from '../../services/enhancedContractService';
+import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
 export function BookingConfirmation() {
@@ -33,15 +33,58 @@ export function BookingConfirmation() {
     fetchBooking();
   }, [bookingId]);
 
+  const [creatingAccount, setCreatingAccount] = useState(false);
+
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirmPassword) {
       toast.error('Passwords do not match');
       return;
     }
-    // In a real app, you'd call an auth service here to register the guest
-    toast.success('Account created successfully! Welcome to the family.');
-    navigate('/client');
+    if (password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    setCreatingAccount(true);
+    try {
+      // Sign up with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (authError) throw authError;
+
+      if (authData.user) {
+        // Create user profile with guest info from booking
+        const guestInfo = booking?.metadata?.guest_info;
+        await supabase.from('user_profiles').upsert({
+          id: authData.user.id,
+          email,
+          full_name: guestInfo?.full_name || '',
+          phone_number: guestInfo?.phone || '',
+          license_number: guestInfo?.license_number || '',
+          role: 'client',
+        });
+
+        // Link the booking to the new user account
+        if (bookingId) {
+          await supabase
+            .from('bookings')
+            .update({ client_id: authData.user.id })
+            .eq('id', bookingId);
+        }
+
+        toast.success('Account created successfully! Welcome to the family.');
+        navigate('/client');
+      }
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      toast.error(error.message || 'Failed to create account. Please try again.');
+    } finally {
+      setCreatingAccount(false);
+    }
   };
 
   if (loading) {
@@ -193,11 +236,16 @@ export function BookingConfirmation() {
                   className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-[20px] text-sm text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                 />
               </div>
-              <button 
+              <button
                 type="submit"
-                className="w-full py-5 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-xs flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group"
+                disabled={creatingAccount}
+                className="w-full py-5 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-xs flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group disabled:opacity-50"
               >
-                Create My Account <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                {creatingAccount ? (
+                  <><Loader2 className="animate-spin" size={18} /> Creating Account...</>
+                ) : (
+                  <>Create My Account <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" /></>
+                )}
               </button>
             </form>
 

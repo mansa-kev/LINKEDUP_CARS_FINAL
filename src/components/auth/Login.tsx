@@ -22,6 +22,10 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [rateLimitState, setRateLimitState] = useState<RateLimitState>({
     attempts: 0,
     lockoutUntil: null
@@ -81,6 +85,26 @@ export function Login() {
       attempts: 0,
       lockoutUntil: null
     });
+  };
+
+  const handleForgotPassword = async () => {
+    if (!resetEmail) {
+      setError('Please enter your email address');
+      return;
+    }
+    setResetLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      if (error) throw error;
+      setResetSent(true);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset email. Please try again.');
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -252,7 +276,7 @@ export function Login() {
                   <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     Password
                   </label>
-                  <button type="button" className="text-[10px] font-bold text-primary hover:underline">
+                  <button type="button" onClick={() => { setShowForgotPassword(true); setResetEmail(email); }} className="text-[10px] font-bold text-primary hover:underline">
                     Forgot Password?
                   </button>
                 </div>
@@ -295,6 +319,61 @@ export function Login() {
             </p>
           </div>
         </div>
+
+        {/* Forgot Password Modal */}
+        {showForgotPassword && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6 bg-card border border-border rounded-3xl shadow-2xl p-8 space-y-4"
+          >
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-bold text-foreground">Reset Password</h2>
+              <button onClick={() => { setShowForgotPassword(false); setResetSent(false); setError(null); }} className="text-muted-foreground hover:text-foreground">
+                <Clock size={16} />
+              </button>
+            </div>
+
+            {resetSent ? (
+              <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl text-green-600 text-sm">
+                Password reset link sent! Check your email inbox.
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Enter your email and we'll send you a link to reset your password.
+                </p>
+                {error && (
+                  <div className="p-3 bg-error/10 border border-error/20 rounded-xl flex items-center gap-2 text-error text-sm">
+                    <AlertCircle size={16} />
+                    {error}
+                  </div>
+                )}
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-medium"
+                    placeholder="name@example.com"
+                  />
+                </div>
+                <button
+                  onClick={handleForgotPassword}
+                  disabled={resetLoading}
+                  className="w-full py-3 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                >
+                  {resetLoading ? (
+                    <Loader2 className="animate-spin" size={18} />
+                  ) : (
+                    'Send Reset Link'
+                  )}
+                </button>
+              </>
+            )}
+          </motion.div>
+        )}
       </motion.div>
     </div>
   );

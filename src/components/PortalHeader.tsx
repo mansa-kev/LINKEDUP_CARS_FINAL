@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Bell, 
-  User, 
-  LogOut, 
-  Settings, 
-  Sun, 
-  Moon, 
+import {
+  Bell,
+  User,
+  LogOut,
+  Settings,
+  Sun,
+  Moon,
   Search,
   CheckCircle2,
   AlertCircle,
@@ -39,7 +39,7 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  
+
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
 
@@ -48,7 +48,6 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
       fetchNotifications(user);
     }
 
-    // Close dropdowns on click outside
     const handleClickOutside = (event: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setShowProfileDropdown(false);
@@ -74,7 +73,6 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
       setNotifications(data);
       setUnreadCount(data.filter(n => !n.is_read).length);
     } else {
-      // Mock data if table doesn't exist yet or is empty
       const mockNotifications: Notification[] = [
         {
           id: '1',
@@ -111,7 +109,7 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
       .from('notifications')
       .update({ is_read: true })
       .eq('id', id);
-    
+
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     setUnreadCount(prev => Math.max(0, prev - 1));
   };
@@ -126,14 +124,18 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
   };
 
   return (
-    <header className="h-16 bg-card border-b border-border flex items-center justify-between px-8 relative z-50">
-      <div className="relative w-64">
+    <header className="h-14 md:h-16 bg-card border-b border-border flex items-center justify-between px-4 md:px-8 relative z-50">
+      {/* Search - hidden on mobile */}
+      <div className="relative w-48 lg:w-64 hidden md:block">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
         <input type="text" placeholder="Search..." className="w-full pl-9 pr-4 py-2 bg-muted rounded-xl text-sm outline-none" />
       </div>
 
-      <div className="flex items-center gap-4">
-        <button 
+      {/* Spacer on mobile */}
+      <div className="md:hidden" />
+
+      <div className="flex items-center gap-2 md:gap-4">
+        <button
           onClick={() => setIsDarkMode(!isDarkMode)}
           className="p-2 hover:bg-muted rounded-lg text-muted-foreground transition-colors"
           title="Toggle Theme"
@@ -143,7 +145,7 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
 
         {/* Notifications */}
         <div className="relative" ref={notificationRef}>
-          <button 
+          <button
             onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
             className="p-2 hover:bg-muted rounded-lg relative text-muted-foreground"
           >
@@ -154,19 +156,19 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
           </button>
 
           {showNotificationDropdown && (
-            <div className="absolute right-0 mt-2 w-80 bg-card border border-border rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2">
-              <div className="p-4 border-b border-border flex items-center justify-between">
+            <div className="absolute right-0 mt-2 w-72 md:w-80 bg-card border border-border rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+              <div className="p-3 md:p-4 border-b border-border flex items-center justify-between">
                 <h4 className="font-bold text-sm">Notifications</h4>
                 <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                   {unreadCount} New
                 </span>
               </div>
-              <div className="max-h-96 overflow-y-auto">
+              <div className="max-h-80 md:max-h-96 overflow-y-auto">
                 {notifications.length > 0 ? (
                   notifications.map((notification) => (
-                    <div 
-                      key={notification.id} 
-                      className={`p-4 border-b border-border last:border-0 hover:bg-muted/50 transition-colors cursor-pointer ${!notification.is_read ? 'bg-primary/5' : ''}`}
+                    <div
+                      key={notification.id}
+                      className={`p-3 md:p-4 border-b border-border last:border-0 hover:bg-muted/50 transition-colors cursor-pointer ${!notification.is_read ? 'bg-primary/5' : ''}`}
                       onClick={() => {
                         if (!notification.is_read) markAsRead(notification.id);
                         if (notification.link) navigate(notification.link);
@@ -174,9 +176,9 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
                     >
                       <div className="flex gap-3">
                         <div className="mt-1">{getIcon(notification.type)}</div>
-                        <div className="flex-1">
-                          <p className="text-xs font-bold">{notification.title}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold truncate">{notification.title}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
                             {notification.content}
                           </p>
                           <p className="text-[9px] text-muted-foreground mt-2">
@@ -203,11 +205,11 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
 
         {/* Profile */}
         <div className="relative" ref={profileRef}>
-          <button 
+          <button
             onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-            className="flex items-center gap-3 p-1 pl-3 hover:bg-muted rounded-full transition-colors border border-transparent hover:border-border"
+            className="flex items-center gap-2 md:gap-3 p-1 md:pl-3 hover:bg-muted rounded-full transition-colors border border-transparent hover:border-border"
           >
-            <div className="text-right hidden sm:block">
+            <div className="text-right hidden lg:block">
               <p className="text-xs font-bold leading-none">{user?.full_name || 'User'}</p>
               <p className="text-[10px] text-muted-foreground mt-1 capitalize">{portalType} Portal</p>
             </div>
@@ -227,7 +229,7 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
                 <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
               </div>
               <div className="p-2">
-                <button 
+                <button
                   onClick={() => {
                     if (portalType === 'client') navigate('/client/profile');
                     else if (portalType === 'fleet') navigate('/fleet/settings');
@@ -239,7 +241,7 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
                   <User size={16} />
                   My Profile
                 </button>
-                <button 
+                <button
                   onClick={() => {
                     if (portalType === 'client') navigate('/client/settings');
                     else if (portalType === 'fleet') navigate('/fleet/settings');
@@ -252,7 +254,7 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
                   Account Settings
                 </button>
                 <hr className="my-2 border-border" />
-                <button 
+                <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-error hover:bg-error/10 rounded-xl transition-colors"
                 >

@@ -1,27 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useTheme } from '../contexts/ThemeContext';
-import { 
-  LayoutDashboard, 
-  Calendar, 
-  Car, 
-  Users, 
-  UserCheck, 
-  Building2, 
-  ShieldCheck, 
-  Wallet, 
-  TrendingUp, 
-  Tag, 
-  BarChart3, 
-  Inbox, 
-  Rocket, 
-  AlertTriangle, 
-  Settings, 
-  Image, 
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  LayoutDashboard,
+  Calendar,
+  Car,
+  Users,
+  UserCheck,
+  Building2,
+  ShieldCheck,
+  Wallet,
+  TrendingUp,
+  Tag,
+  BarChart3,
+  Inbox,
+  Rocket,
+  AlertTriangle,
+  Settings,
+  Image,
   FileText,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Menu,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Truck
 } from 'lucide-react';
 
 import { AdminDashboard } from './admin/AdminDashboard';
@@ -45,8 +51,8 @@ import { AdminContractManager } from './admin/AdminContractManager';
 import { AdminSystemHealth } from './admin/AdminSystemHealth';
 import { AdminSettings } from './admin/AdminSettings';
 import { AdminLogout } from './admin/AdminLogout';
+import { AdminOutsourcedCars } from './admin/AdminOutsourcedCars';
 
-// --- Types ---
 type ModuleCategory = {
   title: string;
   items: {
@@ -68,6 +74,7 @@ const MODULE_CATEGORIES: ModuleCategory[] = [
     items: [
       { id: 'bookings', label: 'Bookings Management', icon: Calendar },
       { id: 'cars', label: 'Cars Management', icon: Car },
+      { id: 'outsourced', label: 'Outsourced Cars', icon: Truck },
       { id: 'users', label: 'Users Management', icon: Users },
       { id: 'drivers', label: 'Drivers Management', icon: UserCheck },
     ]
@@ -75,7 +82,7 @@ const MODULE_CATEGORIES: ModuleCategory[] = [
   {
     title: 'Partner Management',
     items: [
-      { id: 'fleet-owners', label: 'Fleet Owners Management', icon: Building2 },
+      { id: 'fleet-owners', label: 'Fleet Owners', icon: Building2 },
       { id: 'verification', label: 'Verification Queue', icon: ShieldCheck },
     ]
   },
@@ -99,126 +106,198 @@ const MODULE_CATEGORIES: ModuleCategory[] = [
   {
     title: 'System Configuration',
     items: [
-      { id: 'hero', label: 'Hero Content Manager', icon: Image },
-      { id: 'contracts', label: 'Contract Manager', icon: FileText },
+      { id: 'hero', label: 'Hero Content', icon: Image },
+      { id: 'contracts', label: 'Contracts', icon: FileText },
       { id: 'settings', label: 'Settings', icon: Settings },
     ]
   }
 ];
 
-// --- Components ---
-
-const AdminSidebar = ({ 
-  isCollapsed, 
-  setIsCollapsed 
-}: { 
-  isCollapsed: boolean;
-  setIsCollapsed: (v: boolean) => void;
-}) => {
-  const location = useLocation();
-  const activeModule = location.pathname.split('/')[2] || 'dashboard';
-
-  return (
-    <aside 
-      className={`fixed left-0 top-0 h-screen bg-card border-r border-border transition-all duration-300 z-40 flex flex-col ${
-        isCollapsed ? 'w-20' : 'w-72'
-      }`}
-    >
-      {/* Logo Area */}
-      <div className="h-20 flex items-center px-6 border-b border-border">
-        {!isCollapsed && (
-          <span className="text-xl font-bold tracking-tighter text-primary">LINKEDUP ADMIN</span>
-        )}
-        {isCollapsed && <span className="text-xl font-bold text-primary mx-auto">L</span>}
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-6 scrollbar-hide">
-        {MODULE_CATEGORIES.map((category) => (
-          <div key={category.title} className="mb-6">
-            {!isCollapsed && (
-              <h3 className="px-4 mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-50">
-                {category.title}
-              </h3>
-            )}
-            <div className="px-3 space-y-1">
-              {category.items.map((item) => {
-                const isActive = activeModule === item.id;
-                return (
-                  <Link
-                    key={item.id}
-                    to={item.id === 'dashboard' ? '/admin' : `/admin/${item.id}`}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all relative group ${
-                      isActive
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    }`}
-                  >
-                    {/* Active Indicator Bar */}
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full" />
-                    )}
-                    
-                    <item.icon size={20} className={isActive ? 'text-primary' : ''} />
-                    
-                    {!isCollapsed && (
-                      <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
-                    )}
-
-                    {/* Tooltip for collapsed state */}
-                    {isCollapsed && (
-                      <div className="absolute left-full ml-4 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
-                        {item.label}
-                      </div>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* Collapse Toggle */}
-      <button 
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className="h-12 border-t border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
-      >
-        {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-      </button>
-    </aside>
-  );
-};
-
-// --- Main Portal Component ---
-
 export function AdminPortal() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const location = useLocation();
   const { theme, setTheme } = useTheme();
   const isDarkMode = theme === 'dark';
   const setIsDarkMode = (isDark: boolean) => setTheme(isDark ? 'dark' : 'light');
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(() => {
+    const activeModule = location.pathname.split('/')[2] || 'dashboard';
+    const active = MODULE_CATEGORIES.find(g => g.items.some(i => i.id === activeModule));
+    return active?.title ?? 'Dashboard';
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) setSidebarOpen(false);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) setSidebarOpen(false);
+  }, [location.pathname, isMobile]);
+
+  const toggleGroup = useCallback((category: string) => {
+    setExpandedGroup(prev => prev === category ? null : category);
+  }, []);
+
+  const activeModule = location.pathname.split('/')[2] || 'dashboard';
+
+  const sidebarContent = (
+    <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
+      {MODULE_CATEGORIES.map((category) => {
+        const isExpanded = expandedGroup === category.title;
+        const hasActive = category.items.some(i => i.id === activeModule);
+
+        return (
+          <div key={category.title} className="mb-1">
+            {(!isCollapsed || isMobile) ? (
+              <button
+                onClick={() => toggleGroup(category.title)}
+                className={`w-full flex items-center justify-between px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                  hasActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <span>{category.title}</span>
+                {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+            ) : (
+              <div className="px-3 py-2">
+                <div className="w-full h-px bg-border" />
+              </div>
+            )}
+
+            <AnimatePresence initial={false}>
+              {(isExpanded || isCollapsed) && (
+                <motion.div
+                  initial={isCollapsed ? false : { height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={isCollapsed ? undefined : { height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeInOut' }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-3 space-y-1">
+                    {category.items.map((item) => {
+                      const isActive = activeModule === item.id;
+                      return (
+                        <Link
+                          key={item.id}
+                          to={item.id === 'dashboard' ? '/admin' : `/admin/${item.id}`}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all relative group ${
+                            isActive
+                              ? 'bg-primary/10 text-primary'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                          }`}
+                        >
+                          {isActive && (
+                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full" />
+                          )}
+                          <item.icon size={18} className={isActive ? 'text-primary' : ''} />
+                          {(!isCollapsed || isMobile) && (
+                            <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
+                          )}
+                          {isCollapsed && !isMobile && (
+                            <div className="absolute left-full ml-4 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                              {item.label}
+                            </div>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
+    </nav>
+  );
+
   return (
     <div className="min-h-screen bg-background flex text-foreground transition-colors duration-300">
-      <AdminSidebar 
-        isCollapsed={isCollapsed}
-        setIsCollapsed={setIsCollapsed}
-      />
-      
-      <main className={`flex-1 flex flex-col transition-all duration-300 ${isCollapsed ? 'pl-20' : 'pl-72'}`}>
-        <PortalHeader 
-          isDarkMode={isDarkMode} 
-          setIsDarkMode={setIsDarkMode} 
-          portalType="admin" 
+      {/* Desktop Sidebar */}
+      <aside className={`hidden md:flex bg-card border-r border-border flex-col flex-shrink-0 sticky top-0 h-screen transition-all duration-300 ${
+        isCollapsed ? 'w-20' : 'w-64'
+      }`}>
+        <div className="h-16 flex items-center px-6 border-b border-border">
+          {!isCollapsed && <span className="text-lg font-bold tracking-tighter text-primary">LINKEDUP ADMIN</span>}
+          {isCollapsed && <span className="text-lg font-bold text-primary mx-auto">L</span>}
+        </div>
+        {sidebarContent}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="h-12 border-t border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+        >
+          {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+        </button>
+      </aside>
+
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isMobile && sidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 z-40"
+              onClick={() => setSidebarOpen(false)}
+            />
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed left-0 top-0 h-full w-72 bg-card border-r border-border z-50 flex flex-col shadow-2xl"
+            >
+              <div className="p-6 flex items-center justify-between">
+                <span className="font-bold text-lg text-primary">LINKEDUP ADMIN</span>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="p-2 hover:bg-muted rounded-lg text-muted-foreground"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              {sidebarContent}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile Header with Hamburger */}
+        <div className="flex items-center md:hidden">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-4 text-muted-foreground hover:text-foreground"
+            aria-label="Open sidebar"
+          >
+            <Menu size={24} />
+          </button>
+        </div>
+
+        <PortalHeader
+          isDarkMode={isDarkMode}
+          setIsDarkMode={setIsDarkMode}
+          portalType="admin"
         />
-        
-        <div className="p-8">
-          {/* Module Content Area */}
+
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <div className="max-w-[1600px] mx-auto">
             <Routes>
               <Route index element={<AdminDashboard />} />
               <Route path="bookings" element={<AdminBookings />} />
               <Route path="cars" element={<AdminCars />} />
+              <Route path="outsourced" element={<AdminOutsourcedCars />} />
               <Route path="users" element={<AdminUsers />} />
               <Route path="drivers" element={<AdminDrivers />} />
               <Route path="fleet-owners" element={<AdminFleetOwners />} />
@@ -236,13 +315,11 @@ export function AdminPortal() {
               <Route path="system-health" element={<AdminSystemHealth />} />
               <Route path="settings" element={<AdminSettings />} />
               <Route path="logout" element={<AdminLogout />} />
-              
-              {/* Fallback for unknown modules */}
               <Route path=":activeModule" element={<AdminModuleFallback />} />
             </Routes>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
@@ -261,7 +338,7 @@ function AdminModuleFallback() {
       </div>
       <h1 className="text-3xl font-bold mb-2">{activeModuleLabel}</h1>
       <p className="text-muted-foreground max-w-md">
-        This module is ready to be connected to Supabase. All UI components will adhere to the Modern Professional design system.
+        This module is ready to be connected to Supabase.
       </p>
     </div>
   );

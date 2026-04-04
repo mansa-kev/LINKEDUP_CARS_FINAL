@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 
 interface SimpleContractDisplayProps {
   contract: any;
@@ -7,10 +7,6 @@ interface SimpleContractDisplayProps {
 }
 
 export function SimpleContractDisplay({ contract, bookingData, car }: SimpleContractDisplayProps) {
-  useEffect(() => {
-    console.log('🎯 SimpleContractDisplay: Contract loaded!', { contract, bookingData, car });
-  }, [contract, bookingData, car]);
-
   if (!contract) {
     return (
       <div className="p-8 bg-yellow-100 border border-yellow-300 rounded-lg text-center">

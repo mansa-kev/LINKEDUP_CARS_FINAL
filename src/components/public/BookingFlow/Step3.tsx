@@ -4,8 +4,7 @@ import { Car } from '../../../types';
 import SignatureCanvas from 'react-signature-canvas';
 import { ArrowLeft, ArrowRight, FileText, Loader2, AlertCircle, CheckCircle2, Eraser, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { enhancedContractService, ContractData } from '../../../services/enhancedContractService';
-import { supabase } from '../../../lib/supabase';
+import { enhancedContractService } from '../../../services/enhancedContractService';
 import { DirectContractDisplay } from './DirectContractDisplay';
 
 interface Step3Props {
@@ -16,39 +15,22 @@ interface Step3Props {
 }
 
 export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
-  console.log('🔍 Step3: Received bookingData:', bookingData);
-  console.log('🔍 Step3: Received car:', car);
-  
   const sigPad = useRef<any>(null);
   const [agreed, setAgreed] = useState(false);
   const [contract, setContract] = useState<any>(null);
   const [loadingContract, setLoadingContract] = useState(true);
   const [signingContract, setSigningContract] = useState(false);
-  const [paymentHoldTriggered, setPaymentHoldTriggered] = useState(false);
 
   useEffect(() => {
     const fetchContract = async () => {
-      console.log('� Step3: Starting contract fetch...');
-      
       try {
         const contract = await enhancedContractService.getMasterContract();
-        console.log('� Step3: Contract received:', contract);
-        
         if (contract) {
-          console.log('✅ Step3: Contract is valid, setting state');
           setContract(contract);
-        } else {
-          console.warn('⚠️ Step3: No contract received, checking database...');
-          // Try to fetch all contracts to debug
-          const { data: allContracts } = await supabase
-            .from('contracts_master')
-            .select('*');
-          console.log('🗂️ Step3: All contracts in database:', allContracts);
         }
       } catch (error) {
-        console.error('💥 Step3: Error fetching contract:', error);
+        console.error('Error fetching contract:', error);
       } finally {
-        console.log('🏁 Step3: Contract fetch completed');
         setLoadingContract(false);
       }
     }
@@ -74,20 +56,13 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
 
     try {
       setSigningContract(true);
-      
-      // Get signature data (just for validation)
+
       const signatureData = sigPad.current.toDataURL();
-      
-      // Simulate contract acceptance (no database operations)
-      console.log('✅ Contract accepted:', { signatureData, bookingData, car });
-      
-      // Just proceed to payment without database operations
+
       toast.success('Contract accepted successfully');
-      
-      // Wait a moment for user feedback
+
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Proceed to next step
+
       onNext({
         contractAccepted: true,
         signatureData: signatureData,
@@ -131,7 +106,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
           </div>
           <div className="space-y-1 text-right">
             <p className="text-[10px] font-black uppercase tracking-widest text-primary/60">Total Amount</p>
-            <p className="text-lg font-black text-primary">${bookingData.totalAmount?.toLocaleString()}</p>
+            <p className="text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
           </div>
         </div>
 
@@ -161,7 +136,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
                 <div className="bg-yellow-500/5 rounded-lg p-4 text-left">
                   <p className="text-xs text-yellow-500/60 font-bold mb-2">Required Steps:</p>
                   <ol className="text-xs text-yellow-500/80 space-y-1 list-decimal list-inside">
-                    <li>Go to Admin Portal → Contract Manager</li>
+                    <li>Go to Admin Portal &rarr; Contract Manager</li>
                     <li>Upload a master contract PDF</li>
                     <li>Set the contract as "Active"</li>
                     <li>Return to booking flow to continue</li>
@@ -176,8 +151,8 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary block">Digital Signature</label>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={clear}
               className="text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-primary flex items-center gap-2 transition-colors"
             >
@@ -185,13 +160,13 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
             </button>
           </div>
           <div className="relative h-[200px] bg-white/5 border border-white/10 rounded-[24px] overflow-hidden group hover:border-primary/30 transition-colors">
-            <SignatureCanvas 
+            <SignatureCanvas
               ref={sigPad}
               penColor='#D4AF37'
               canvasProps={{
                 className: 'w-full h-full cursor-crosshair',
                 style: { width: '100%', height: '100%' }
-              }} 
+              }}
             />
             <div className="absolute bottom-4 right-4 pointer-events-none opacity-20 group-hover:opacity-40 transition-opacity">
               <FileText size={40} className="text-white" />
@@ -203,11 +178,11 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
         <div className="space-y-4">
           <label className="flex items-start gap-3 cursor-pointer group">
             <div className="relative mt-1">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={agreed}
                 onChange={(e) => setAgreed(e.target.checked)}
-                className="peer sr-only" 
+                className="peer sr-only"
               />
               <div className="w-5 h-5 border-2 border-white/20 rounded-md bg-white/5 peer-checked:bg-primary peer-checked:border-primary transition-all" />
               <CheckCircle2 size={12} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-black opacity-0 peer-checked:opacity-100 transition-opacity" />
@@ -216,7 +191,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
               I have read and agree to the <span className="text-primary underline cursor-pointer">Rental Terms and Conditions</span>, including insurance policies and vehicle usage guidelines.
             </span>
           </label>
-          
+
           <div className="p-4 bg-primary/5 rounded-[20px] flex gap-3 items-start border border-primary/10">
             <ShieldCheck className="text-primary shrink-0" size={16} />
             <p className="text-[10px] text-primary/80 font-bold uppercase tracking-widest leading-normal">
@@ -227,13 +202,13 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
       </div>
 
       <div className="flex gap-4">
-        <button 
+        <button
           type="button" onClick={onPrev}
           className="w-1/4 py-5 bg-white/5 rounded-[24px] text-white font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center"
         >
           <ArrowLeft size={20} />
         </button>
-        <button 
+        <button
           type="submit"
           disabled={signingContract || !agreed}
           className="w-3/4 py-5 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-4 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group disabled:opacity-50"
@@ -245,7 +220,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
             </>
           ) : (
             <>
-              Sign & Proceed to Payment 
+              Sign & Proceed to Payment
               <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
             </>
           )}

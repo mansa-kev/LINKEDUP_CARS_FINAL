@@ -667,6 +667,26 @@ CREATE POLICY "Owners can manage their car maintenance" ON maintenance FOR ALL U
 DROP POLICY IF EXISTS "Owners can update their car bookings" ON bookings;
 CREATE POLICY "Owners can update their car bookings" ON bookings FOR UPDATE USING (fleet_owner_id = auth.uid());
 
+-- Allow guest (anonymous) and authenticated users to create bookings
+DROP POLICY IF EXISTS "Anyone can create bookings" ON bookings;
+CREATE POLICY "Anyone can create bookings" ON bookings FOR INSERT WITH CHECK (true);
+
+-- Allow anyone to read a booking by ID (for confirmation page - guest bookings)
+DROP POLICY IF EXISTS "Anyone can view their booking by id" ON bookings;
+CREATE POLICY "Anyone can view their booking by id" ON bookings FOR SELECT USING (
+  client_id = auth.uid() OR client_id IS NULL OR is_admin() OR fleet_owner_id = auth.uid()
+);
+
+-- Allow guest (anonymous) users to insert pending payments
+DROP POLICY IF EXISTS "Anyone can create pending payments" ON pending_payments;
+CREATE POLICY "Anyone can create pending payments" ON pending_payments FOR INSERT WITH CHECK (true);
+
+-- Allow anonymous uploads to public_assets for guest booking documents
+DROP POLICY IF EXISTS "Anyone can upload booking documents" ON storage.objects;
+CREATE POLICY "Anyone can upload booking documents" ON storage.objects FOR INSERT WITH CHECK (
+  bucket_id = 'public_assets' AND (storage.foldername(name))[1] = 'booking-docs'
+);
+
 -- 26. Missing Policies for Messages
 DROP POLICY IF EXISTS "Users can update their own messages" ON messages;
 CREATE POLICY "Users can update their own messages" ON messages FOR UPDATE USING (sender_id = auth.uid() OR receiver_id = auth.uid());
@@ -711,3 +731,100 @@ DROP POLICY IF EXISTS "Admins can delete" ON storage.objects;
 CREATE POLICY "Admins can delete" ON storage.objects FOR DELETE USING (
   bucket_id = 'public_assets' AND (SELECT role FROM public.user_profiles WHERE id = auth.uid()) = 'admin'
 );
+
+-- ===============================================================
+-- Schema Extensions: Outsourced Cars, Booking Fields, Notifications
+-- ===============================================================
+
+-- Outsourced car columns on cars table
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'cars' AND column_name = 'is_outsourced') THEN
+    ALTER TABLE cars ADD COLUMN is_outsourced BOOLEAN DEFAULT FALSE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'cars' AND column_name = 'outsource_owner_name') THEN
+    ALTER TABLE cars ADD COLUMN outsource_owner_name TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'cars' AND column_name = 'outsource_owner_phone') THEN
+    ALTER TABLE cars ADD COLUMN outsource_owner_phone TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'cars' AND column_name = 'outsource_owner_email') THEN
+    ALTER TABLE cars ADD COLUMN outsource_owner_email TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'cars' AND column_name = 'outsource_commission_rate') THEN
+    ALTER TABLE cars ADD COLUMN outsource_commission_rate NUMERIC DEFAULT 15;
+  END IF;
+END $$;
+
+-- Booking columns for payment method, locations, chauffeur
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'payment_method') THEN
+    ALTER TABLE bookings ADD COLUMN payment_method TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'pickup_location') THEN
+    ALTER TABLE bookings ADD COLUMN pickup_location TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'dropoff_location') THEN
+    ALTER TABLE bookings ADD COLUMN dropoff_location TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'needs_chauffeur') THEN
+    ALTER TABLE bookings ADD COLUMN needs_chauffeur BOOLEAN DEFAULT FALSE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'driver_id') THEN
+    ALTER TABLE bookings ADD COLUMN driver_id UUID REFERENCES user_profiles(id) ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'metadata') THEN
+    ALTER TABLE bookings ADD COLUMN metadata JSONB;
+  END IF;
+END $$;
+
+-- Notification Queue table for external SMS/email delivery
+CREATE TABLE IF NOT EXISTS notification_queue (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE,
+  channel TEXT NOT NULL, -- 'sms' or 'email'
+  template TEXT,
+  data JSONB,
+  recipient TEXT, -- phone number or email address
+  content TEXT,
+  status TEXT DEFAULT 'pending', -- 'pending', 'queued', 'sent', 'failed'
+  attempts INTEGER DEFAULT 0,
+  last_attempt_at TIMESTAMPTZ,
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE notification_queue ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Admins can manage notification queue" ON notification_queue;
+CREATE POLICY "Admins can manage notification queue" ON notification_queue FOR ALL USING (is_admin());
+DROP POLICY IF EXISTS "System can insert notifications" ON notification_queue;
+CREATE POLICY "System can insert notifications" ON notification_queue FOR INSERT WITH CHECK (true);
+
+-- Secure documents bucket for sensitive ID/license uploads
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('secure_documents', 'secure_documents', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Only authenticated users can upload to secure_documents
+DROP POLICY IF EXISTS "Authenticated users can upload secure docs" ON storage.objects;
+CREATE POLICY "Authenticated users can upload secure docs" ON storage.objects FOR INSERT WITH CHECK (
+  bucket_id = 'secure_documents' AND auth.role() = 'authenticated'
+);
+
+-- Users can read their own secure documents (path starts with their user ID)
+DROP POLICY IF EXISTS "Users can read their own secure docs" ON storage.objects;
+CREATE POLICY "Users can read their own secure docs" ON storage.objects FOR SELECT USING (
+  bucket_id = 'secure_documents' AND (
+    (storage.foldername(name))[1] = auth.uid()::text OR
+    (SELECT role FROM public.user_profiles WHERE id = auth.uid()) = 'admin'
+  )
+);
+
+-- Admins can read all secure documents
+DROP POLICY IF EXISTS "Admins can manage secure docs" ON storage.objects;
+CREATE POLICY "Admins can manage secure docs" ON storage.objects FOR ALL USING (
+  bucket_id = 'secure_documents' AND (SELECT role FROM public.user_profiles WHERE id = auth.uid()) = 'admin'
+);
+
+-- Allow notifications to be inserted by the system (for guest bookings too)
+DROP POLICY IF EXISTS "Anyone can insert notifications" ON notifications;
+CREATE POLICY "Anyone can insert notifications" ON notifications FOR INSERT WITH CHECK (true);
