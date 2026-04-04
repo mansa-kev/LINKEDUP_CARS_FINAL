@@ -1,4 +1,5 @@
-import { supabase, handleSupabaseErrorWrapper as handleSupabaseError } from '../lib/supabase';
+import { supabase, handleSupabaseErrorWrapper } from '../lib/supabase';
+const handleSupabaseError = handleSupabaseErrorWrapper;
 
 export const adminService = {
   // --- Dashboard ---
