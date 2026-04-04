@@ -1,25 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { 
-  LayoutDashboard, 
-  Car, 
-  Wrench, 
-  AlertTriangle, 
-  DollarSign, 
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  LayoutDashboard,
+  Car,
+  Wrench,
+  AlertTriangle,
+  DollarSign,
   Receipt,
-  Inbox, 
+  Inbox,
   CalendarCheck,
-  FileText, 
-  TrendingUp, 
+  FileText,
+  TrendingUp,
   Settings as SettingsIcon,
   Menu,
   X,
-  Bell,
-  Search,
-  User,
-  Sun,
-  Moon
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { FleetDashboard } from './FleetDashboard';
 import { MyCars } from './MyCars';
@@ -80,62 +78,160 @@ const navGroups = [
 
 export function FleetLayout() {
   const location = useLocation();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { theme, setTheme } = useTheme();
   const isDarkMode = theme === 'dark';
   const setIsDarkMode = (isDark: boolean) => setTheme(isDark ? 'dark' : 'light');
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(() => {
+    const active = navGroups.find(g => g.items.some(i => i.path === location.pathname));
+    return active?.category ?? 'Strategic Dashboard';
+  });
+
+  // Responsive detection
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) setSidebarOpen(false);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    if (isMobile) setSidebarOpen(false);
+  }, [location.pathname, isMobile]);
+
+  const toggleGroup = useCallback((category: string) => {
+    setExpandedGroup(prev => prev === category ? null : category);
+  }, []);
+
+  const sidebarContent = (
+    <nav className="flex-1 px-4 space-y-2 overflow-y-auto pb-4 pt-2">
+      {navGroups.map((group) => {
+        const isExpanded = expandedGroup === group.category;
+        const hasActive = group.items.some(i => i.path === location.pathname);
+
+        return (
+          <div key={group.category}>
+            <button
+              onClick={() => toggleGroup(group.category)}
+              className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                hasActive
+                  ? 'text-primary bg-primary/5'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <span>{group.category}</span>
+              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+
+            <AnimatePresence initial={false}>
+              {isExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeInOut' }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-1 space-y-1">
+                    {group.items.map((item) => {
+                      const isActive = location.pathname === item.path;
+                      return (
+                        <Link
+                          key={item.name}
+                          to={item.path}
+                          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+                            isActive
+                              ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                              : 'text-muted-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <item.icon size={20} />
+                          <span>{item.name}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
+    </nav>
+  );
+
   return (
     <div className="min-h-screen bg-background flex text-foreground transition-colors duration-300">
-      {/* Sidebar */}
-      <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-card border-r border-border transition-all duration-300 flex flex-col`}>
-        <div className="p-6 flex items-center justify-between">
-          {isSidebarOpen && <span className="font-bold text-xl text-primary">LinkedUp</span>}
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-muted rounded-lg">
-            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex w-64 bg-card border-r border-border flex-col flex-shrink-0">
+        <div className="p-6 flex items-center">
+          <span className="font-bold text-xl text-primary">LinkedUp</span>
         </div>
-        
-        <nav className="flex-1 px-4 space-y-6 overflow-y-auto pb-4">
-          {navGroups.map((group, groupIndex) => (
-            <div key={groupIndex} className="space-y-2">
-              {isSidebarOpen && (
-                <h3 className="px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  {group.category}
-                </h3>
-              )}
-              {group.items.map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.path}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
-                      isActive 
-                        ? 'bg-primary text-white shadow-lg shadow-primary/20' 
-                        : 'text-muted-foreground hover:bg-muted'
-                    }`}
-                    title={!isSidebarOpen ? item.name : undefined}
-                  >
-                    <item.icon size={20} />
-                    {isSidebarOpen && <span>{item.name}</span>}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
+        {sidebarContent}
       </aside>
 
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isMobile && sidebarOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 z-40"
+              onClick={() => setSidebarOpen(false)}
+            />
+            {/* Drawer */}
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed left-0 top-0 h-full w-72 bg-card border-r border-border z-50 flex flex-col shadow-2xl"
+            >
+              <div className="p-6 flex items-center justify-between">
+                <span className="font-bold text-xl text-primary">LinkedUp</span>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="p-2 hover:bg-muted rounded-lg text-muted-foreground"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              {sidebarContent}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        <PortalHeader 
-          isDarkMode={isDarkMode} 
-          setIsDarkMode={setIsDarkMode} 
-          portalType="fleet" 
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile Header with Hamburger */}
+        <div className="flex items-center md:hidden">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-4 text-muted-foreground hover:text-foreground"
+            aria-label="Open sidebar"
+          >
+            <Menu size={24} />
+          </button>
+        </div>
+
+        <PortalHeader
+          isDarkMode={isDarkMode}
+          setIsDarkMode={setIsDarkMode}
+          portalType="fleet"
         />
 
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <Routes>
             <Route index element={<FleetDashboard />} />
             <Route path="cars" element={<MyCars />} />
