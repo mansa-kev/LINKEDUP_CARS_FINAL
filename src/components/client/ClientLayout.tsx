@@ -15,6 +15,7 @@ import {
   ChevronUp,
   User
 } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Dashboard } from './Dashboard';
 import { DigitalGlovebox } from './DigitalGlovebox';
 import { MyBookings } from './MyBookings';
@@ -22,6 +23,7 @@ import { MyProfile } from './MyProfile';
 import { MyInbox } from './MyInbox';
 import { Settings } from './Settings';
 import { LoyaltyRewards } from './LoyaltyRewards';
+import { BrowseAndBook } from './BrowseAndBook';
 import { PortalHeader } from '../PortalHeader';
 
 const navGroups = [
@@ -29,6 +31,7 @@ const navGroups = [
     category: 'Main',
     items: [
       { name: 'Dashboard', path: '/client', icon: LayoutDashboard },
+      { name: 'Browse Cars', path: '/client/browse', icon: Search },
       { name: 'My Bookings', path: '/client/bookings', icon: Car },
     ]
   },
@@ -211,6 +214,7 @@ export function ClientLayout() {
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <Routes>
             <Route index element={<Dashboard />} />
+            <Route path="browse" element={<BrowseAndBook />} />
             <Route path="bookings" element={<MyBookings />} />
             <Route path="profile" element={<MyProfile />} />
             <Route path="glovebox" element={<DigitalGlovebox />} />

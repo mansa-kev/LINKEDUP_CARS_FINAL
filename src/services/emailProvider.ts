@@ -107,7 +107,7 @@ export const EMAIL_TEMPLATES: Record<string, { subject: string; html: (data: Rec
     html: (d) => wrapInHtml('Welcome!', `
       <p style="color:#334155;line-height:1.6;margin:0 0 16px;">Hi <strong>${d.name}</strong>, welcome to LinkedUp Cars!</p>
       <p style="color:#334155;line-height:1.6;margin:0 0 24px;">Browse our fleet, book a car, and hit the road in minutes. We're excited to have you on board.</p>
-      <a href="https://office.linkedupcarsrentals.com/cars" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:14px;">Browse Fleet</a>
+      <a href="https://www.linkedupcarsrentals.com/cars" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:14px;">Browse Fleet</a>
     `),
     text: (d) => `Hi ${d.name}, welcome to LinkedUp Cars!\n\nBrowse our fleet and book your first ride today.\n\n- LinkedUp Cars Team`,
   },
@@ -123,9 +123,9 @@ export const EMAIL_TEMPLATES: Record<string, { subject: string; html: (data: Rec
         </table>
       </div>
       <p style="color:#dc2626;font-weight:600;margin:0 0 16px;">Please change your password immediately after your first login.</p>
-      <a href="https://office.linkedupcarsrentals.com/login" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:14px;">Login Now</a>
+      <a href="https://fleet.linkedupcarsrentals.com/login" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:14px;">Login Now</a>
     `),
-    text: (d) => `Hi ${d.name},\n\nYour fleet owner account has been created.\nEmail: ${d.email}\nTemporary Password: Fleet123!\n\nPlease change your password immediately after first login.\n\nLogin at: https://office.linkedupcarsrentals.com/login\n\n- LinkedUp Cars Team`,
+    text: (d) => `Hi ${d.name},\n\nYour fleet owner account has been created.\nEmail: ${d.email}\nTemporary Password: Fleet123!\n\nPlease change your password immediately after first login.\n\nLogin at: https://fleet.linkedupcarsrentals.com/login\n\n- LinkedUp Cars Team`,
   },
 };
 

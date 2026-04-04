@@ -100,6 +100,23 @@ export function Login() {
   const resetRateLimit = () => updateRateLimit({ attempts: 0, lockoutUntil: null });
 
   // ---------------------------------------------------------------------------
+  // Domain helpers
+  // ---------------------------------------------------------------------------
+  const getPortalUrl = (portalKey: 'app' | 'fleet' | 'admin') => {
+    const urls: Record<string, string> = {
+      app: import.meta.env.VITE_APP_URL || 'https://app.linkedupcarsrentals.com',
+      fleet: import.meta.env.VITE_FLEET_URL || 'https://fleet.linkedupcarsrentals.com',
+      admin: import.meta.env.VITE_ADMIN_URL || 'https://admin.linkedupcarsrentals.com',
+    };
+    return urls[portalKey];
+  };
+
+  const isDev = (() => {
+    const h = window.location.hostname;
+    return h.includes('run.app') || h === 'localhost' || h.includes('google.com');
+  })();
+
+  // ---------------------------------------------------------------------------
   // Redirect logic
   // ---------------------------------------------------------------------------
   const redirectAfterLogin = (userRole: string) => {
@@ -109,16 +126,15 @@ export function Login() {
       : userRole === 'fleet_owner' ? 'fleet'
       : 'app';
 
-    const hostname = window.location.hostname;
-    const isDev = hostname.includes('run.app') || hostname === 'localhost' || hostname.includes('google.com');
-
     if (isDev) {
       setPreviewSubdomain(targetSubdomain);
       if (targetSubdomain === 'admin') navigate('/admin');
       else if (targetSubdomain === 'fleet') navigate('/fleet');
       else navigate('/client');
     } else {
-      window.location.href = `https://${targetSubdomain}.${hostname.split('.').slice(1).join('.')}/${targetSubdomain === 'app' ? 'client' : targetSubdomain}`;
+      const portalUrl = getPortalUrl(targetSubdomain as 'app' | 'fleet' | 'admin');
+      const path = targetSubdomain === 'app' ? '/client' : `/${targetSubdomain}`;
+      window.location.href = `${portalUrl}${path}`;
     }
   };
 
@@ -203,13 +219,14 @@ export function Login() {
     }
 
     try {
-      const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+      // After confirming email, redirect clients to app portal login
+      const appUrl = isDev ? window.location.origin : getPortalUrl('app');
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${siteUrl}/login`,
+          emailRedirectTo: `${appUrl}/login`,
           data: {
             full_name: signUpName,
             phone_number: signUpPhone,
@@ -252,10 +269,15 @@ export function Login() {
     setError(null);
 
     try {
-      const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+      // Redirect to the current portal's login after reset
+      const resetRedirectUrl = isDev ? window.location.origin : (() => {
+        if (portal === 'fleet') return getPortalUrl('fleet');
+        if (portal === 'admin') return getPortalUrl('admin');
+        return getPortalUrl('app');
+      })();
 
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${siteUrl}/login`,
+        redirectTo: `${resetRedirectUrl}/login`,
       });
       if (error) throw error;
       setResetSent(true);

@@ -455,13 +455,13 @@ export const adminService = {
       }
     });
 
-    const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+    const fleetUrl = import.meta.env.VITE_FLEET_URL || 'https://fleet.linkedupcarsrentals.com';
 
     const { data: authData, error: authError } = await adminAuthClient.auth.signUp({
       email: data.email,
       password: 'Fleet123!',
       options: {
-        emailRedirectTo: `${siteUrl}/login`,
+        emailRedirectTo: `${fleetUrl}/login`,
         data: {
           full_name: data.contact_name,
           role: 'fleet_owner',
@@ -571,9 +571,9 @@ export const adminService = {
   },
 
   resetFleetOwnerPassword: async (email: string) => {
-    const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+    const fleetUrl = import.meta.env.VITE_FLEET_URL || 'https://fleet.linkedupcarsrentals.com';
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${siteUrl}/login`,
+      redirectTo: `${fleetUrl}/login`,
     });
     if (error) return handleSupabaseErrorWrapper(error, 'resetFleetOwnerPassword');
   },
