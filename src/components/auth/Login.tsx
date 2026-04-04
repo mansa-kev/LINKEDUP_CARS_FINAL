@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Mail, Lock, Loader2, AlertCircle, ArrowRight, Car, Clock } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Mail, Lock, Loader2, AlertCircle, ArrowRight, Car, Clock, UserPlus, Eye, EyeOff, X, CheckCircle2, User } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useSubdomain } from '../../contexts/SubdomainContext';
+import { toast } from 'sonner';
 
+// ---------------------------------------------------------------------------
+// Rate limiting
+// ---------------------------------------------------------------------------
 interface RateLimitState {
   attempts: number;
   lockoutUntil: number | null;
@@ -12,115 +16,126 @@ interface RateLimitState {
 
 const RATE_LIMIT_KEY = 'login_rate_limit';
 const MAX_ATTEMPTS = 5;
-const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
+const LOCKOUT_DURATION = 15 * 60 * 1000;
 
+// ---------------------------------------------------------------------------
+// Portal detection
+// ---------------------------------------------------------------------------
+type PortalType = 'admin' | 'fleet' | 'client' | 'www';
+
+function detectPortal(subdomain: string, pathname: string): PortalType {
+  if (subdomain === 'admin' || pathname.startsWith('/admin')) return 'admin';
+  if (subdomain === 'fleet' || pathname.startsWith('/fleet')) return 'fleet';
+  if (subdomain === 'app' || pathname.startsWith('/client')) return 'client';
+  return 'www';
+}
+
+const PORTAL_CONFIG: Record<PortalType, { title: string; subtitle: string; allowSignUp: boolean; roleLabel: string }> = {
+  admin: { title: 'Admin Portal', subtitle: 'Manage your platform', allowSignUp: false, roleLabel: 'Administrator' },
+  fleet: { title: 'Fleet Portal', subtitle: 'Manage your fleet', allowSignUp: false, roleLabel: 'Fleet Owner' },
+  client: { title: 'Client Portal', subtitle: 'Your driving experience', allowSignUp: true, roleLabel: 'Client' },
+  www: { title: 'LinkedUp Cars', subtitle: 'Premium car rentals', allowSignUp: true, roleLabel: 'Client' },
+};
+
+// ---------------------------------------------------------------------------
+// Main Login Component
+// ---------------------------------------------------------------------------
 export function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setPreviewSubdomain } = useSubdomain();
+  const { subdomain, setPreviewSubdomain } = useSubdomain();
+  const portal = detectPortal(subdomain, location.pathname);
+  const config = PORTAL_CONFIG[portal];
+
+  // Auth state
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'force-change'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Sign up fields
+  const [signUpName, setSignUpName] = useState('');
+  const [signUpPhone, setSignUpPhone] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Forgot password
   const [resetEmail, setResetEmail] = useState('');
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const [rateLimitState, setRateLimitState] = useState<RateLimitState>({
-    attempts: 0,
-    lockoutUntil: null
-  });
 
-  // Load rate limit state from localStorage on mount
+  // Force password change
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  // Rate limiting
+  const [rateLimitState, setRateLimitState] = useState<RateLimitState>({ attempts: 0, lockoutUntil: null });
+
   useEffect(() => {
     const stored = localStorage.getItem(RATE_LIMIT_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      setRateLimitState(parsed);
-    }
+    if (stored) setRateLimitState(JSON.parse(stored));
   }, []);
 
-  // Check if user is currently locked out
-  const isLockedOut = () => {
-    if (!rateLimitState.lockoutUntil) return false;
-    return Date.now() < rateLimitState.lockoutUntil;
+  const isLockedOut = () => rateLimitState.lockoutUntil ? Date.now() < rateLimitState.lockoutUntil : false;
+  const getRemainingLockoutTime = () => rateLimitState.lockoutUntil ? Math.ceil((rateLimitState.lockoutUntil - Date.now()) / 60000) : 0;
+
+  const updateRateLimit = (state: RateLimitState) => {
+    setRateLimitState(state);
+    localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(state));
   };
 
-  // Get remaining lockout time in minutes
-  const getRemainingLockoutTime = () => {
-    if (!rateLimitState.lockoutUntil) return 0;
-    const remaining = rateLimitState.lockoutUntil - Date.now();
-    return Math.ceil(remaining / (60 * 1000));
-  };
-
-  // Update rate limit state in localStorage
-  const updateRateLimitState = (newState: RateLimitState) => {
-    setRateLimitState(newState);
-    localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(newState));
-  };
-
-  // Increment login attempts
   const incrementAttempts = () => {
     const newAttempts = rateLimitState.attempts + 1;
-    
     if (newAttempts >= MAX_ATTEMPTS) {
-      // Lock out the user
-      const lockoutUntil = Date.now() + LOCKOUT_DURATION;
-      updateRateLimitState({
-        attempts: newAttempts,
-        lockoutUntil
-      });
-      setError(`Too many failed attempts. Account locked for ${LOCKOUT_DURATION / (60 * 1000)} minutes.`);
+      updateRateLimit({ attempts: newAttempts, lockoutUntil: Date.now() + LOCKOUT_DURATION });
+      setError(`Too many failed attempts. Locked for ${LOCKOUT_DURATION / 60000} minutes.`);
     } else {
-      updateRateLimitState({
-        attempts: newAttempts,
-        lockoutUntil: rateLimitState.lockoutUntil
-      });
+      updateRateLimit({ ...rateLimitState, attempts: newAttempts });
     }
   };
 
-  // Reset rate limit on successful login
-  const resetRateLimit = () => {
-    updateRateLimitState({
-      attempts: 0,
-      lockoutUntil: null
-    });
-  };
+  const resetRateLimit = () => updateRateLimit({ attempts: 0, lockoutUntil: null });
 
-  const handleForgotPassword = async () => {
-    if (!resetEmail) {
-      setError('Please enter your email address');
-      return;
-    }
-    setResetLoading(true);
-    setError(null);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/login`,
-      });
-      if (error) throw error;
-      setResetSent(true);
-    } catch (err: any) {
-      setError(err.message || 'Failed to send reset email. Please try again.');
-    } finally {
-      setResetLoading(false);
+  // ---------------------------------------------------------------------------
+  // Redirect logic
+  // ---------------------------------------------------------------------------
+  const redirectAfterLogin = (userRole: string) => {
+    const targetSubdomain = portal === 'admin' ? 'admin'
+      : portal === 'fleet' ? 'fleet'
+      : userRole === 'admin' ? 'admin'
+      : userRole === 'fleet_owner' ? 'fleet'
+      : 'app';
+
+    const hostname = window.location.hostname;
+    const isDev = hostname.includes('run.app') || hostname === 'localhost' || hostname.includes('google.com');
+
+    if (isDev) {
+      setPreviewSubdomain(targetSubdomain);
+      if (targetSubdomain === 'admin') navigate('/admin');
+      else if (targetSubdomain === 'fleet') navigate('/fleet');
+      else navigate('/client');
+    } else {
+      window.location.href = `https://${targetSubdomain}.${hostname.split('.').slice(1).join('.')}/${targetSubdomain === 'app' ? 'client' : targetSubdomain}`;
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Login
+  // ---------------------------------------------------------------------------
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    // Check rate limiting first
     if (isLockedOut()) {
-      const remainingTime = getRemainingLockoutTime();
-      setError(`Account locked. Try again in ${remainingTime} minutes.`);
+      setError(`Account locked. Try again in ${getRemainingLockoutTime()} minutes.`);
       setLoading(false);
       return;
     }
 
-    // Basic validation
     if (!email || !password) {
       setError('Please enter both email and password');
       setLoading(false);
@@ -128,253 +143,566 @@ export function Login() {
     }
 
     try {
-      // Real authentication with Supabase
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
       if (signInError) {
-        console.error('Supabase auth error:', signInError);
-        incrementAttempts(); // Increment failed attempts
+        incrementAttempts();
         setError(signInError.message || 'Invalid email or password');
         return;
       }
 
       if (data.user) {
-        // Reset rate limit on successful login
         resetRateLimit();
-        
-        // Get user profile to determine role
-        const { data: profile, error: profileError } = await supabase
+
+        const { data: profile } = await supabase
           .from('user_profiles')
-          .select('role')
+          .select('role, status')
           .eq('id', data.user.id)
           .single();
 
-        if (profileError) {
-          console.error('Profile fetch error:', profileError);
-          setError('Unable to fetch user profile. Please contact support.');
+        const userRole = profile?.role || 'client';
+
+        // Check if fleet owner needs to change default password
+        if (userRole === 'fleet_owner' && password === 'Fleet123!') {
+          setMode('force-change');
           return;
         }
 
-        // Determine redirect path based on user role
-        const userRole = profile?.role || 'client';
-        const targetSubdomain = location.pathname.includes('/admin') ? 'admin' 
-                              : location.pathname.includes('/fleet') ? 'fleet' 
-                              : userRole === 'admin' ? 'admin'
-                              : userRole === 'fleet_owner' ? 'fleet'
-                              : 'app';
-
-        const hostname = window.location.hostname;
-        const isDev = hostname.includes('run.app') || hostname === 'localhost' || hostname.includes('google.com');
-
-        if (isDev) {
-          setPreviewSubdomain(targetSubdomain);
-          if (targetSubdomain === 'admin') navigate('/admin');
-          else if (targetSubdomain === 'fleet') navigate('/fleet');
-          else navigate('/client');
-        } else {
-          window.location.href = `https://${targetSubdomain}.${hostname.split('.').slice(1).join('.')}/${targetSubdomain === 'app' ? 'client' : targetSubdomain}`;
-        }
+        redirectAfterLogin(userRole);
       }
-    } catch (err: any) {
-      console.error('Login error:', err);
-      incrementAttempts(); // Increment failed attempts for system errors too
+    } catch {
+      incrementAttempts();
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Sign Up (clients only)
+  // ---------------------------------------------------------------------------
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      setLoading(false);
+      return;
+    }
+    if (!signUpName.trim()) {
+      setError('Please enter your full name');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${siteUrl}/login`,
+          data: {
+            full_name: signUpName,
+            phone_number: signUpPhone,
+          },
+        },
+      });
+
+      if (authError) throw authError;
+
+      if (authData.user) {
+        // Create user profile
+        await supabase.from('user_profiles').upsert({
+          id: authData.user.id,
+          email,
+          full_name: signUpName,
+          phone_number: signUpPhone,
+          role: 'client',
+        });
+
+        setSuccessMsg('Account created! Check your email to confirm your account, then log in.');
+        setMode('login');
+        setPassword('');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to create account');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Forgot Password
+  // ---------------------------------------------------------------------------
+  const handleForgotPassword = async () => {
+    if (!resetEmail) {
+      setError('Please enter your email address');
+      return;
+    }
+    setResetLoading(true);
+    setError(null);
+
+    try {
+      const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${siteUrl}/login`,
+      });
+      if (error) throw error;
+      setResetSent(true);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset email');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Force Password Change (fleet owners on first login)
+  // ---------------------------------------------------------------------------
+  const handleForcePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setChangingPassword(true);
+    setError(null);
+
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters');
+      setChangingPassword(false);
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setError('Passwords do not match');
+      setChangingPassword(false);
+      return;
+    }
+    if (newPassword === 'Fleet123!') {
+      setError('Please choose a different password');
+      setChangingPassword(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+
+      toast.success('Password changed successfully!');
+      redirectAfterLogin('fleet_owner');
+    } catch (err: any) {
+      setError(err.message || 'Failed to change password');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <div className="absolute inset-0 z-0 overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]" />
-      </div>
-
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 w-full max-w-md"
-      >
-        <div className="bg-card border border-border rounded-3xl shadow-2xl overflow-hidden">
-          <div className="p-8 pb-0 flex flex-col items-center">
-            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-6">
-              <Car size={32} />
-            </div>
-            <h1 className="text-3xl font-serif font-black tracking-tighter text-foreground italic mb-2">
-              LINKEDUP
-            </h1>
-            <p className="text-muted-foreground text-sm font-medium">
-              Access your command center
-            </p>
-          </div>
-
-          <form onSubmit={handleLogin} className="p-8 space-y-6">
-            {error && (
-              <motion.div 
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="p-4 bg-error/10 border border-error/20 rounded-xl flex items-center gap-3 text-error text-sm"
-              >
-                <AlertCircle size={18} />
-                {error}
-              </motion.div>
-            )}
-
-            {/* Rate Limiting Warning */}
-            {isLockedOut() && (
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3 text-amber-800"
-              >
-                <Clock className="flex-shrink-0" size={18} />
-                <div className="text-sm">
-                  <div className="font-semibold">Account Temporarily Locked</div>
-                  <div>Too many failed login attempts. Please try again in {getRemainingLockoutTime()} minutes.</div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* Remaining Attempts Warning */}
-            {!isLockedOut() && rateLimitState.attempts > 0 && (
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="p-3 bg-orange-50 border border-orange-200 rounded-xl flex items-center gap-3 text-orange-800 text-sm"
-              >
-                <AlertCircle className="flex-shrink-0" size={16} />
-                <div>
-                  {MAX_ATTEMPTS - rateLimitState.attempts} attempts remaining before account lockout.
-                </div>
-              </motion.div>
-            )}
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-medium"
-                    placeholder="name@example.com"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between items-center ml-1">
-                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    Password
-                  </label>
-                  <button type="button" onClick={() => { setShowForgotPassword(true); setResetEmail(email); }} className="text-[10px] font-bold text-primary hover:underline">
-                    Forgot Password?
-                  </button>
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-medium"
-                    placeholder="••••••••"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || isLockedOut()}
-              className="w-full py-4 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:hover:scale-100"
-            >
-              {loading ? (
-                <Loader2 className="animate-spin" size={20} />
-              ) : (
-                <>
-                  Sign In
-                  <ArrowRight size={20} />
-                </>
-              )}
-            </button>
-          </form>
-
-          <div className="p-6 bg-muted/30 border-t border-border text-center">
-            <p className="text-xs text-muted-foreground">
-              Don't have an account?{' '}
-              <button className="font-bold text-primary hover:underline">
-                Contact Support
-              </button>
-            </p>
-          </div>
+    <div className="min-h-screen flex">
+      {/* Left side - Background image */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+        {/* Placeholder background - user will provide image later */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+          <img
+            src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1200&q=80"
+            alt="Luxury car"
+            className="w-full h-full object-cover opacity-40"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-black/70" />
         </div>
 
-        {/* Forgot Password Modal */}
-        {showForgotPassword && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-6 bg-card border border-border rounded-3xl shadow-2xl p-8 space-y-4"
-          >
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold text-foreground">Reset Password</h2>
-              <button onClick={() => { setShowForgotPassword(false); setResetSent(false); setError(null); }} className="text-muted-foreground hover:text-foreground">
-                <Clock size={16} />
-              </button>
+        {/* Overlay content */}
+        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+          <div>
+            <h2 className="text-4xl font-serif font-black italic text-white tracking-tight leading-tight">
+              LINKEDUP<br />CARS
+            </h2>
+            <p className="text-white/50 text-sm mt-2 font-medium">Premium Car Rentals</p>
+          </div>
+
+          <div className="space-y-6">
+            <blockquote className="text-xl text-white/80 font-serif italic leading-relaxed">
+              "The road is your canvas. Drive your masterpiece."
+            </blockquote>
+            <div className="flex items-center gap-8 text-white/40 text-xs font-bold uppercase tracking-widest">
+              <span>Nairobi</span>
+              <span>&bull;</span>
+              <span>Mombasa</span>
+              <span>&bull;</span>
+              <span>Kisumu</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right side - Form */}
+      <div className="flex-1 flex items-center justify-center p-6 md:p-12 bg-background relative">
+        {/* Mobile background */}
+        <div className="absolute inset-0 lg:hidden overflow-hidden">
+          <img
+            src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800&q=60"
+            alt=""
+            className="w-full h-full object-cover opacity-5"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative z-10 w-full max-w-md"
+        >
+          {/* Success message */}
+          <AnimatePresence>
+            {successMsg && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-2xl flex items-start gap-3"
+              >
+                <CheckCircle2 className="text-green-500 shrink-0 mt-0.5" size={18} />
+                <div>
+                  <p className="text-sm font-bold text-green-600">{successMsg}</p>
+                </div>
+                <button onClick={() => setSuccessMsg(null)} className="text-green-500/60 hover:text-green-500 ml-auto shrink-0">
+                  <X size={16} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="bg-card border border-border rounded-3xl shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="p-8 pb-0 flex flex-col items-center">
+              <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-5">
+                <Car size={28} />
+              </div>
+              <h1 className="text-2xl font-serif font-black tracking-tighter text-foreground italic mb-1">
+                {config.title}
+              </h1>
+              <p className="text-muted-foreground text-sm font-medium">
+                {mode === 'force-change' ? 'Change your password to continue' : config.subtitle}
+              </p>
+
+              {/* Portal badge */}
+              {portal !== 'www' && (
+                <div className="mt-3 px-3 py-1 bg-primary/5 rounded-full">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-primary">{config.roleLabel}</span>
+                </div>
+              )}
             </div>
 
-            {resetSent ? (
-              <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl text-green-600 text-sm">
-                Password reset link sent! Check your email inbox.
-              </div>
-            ) : (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  Enter your email and we'll send you a link to reset your password.
-                </p>
-                {error && (
-                  <div className="p-3 bg-error/10 border border-error/20 rounded-xl flex items-center gap-2 text-error text-sm">
-                    <AlertCircle size={16} />
-                    {error}
+            {/* --------------- Force Password Change --------------- */}
+            {mode === 'force-change' && (
+              <form onSubmit={handleForcePasswordChange} className="p-8 space-y-5">
+                <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                  <p className="text-sm text-amber-600 font-medium">
+                    You are using a temporary password. Please set a new secure password to continue.
+                  </p>
+                </div>
+
+                {error && <ErrorAlert message={error} />}
+
+                <PasswordField
+                  label="New Password"
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  show={showPassword}
+                  onToggle={() => setShowPassword(!showPassword)}
+                  placeholder="Min 8 characters"
+                />
+                <PasswordField
+                  label="Confirm New Password"
+                  value={confirmNewPassword}
+                  onChange={setConfirmNewPassword}
+                  show={showPassword}
+                  onToggle={() => setShowPassword(!showPassword)}
+                  placeholder="Repeat password"
+                />
+
+                <SubmitButton loading={changingPassword} disabled={changingPassword}>
+                  Set New Password
+                </SubmitButton>
+              </form>
+            )}
+
+            {/* --------------- Login Form --------------- */}
+            {mode === 'login' && (
+              <form onSubmit={handleLogin} className="p-8 space-y-5">
+                {error && <ErrorAlert message={error} />}
+
+                {isLockedOut() && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3">
+                    <Clock className="text-amber-500 shrink-0" size={18} />
+                    <div className="text-sm text-amber-600">
+                      <span className="font-bold">Account locked.</span> Try again in {getRemainingLockoutTime()} minutes.
+                    </div>
+                  </motion.div>
+                )}
+
+                {!isLockedOut() && rateLimitState.attempts > 0 && (
+                  <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl text-sm text-orange-600 flex items-center gap-2">
+                    <AlertCircle size={16} className="shrink-0" />
+                    {MAX_ATTEMPTS - rateLimitState.attempts} attempts remaining
                   </div>
                 )}
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                  <input
-                    type="email"
-                    value={resetEmail}
-                    onChange={(e) => setResetEmail(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-medium"
-                    placeholder="name@example.com"
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                    <input
+                      type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-medium text-sm"
+                      placeholder="name@example.com" required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center ml-1">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Password</label>
+                    <button type="button" onClick={() => { setMode('forgot'); setResetEmail(email); setError(null); }} className="text-[10px] font-bold text-primary hover:underline">
+                      Forgot Password?
+                    </button>
+                  </div>
+                  <PasswordField
+                    value={password} onChange={setPassword}
+                    show={showPassword} onToggle={() => setShowPassword(!showPassword)}
+                    placeholder="••••••••"
                   />
                 </div>
-                <button
-                  onClick={handleForgotPassword}
-                  disabled={resetLoading}
-                  className="w-full py-3 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
-                >
-                  {resetLoading ? (
-                    <Loader2 className="animate-spin" size={18} />
-                  ) : (
-                    'Send Reset Link'
-                  )}
-                </button>
-              </>
+
+                <SubmitButton loading={loading} disabled={loading || isLockedOut()}>
+                  Sign In
+                </SubmitButton>
+              </form>
             )}
-          </motion.div>
-        )}
-      </motion.div>
+
+            {/* --------------- Sign Up Form (clients only) --------------- */}
+            {mode === 'signup' && (
+              <form onSubmit={handleSignUp} className="p-8 space-y-5">
+                {error && <ErrorAlert message={error} />}
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Full Name</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                    <input
+                      type="text" value={signUpName} onChange={(e) => setSignUpName(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-medium text-sm"
+                      placeholder="John Doe" required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                    <input
+                      type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-medium text-sm"
+                      placeholder="name@example.com" required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">+254</span>
+                    <input
+                      type="tel" value={signUpPhone} onChange={(e) => setSignUpPhone(e.target.value)}
+                      className="w-full pl-16 pr-4 py-3.5 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-medium text-sm"
+                      placeholder="712345678"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <PasswordField
+                    label="Password" value={password} onChange={setPassword}
+                    show={showPassword} onToggle={() => setShowPassword(!showPassword)}
+                    placeholder="Min 6 chars"
+                  />
+                  <PasswordField
+                    label="Confirm" value={confirmPassword} onChange={setConfirmPassword}
+                    show={showPassword} onToggle={() => setShowPassword(!showPassword)}
+                    placeholder="Repeat"
+                  />
+                </div>
+
+                <SubmitButton loading={loading} disabled={loading}>
+                  <UserPlus size={18} /> Create Account
+                </SubmitButton>
+              </form>
+            )}
+
+            {/* --------------- Forgot Password --------------- */}
+            {mode === 'forgot' && (
+              <div className="p-8 space-y-5">
+                {resetSent ? (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center gap-3">
+                      <CheckCircle2 className="text-green-500" size={18} />
+                      <p className="text-sm font-medium text-green-600">Password reset link sent! Check your email inbox.</p>
+                    </div>
+                    <button
+                      onClick={() => { setMode('login'); setResetSent(false); setError(null); }}
+                      className="w-full py-3 bg-muted rounded-xl text-sm font-bold text-foreground hover:bg-muted/80 transition-colors"
+                    >
+                      Back to Sign In
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">Enter your email and we'll send you a link to reset your password.</p>
+                    {error && <ErrorAlert message={error} />}
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                      <input
+                        type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3.5 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-medium text-sm"
+                        placeholder="name@example.com"
+                      />
+                    </div>
+                    <SubmitButton loading={resetLoading} disabled={resetLoading} onClick={handleForgotPassword} type="button">
+                      Send Reset Link
+                    </SubmitButton>
+                    <button
+                      onClick={() => { setMode('login'); setError(null); }}
+                      className="w-full py-2 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Back to Sign In
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="p-6 bg-muted/30 border-t border-border text-center">
+              {mode === 'login' && config.allowSignUp && (
+                <p className="text-xs text-muted-foreground">
+                  Don't have an account?{' '}
+                  <button onClick={() => { setMode('signup'); setError(null); setSuccessMsg(null); }} className="font-bold text-primary hover:underline">
+                    Sign Up
+                  </button>
+                </p>
+              )}
+              {mode === 'login' && !config.allowSignUp && (
+                <p className="text-xs text-muted-foreground">
+                  Account issues? Contact <span className="font-bold text-primary">support@linkedupcarsrentals.com</span>
+                </p>
+              )}
+              {mode === 'signup' && (
+                <p className="text-xs text-muted-foreground">
+                  Already have an account?{' '}
+                  <button onClick={() => { setMode('login'); setError(null); }} className="font-bold text-primary hover:underline">
+                    Sign In
+                  </button>
+                </p>
+              )}
+              {mode === 'forgot' && !resetSent && (
+                <p className="text-xs text-muted-foreground">
+                  Remember your password?{' '}
+                  <button onClick={() => { setMode('login'); setError(null); }} className="font-bold text-primary hover:underline">
+                    Sign In
+                  </button>
+                </p>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function ErrorAlert({ message }: { message: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      className="p-4 bg-error/10 border border-error/20 rounded-xl flex items-center gap-3 text-error text-sm"
+    >
+      <AlertCircle size={18} className="shrink-0" />
+      <span>{message}</span>
+    </motion.div>
+  );
+}
+
+function PasswordField({ label, value, onChange, show, onToggle, placeholder }: {
+  label?: string;
+  value: string;
+  onChange: (v: string) => void;
+  show: boolean;
+  onToggle: () => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {label && <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">{label}</label>}
+      <div className="relative">
+        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+        <input
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full pl-12 pr-12 py-3.5 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-medium text-sm"
+          placeholder={placeholder || '••••••••'}
+          required
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {show ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SubmitButton({ loading, disabled, children, onClick, type = 'submit' }: {
+  loading: boolean;
+  disabled: boolean;
+  children: React.ReactNode;
+  onClick?: () => void;
+  type?: 'submit' | 'button';
+}) {
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full py-4 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:hover:scale-100 text-sm"
+    >
+      {loading ? (
+        <Loader2 className="animate-spin" size={20} />
+      ) : (
+        <>
+          {children}
+          <ArrowRight size={18} />
+        </>
+      )}
+    </button>
   );
 }

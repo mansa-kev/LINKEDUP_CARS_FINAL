@@ -49,9 +49,14 @@ export function BookingConfirmation() {
     setCreatingAccount(true);
     try {
       // Sign up with Supabase Auth
+      const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${siteUrl}/login`,
+        },
       });
 
       if (authError) throw authError;
