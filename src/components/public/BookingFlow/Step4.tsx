@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Car } from '../../../types';
 import { ArrowLeft, CreditCard, ShieldCheck, CheckCircle2, Loader2, Phone, Info, AlertCircle, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +18,7 @@ export function Step4({ car, bookingData, onPrev }: Step4Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'mpesa'>('card');
   const [mpesaCode, setMpesaCode] = useState('');
+  const mpesaAccountNumber = useMemo(() => `RENTAL_${Math.floor(1000 + Math.random() * 9000)}`, []);
 
   const handleConfirm = async () => {
     if (paymentMethod === 'mpesa' && !mpesaCode) {
@@ -31,8 +32,8 @@ export function Step4({ car, bookingData, onPrev }: Step4Props) {
       const result = await bookingService.createBooking({
         ...bookingData,
         carId: car.id,
-        payment_method: paymentMethod,
-        mpesa_code: paymentMethod === 'mpesa' ? mpesaCode : null
+        paymentMethod: paymentMethod,
+        mpesaCode: paymentMethod === 'mpesa' ? mpesaCode : null
       });
 
       // Release payment hold after successful booking
@@ -124,7 +125,7 @@ export function Step4({ car, bookingData, onPrev }: Step4Props) {
                     <li>Go to M-Pesa on your phone</li>
                       <li>Select Lipa na M-Pesa &gt; Paybill</li>
                     <li>Enter Business No: <span className="font-black text-white">4040404</span></li>
-                    <li>Enter Account No: <span className="font-black text-white">RENTAL_{Math.floor(1000 + Math.random() * 9000)}</span></li>
+                    <li>Enter Account No: <span className="font-black text-white">{mpesaAccountNumber}</span></li>
                     <li>Enter Amount: <span className="font-black text-white">KES {bookingData.totalAmount?.toLocaleString()}</span></li>
                   </ol>
                 </div>

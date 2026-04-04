@@ -667,6 +667,26 @@ CREATE POLICY "Owners can manage their car maintenance" ON maintenance FOR ALL U
 DROP POLICY IF EXISTS "Owners can update their car bookings" ON bookings;
 CREATE POLICY "Owners can update their car bookings" ON bookings FOR UPDATE USING (fleet_owner_id = auth.uid());
 
+-- Allow guest (anonymous) and authenticated users to create bookings
+DROP POLICY IF EXISTS "Anyone can create bookings" ON bookings;
+CREATE POLICY "Anyone can create bookings" ON bookings FOR INSERT WITH CHECK (true);
+
+-- Allow anyone to read a booking by ID (for confirmation page - guest bookings)
+DROP POLICY IF EXISTS "Anyone can view their booking by id" ON bookings;
+CREATE POLICY "Anyone can view their booking by id" ON bookings FOR SELECT USING (
+  client_id = auth.uid() OR client_id IS NULL OR is_admin() OR fleet_owner_id = auth.uid()
+);
+
+-- Allow guest (anonymous) users to insert pending payments
+DROP POLICY IF EXISTS "Anyone can create pending payments" ON pending_payments;
+CREATE POLICY "Anyone can create pending payments" ON pending_payments FOR INSERT WITH CHECK (true);
+
+-- Allow anonymous uploads to public_assets for guest booking documents
+DROP POLICY IF EXISTS "Anyone can upload booking documents" ON storage.objects;
+CREATE POLICY "Anyone can upload booking documents" ON storage.objects FOR INSERT WITH CHECK (
+  bucket_id = 'public_assets' AND (storage.foldername(name))[1] = 'booking-docs'
+);
+
 -- 26. Missing Policies for Messages
 DROP POLICY IF EXISTS "Users can update their own messages" ON messages;
 CREATE POLICY "Users can update their own messages" ON messages FOR UPDATE USING (sender_id = auth.uid() OR receiver_id = auth.uid());

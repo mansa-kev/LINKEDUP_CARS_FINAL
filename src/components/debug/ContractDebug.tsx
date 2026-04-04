@@ -44,11 +44,9 @@ export function ContractDebug() {
         const contract = await enhancedContractService.getMasterContract();
         console.log('📄 Enhanced service result:', contract);
 
-        // Test 5: Create test contract if needed
+        // Test 5: Note if no active contract found
         if (!contract && (!activeContracts || activeContracts.length === 0)) {
-          console.log('🔨 Creating test contract...');
-          const testContract = await enhancedContractService.createTestContract();
-          console.log('✨ Test contract created:', testContract);
+          console.log('No active contracts found. Upload one via Admin Portal.');
         }
 
         setDebugInfo({

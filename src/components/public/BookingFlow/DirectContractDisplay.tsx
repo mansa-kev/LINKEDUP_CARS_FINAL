@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 
 interface DirectContractDisplayProps {
   contract: any;
@@ -7,10 +7,6 @@ interface DirectContractDisplayProps {
 }
 
 export function DirectContractDisplay({ contract, bookingData, car }: DirectContractDisplayProps) {
-  useEffect(() => {
-    console.log('📄 DirectContractDisplay: Contract loaded!', { contract, bookingData, car });
-  }, [contract, bookingData, car]);
-
   if (!contract) {
     return (
       <div className="p-8 bg-yellow-100 border border-yellow-300 rounded-lg text-center">
@@ -40,8 +36,6 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
                      bookingData?.full_name || 
                      `${bookingData?.firstName || ''} ${bookingData?.lastName || ''}`.trim() ||
                      'the Client';
-    
-    console.log('🔍 Client Name:', { fullName, bookingData });
     
     return fullName;
   };
