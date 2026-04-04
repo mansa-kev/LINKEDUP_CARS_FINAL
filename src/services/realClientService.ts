@@ -1,4 +1,4 @@
-import { supabase, handleSupabaseError } from '../lib/supabase';
+import { supabase, handleSupabaseErrorWrapper as handleSupabaseError } from '../lib/supabase';
 
 export const clientService = {
   getDashboardData: async (clientId: string) => {

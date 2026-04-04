@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { handleSupabaseError } from '../utils/errorHandling';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -9,7 +10,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
 
-export const handleSupabaseError = (error: any, operation: string) => {
-  console.error(`Supabase Error during ${operation}:`, error);
-  throw new Error(error.message || `An error occurred during ${operation}`);
+export const handleSupabaseErrorWrapper = (error: any, operation: string) => {
+  throw new Error(handleSupabaseError(error, operation));
 };

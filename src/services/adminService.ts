@@ -1,4 +1,4 @@
-import { supabase, handleSupabaseError } from '../lib/supabase';
+import { supabase, handleSupabaseErrorWrapper as handleSupabaseError } from '../lib/supabase';
 
 export const adminService = {
   // --- Dashboard ---
@@ -168,7 +168,7 @@ export const adminService = {
         ]
       };
     } catch (error) {
-      return handleSupabaseError(error, 'getDashboardStats');
+      return handleSupabaseErrorWrapper(error, 'getDashboardStats');
     }
   },
 
@@ -188,7 +188,7 @@ export const adminService = {
       .order('created_at', { ascending: false })
       .range(from, to);
 
-    if (error) return handleSupabaseError(error, 'getBookings');
+    if (error) return handleSupabaseErrorWrapper(error, 'getBookings');
     return { data, count };
   },
 
@@ -198,7 +198,7 @@ export const adminService = {
       .update({ status })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'updateBookingStatus');
+    if (error) return handleSupabaseErrorWrapper(error, 'updateBookingStatus');
     return data;
   },
 
@@ -219,7 +219,7 @@ export const adminService = {
       .order('created_at', { ascending: false })
       .range(from, to);
 
-    if (error) return handleSupabaseError(error, 'getCars');
+    if (error) return handleSupabaseErrorWrapper(error, 'getCars');
     return { data, count };
   },
 
@@ -265,7 +265,7 @@ export const adminService = {
       .from('cars')
       .insert([processedCar])
       .select();
-    if (error) return handleSupabaseError(error, 'addCar');
+    if (error) return handleSupabaseErrorWrapper(error, 'addCar');
     return data;
   },
 
@@ -286,7 +286,7 @@ export const adminService = {
       .update(processedUpdates)
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'updateCar');
+    if (error) return handleSupabaseErrorWrapper(error, 'updateCar');
     return data;
   },
 
@@ -295,7 +295,7 @@ export const adminService = {
       .from('cars')
       .delete()
       .eq('id', id);
-    if (error) return handleSupabaseError(error, 'deleteCar');
+    if (error) return handleSupabaseErrorWrapper(error, 'deleteCar');
   },
 
   // --- Users ---
@@ -304,7 +304,7 @@ export const adminService = {
       .from('user_profiles')
       .select('*')
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getUsers');
+    if (error) return handleSupabaseErrorWrapper(error, 'getUsers');
     return data;
   },
 
@@ -314,7 +314,7 @@ export const adminService = {
       .update({ role })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'updateUserRole');
+    if (error) return handleSupabaseErrorWrapper(error, 'updateUserRole');
     return data;
   },
 
@@ -324,7 +324,7 @@ export const adminService = {
       .update({ status })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'updateUserStatus');
+    if (error) return handleSupabaseErrorWrapper(error, 'updateUserStatus');
     return data;
   },
 
@@ -333,7 +333,7 @@ export const adminService = {
       .from('user_profiles')
       .delete()
       .eq('id', id);
-    if (error) return handleSupabaseError(error, 'deleteUser');
+    if (error) return handleSupabaseErrorWrapper(error, 'deleteUser');
     return true;
   },
 
@@ -342,7 +342,7 @@ export const adminService = {
     const { data, error } = await supabase
       .from('settings')
       .select('*');
-    if (error) return handleSupabaseError(error, 'getSettings');
+    if (error) return handleSupabaseErrorWrapper(error, 'getSettings');
     return data;
   },
 
@@ -351,7 +351,7 @@ export const adminService = {
       .from('settings')
       .upsert({ key, value, updated_at: new Date().toISOString() })
       .select();
-    if (error) return handleSupabaseError(error, 'updateSetting');
+    if (error) return handleSupabaseErrorWrapper(error, 'updateSetting');
     return data;
   },
 
@@ -361,7 +361,7 @@ export const adminService = {
       .select('*')
       .eq('role', 'admin')
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getAdmins');
+    if (error) return handleSupabaseErrorWrapper(error, 'getAdmins');
     return data;
   },
 
@@ -373,7 +373,7 @@ export const adminService = {
       .update({ role: 'admin' })
       .eq('email', email) // Assuming email is in user_profiles
       .select();
-    if (error) return handleSupabaseError(error, 'addAdmin');
+    if (error) return handleSupabaseErrorWrapper(error, 'addAdmin');
     return data;
   },
 
@@ -383,7 +383,7 @@ export const adminService = {
       .update({ role: 'client' })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'removeAdmin');
+    if (error) return handleSupabaseErrorWrapper(error, 'removeAdmin');
     return data;
   },
 
@@ -399,7 +399,7 @@ export const adminService = {
       `)
       .eq('role', 'fleet_owner');
       
-    if (error) return handleSupabaseError(error, 'getFleetOwnersWithStats');
+    if (error) return handleSupabaseErrorWrapper(error, 'getFleetOwnersWithStats');
     
     const { data: transactions } = await supabase
       .from('transactions')
@@ -436,7 +436,7 @@ export const adminService = {
         fleet_owner_settings (*)
       `)
       .eq('role', 'fleet_owner');
-    if (error) return handleSupabaseError(error, 'getFleetOwners');
+    if (error) return handleSupabaseErrorWrapper(error, 'getFleetOwners');
     return data;
   },
 
@@ -459,7 +459,7 @@ export const adminService = {
       password: data.password,
     });
 
-    if (authError) return handleSupabaseError(authError, 'createFleetOwnerAccount_Auth');
+    if (authError) return handleSupabaseErrorWrapper(authError, 'createFleetOwnerAccount_Auth');
 
     const userId = authData.user?.id;
     if (!userId) throw new Error('Failed to create user account');
@@ -477,7 +477,7 @@ export const adminService = {
       })
       .eq('id', userId);
 
-    if (profileError) return handleSupabaseError(profileError, 'createFleetOwnerAccount_Profile');
+    if (profileError) return handleSupabaseErrorWrapper(profileError, 'createFleetOwnerAccount_Profile');
 
     // Create fleet owner settings
     const { error: settingsError } = await supabase
@@ -489,7 +489,7 @@ export const adminService = {
         status: data.status || 'pending_verification'
       });
 
-    if (settingsError) return handleSupabaseError(settingsError, 'createFleetOwnerAccount_Settings');
+    if (settingsError) return handleSupabaseErrorWrapper(settingsError, 'createFleetOwnerAccount_Settings');
 
     // Send automated email via Inbox module (messages table)
     const { data: adminUser } = await supabase.auth.getUser();
@@ -545,7 +545,7 @@ export const adminService = {
       .from('fleet_owner_settings')
       .upsert({ id, ...settings })
       .select();
-    if (error) return handleSupabaseError(error, 'updateFleetOwnerSettings');
+    if (error) return handleSupabaseErrorWrapper(error, 'updateFleetOwnerSettings');
     return data;
   },
 
@@ -553,7 +553,7 @@ export const adminService = {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-    if (error) return handleSupabaseError(error, 'resetFleetOwnerPassword');
+    if (error) return handleSupabaseErrorWrapper(error, 'resetFleetOwnerPassword');
   },
 
   // --- Financials ---
@@ -601,7 +601,7 @@ export const adminService = {
         chartData
       };
     } catch (error) {
-      return handleSupabaseError(error, 'getFinancials');
+      return handleSupabaseErrorWrapper(error, 'getFinancials');
     }
   },
 
@@ -612,7 +612,7 @@ export const adminService = {
       .select('*, fleet_owner:user_profiles!transactions_user_id_fkey(*)')
       .eq('type', 'payout_out')
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getPayouts');
+    if (error) return handleSupabaseErrorWrapper(error, 'getPayouts');
     return data;
   },
 
@@ -622,7 +622,7 @@ export const adminService = {
       .update({ status: 'completed' })
       .in('id', ids)
       .select();
-    if (error) return handleSupabaseError(error, 'approvePayouts');
+    if (error) return handleSupabaseErrorWrapper(error, 'approvePayouts');
     return data;
   },
 
@@ -635,7 +635,7 @@ export const adminService = {
         user_profiles (*)
       `)
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getTransactions');
+    if (error) return handleSupabaseErrorWrapper(error, 'getTransactions');
     return data;
   },
 
@@ -644,7 +644,7 @@ export const adminService = {
       .from('expenses')
       .select('*')
       .order('date', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getExpenses');
+    if (error) return handleSupabaseErrorWrapper(error, 'getExpenses');
     return data;
   },
 
@@ -653,7 +653,7 @@ export const adminService = {
       .from('expenses')
       .insert([expense])
       .select();
-    if (error) return handleSupabaseError(error, 'addExpense');
+    if (error) return handleSupabaseErrorWrapper(error, 'addExpense');
     return data;
   },
 
@@ -663,7 +663,7 @@ export const adminService = {
       .from('pricing_rules')
       .select('*')
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getPricingRules');
+    if (error) return handleSupabaseErrorWrapper(error, 'getPricingRules');
     return data;
   },
 
@@ -672,7 +672,7 @@ export const adminService = {
       .from('pricing_rules')
       .insert([rule])
       .select();
-    if (error) return handleSupabaseError(error, 'addPricingRule');
+    if (error) return handleSupabaseErrorWrapper(error, 'addPricingRule');
     return data;
   },
 
@@ -682,7 +682,7 @@ export const adminService = {
       .update(updates)
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'updatePricingRule');
+    if (error) return handleSupabaseErrorWrapper(error, 'updatePricingRule');
     return data;
   },
 
@@ -691,7 +691,7 @@ export const adminService = {
       .from('pricing_rules')
       .delete()
       .eq('id', id);
-    if (error) return handleSupabaseError(error, 'deletePricingRule');
+    if (error) return handleSupabaseErrorWrapper(error, 'deletePricingRule');
   },
 
   // --- Coupons (Removed duplicate) ---
@@ -706,7 +706,7 @@ export const adminService = {
         cars (*)
       `)
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getReviews');
+    if (error) return handleSupabaseErrorWrapper(error, 'getReviews');
     return data;
   },
 
@@ -716,7 +716,7 @@ export const adminService = {
       .update({ status })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'updateReviewStatus');
+    if (error) return handleSupabaseErrorWrapper(error, 'updateReviewStatus');
     return data;
   },
 
@@ -725,7 +725,7 @@ export const adminService = {
       .from('reviews')
       .delete()
       .eq('id', id);
-    if (error) return handleSupabaseError(error, 'deleteReview');
+    if (error) return handleSupabaseErrorWrapper(error, 'deleteReview');
   },
 
   // --- Reports ---
@@ -734,7 +734,7 @@ export const adminService = {
       .from('reports')
       .select('*')
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getReports');
+    if (error) return handleSupabaseErrorWrapper(error, 'getReports');
     return data;
   },
 
@@ -782,7 +782,7 @@ export const adminService = {
       .from('reports')
       .insert([{ ...report, status: 'generating' }])
       .select();
-    if (error) return handleSupabaseError(error, 'generateReport');
+    if (error) return handleSupabaseErrorWrapper(error, 'generateReport');
     
     // Simulate generation for now
     setTimeout(async () => {
@@ -804,7 +804,7 @@ export const adminService = {
         driver_profiles (*)
       `)
       .eq('role', 'driver');
-    if (error) return handleSupabaseError(error, 'getDrivers');
+    if (error) return handleSupabaseErrorWrapper(error, 'getDrivers');
     return data;
   },
 
@@ -818,7 +818,7 @@ export const adminService = {
         role: 'driver'
       }])
       .select();
-    if (error) return handleSupabaseError(error, 'addDriver_Profile');
+    if (error) return handleSupabaseErrorWrapper(error, 'addDriver_Profile');
 
     const userId = data[0].id;
     const { error: profileError } = await supabase
@@ -830,7 +830,7 @@ export const adminService = {
         id_status: 'pending',
         status: 'pending_verification'
       }]);
-    if (profileError) return handleSupabaseError(profileError, 'addDriver_ProfileDetails');
+    if (profileError) return handleSupabaseErrorWrapper(profileError, 'addDriver_ProfileDetails');
 
     return data;
   },
@@ -841,7 +841,7 @@ export const adminService = {
       .update({ status })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'updateDriverStatus');
+    if (error) return handleSupabaseErrorWrapper(error, 'updateDriverStatus');
     return data;
   },
 
@@ -851,7 +851,7 @@ export const adminService = {
       .update({ status })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'updateFleetOwnerStatus');
+    if (error) return handleSupabaseErrorWrapper(error, 'updateFleetOwnerStatus');
     return data;
   },
 
@@ -861,7 +861,7 @@ export const adminService = {
       .update({ status })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'updateCarStatus');
+    if (error) return handleSupabaseErrorWrapper(error, 'updateCarStatus');
     return data;
   },
 
@@ -901,7 +901,7 @@ export const adminService = {
         cars: cars || []
       };
     } catch (error) {
-      return handleSupabaseError(error, 'getVerifications');
+      return handleSupabaseErrorWrapper(error, 'getVerifications');
     }
   },
 
@@ -954,7 +954,7 @@ export const adminService = {
         };
       });
     } catch (error) {
-      return handleSupabaseError(error, 'getCarEarnings');
+      return handleSupabaseErrorWrapper(error, 'getCarEarnings');
     }
   },
 
@@ -1012,7 +1012,7 @@ export const adminService = {
         receiver:user_profiles!receiver_id(*)
       `)
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getMessages');
+    if (error) return handleSupabaseErrorWrapper(error, 'getMessages');
     return data;
   },
 
@@ -1021,7 +1021,7 @@ export const adminService = {
       .from('messages')
       .insert([message])
       .select();
-    if (error) return handleSupabaseError(error, 'sendMessage');
+    if (error) return handleSupabaseErrorWrapper(error, 'sendMessage');
     return data;
   },
 
@@ -1030,7 +1030,7 @@ export const adminService = {
       .from('broadcasts')
       .insert([broadcast])
       .select();
-    if (error) return handleSupabaseError(error, 'sendBroadcast');
+    if (error) return handleSupabaseErrorWrapper(error, 'sendBroadcast');
     return data;
   },
 
@@ -1040,7 +1040,7 @@ export const adminService = {
       .from('hero_content')
       .select('*')
       .order('display_order', { ascending: true });
-    if (error) return handleSupabaseError(error, 'getHeroContent');
+    if (error) return handleSupabaseErrorWrapper(error, 'getHeroContent');
     return data;
   },
 
@@ -1057,7 +1057,7 @@ export const adminService = {
       .from('hero_content')
       .insert([sanitizedContent])
       .select();
-    if (error) return handleSupabaseError(error, 'createHeroContent');
+    if (error) return handleSupabaseErrorWrapper(error, 'createHeroContent');
     return data;
   },
 
@@ -1066,7 +1066,7 @@ export const adminService = {
       .from('hero_content')
       .delete()
       .eq('id', id);
-    if (error) return handleSupabaseError(error, 'deleteHeroContent');
+    if (error) return handleSupabaseErrorWrapper(error, 'deleteHeroContent');
     return true;
   },
 
@@ -1076,7 +1076,7 @@ export const adminService = {
       .from('contracts_master')
       .select('*')
       .order('version', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getContracts');
+    if (error) return handleSupabaseErrorWrapper(error, 'getContracts');
     return data;
   },
 
@@ -1085,7 +1085,7 @@ export const adminService = {
       .from('contracts_master')
       .insert([contract])
       .select();
-    if (error) return handleSupabaseError(error, 'createContract');
+    if (error) return handleSupabaseErrorWrapper(error, 'createContract');
     return data;
   },
 
@@ -1094,7 +1094,7 @@ export const adminService = {
       .from('contracts_master')
       .delete()
       .eq('id', id);
-    if (error) return handleSupabaseError(error, 'deleteContract');
+    if (error) return handleSupabaseErrorWrapper(error, 'deleteContract');
     return true;
   },
 
@@ -1108,7 +1108,7 @@ export const adminService = {
         client:user_profiles!pending_payments_client_id_fkey (*)
       `)
       .order('submitted_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getPendingPayments');
+    if (error) return handleSupabaseErrorWrapper(error, 'getPendingPayments');
     return data;
   },
 
@@ -1122,7 +1122,7 @@ export const adminService = {
       })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'verifyPayment');
+    if (error) return handleSupabaseErrorWrapper(error, 'verifyPayment');
 
     if (status === 'verified' && bookingId && amount && clientId) {
       // Update booking status to confirmed
@@ -1159,7 +1159,7 @@ export const adminService = {
       .from('coupons')
       .select('*')
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getCoupons');
+    if (error) return handleSupabaseErrorWrapper(error, 'getCoupons');
     return data;
   },
 
@@ -1168,7 +1168,7 @@ export const adminService = {
       .from('coupons')
       .insert([coupon])
       .select();
-    if (error) return handleSupabaseError(error, 'createCoupon');
+    if (error) return handleSupabaseErrorWrapper(error, 'createCoupon');
     return data;
   },
 
@@ -1177,7 +1177,7 @@ export const adminService = {
       .from('coupons')
       .delete()
       .eq('id', id);
-    if (error) return handleSupabaseError(error, 'deleteCoupon');
+    if (error) return handleSupabaseErrorWrapper(error, 'deleteCoupon');
     return true;
   },
   // --- Incidents ---
@@ -1190,7 +1190,7 @@ export const adminService = {
         user:user_profiles!incidents_user_id_fkey (*)
       `)
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getIncidents');
+    if (error) return handleSupabaseErrorWrapper(error, 'getIncidents');
     return data;
   },
 
@@ -1200,7 +1200,7 @@ export const adminService = {
       .update({ status })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'updateIncidentStatus');
+    if (error) return handleSupabaseErrorWrapper(error, 'updateIncidentStatus');
     return data;
   },
 
@@ -1213,7 +1213,7 @@ export const adminService = {
         client:user_profiles!client_id (*)
       `)
       .order('uploaded_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getClientDocuments');
+    if (error) return handleSupabaseErrorWrapper(error, 'getClientDocuments');
     return data;
   },
 
@@ -1227,7 +1227,7 @@ export const adminService = {
       })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'approveClientDocument');
+    if (error) return handleSupabaseErrorWrapper(error, 'approveClientDocument');
     return data;
   },
 
@@ -1242,7 +1242,7 @@ export const adminService = {
       })
       .eq('id', id)
       .select();
-    if (error) return handleSupabaseError(error, 'rejectClientDocument');
+    if (error) return handleSupabaseErrorWrapper(error, 'rejectClientDocument');
     return data;
   },
 

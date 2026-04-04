@@ -1,9 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Mail, Lock, Loader2, AlertCircle, ArrowRight, Car } from 'lucide-react';
+import { Mail, Lock, Loader2, AlertCircle, ArrowRight, Car, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useSubdomain } from '../../contexts/SubdomainContext';
+
+interface RateLimitState {
+  attempts: number;
+  lockoutUntil: number | null;
+}
+
+const RATE_LIMIT_KEY = 'login_rate_limit';
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
 
 export function Login() {
   const navigate = useNavigate();
@@ -13,11 +22,79 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimitState, setRateLimitState] = useState<RateLimitState>({
+    attempts: 0,
+    lockoutUntil: null
+  });
+
+  // Load rate limit state from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(RATE_LIMIT_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      setRateLimitState(parsed);
+    }
+  }, []);
+
+  // Check if user is currently locked out
+  const isLockedOut = () => {
+    if (!rateLimitState.lockoutUntil) return false;
+    return Date.now() < rateLimitState.lockoutUntil;
+  };
+
+  // Get remaining lockout time in minutes
+  const getRemainingLockoutTime = () => {
+    if (!rateLimitState.lockoutUntil) return 0;
+    const remaining = rateLimitState.lockoutUntil - Date.now();
+    return Math.ceil(remaining / (60 * 1000));
+  };
+
+  // Update rate limit state in localStorage
+  const updateRateLimitState = (newState: RateLimitState) => {
+    setRateLimitState(newState);
+    localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(newState));
+  };
+
+  // Increment login attempts
+  const incrementAttempts = () => {
+    const newAttempts = rateLimitState.attempts + 1;
+    
+    if (newAttempts >= MAX_ATTEMPTS) {
+      // Lock out the user
+      const lockoutUntil = Date.now() + LOCKOUT_DURATION;
+      updateRateLimitState({
+        attempts: newAttempts,
+        lockoutUntil
+      });
+      setError(`Too many failed attempts. Account locked for ${LOCKOUT_DURATION / (60 * 1000)} minutes.`);
+    } else {
+      updateRateLimitState({
+        attempts: newAttempts,
+        lockoutUntil: rateLimitState.lockoutUntil
+      });
+    }
+  };
+
+  // Reset rate limit on successful login
+  const resetRateLimit = () => {
+    updateRateLimitState({
+      attempts: 0,
+      lockoutUntil: null
+    });
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    // Check rate limiting first
+    if (isLockedOut()) {
+      const remainingTime = getRemainingLockoutTime();
+      setError(`Account locked. Try again in ${remainingTime} minutes.`);
+      setLoading(false);
+      return;
+    }
 
     // Basic validation
     if (!email || !password) {
@@ -35,11 +112,15 @@ export function Login() {
 
       if (signInError) {
         console.error('Supabase auth error:', signInError);
+        incrementAttempts(); // Increment failed attempts
         setError(signInError.message || 'Invalid email or password');
         return;
       }
 
       if (data.user) {
+        // Reset rate limit on successful login
+        resetRateLimit();
+        
         // Get user profile to determine role
         const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
@@ -75,6 +156,7 @@ export function Login() {
       }
     } catch (err: any) {
       console.error('Login error:', err);
+      incrementAttempts(); // Increment failed attempts for system errors too
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -115,6 +197,35 @@ export function Login() {
               >
                 <AlertCircle size={18} />
                 {error}
+              </motion.div>
+            )}
+
+            {/* Rate Limiting Warning */}
+            {isLockedOut() && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3 text-amber-800"
+              >
+                <Clock className="flex-shrink-0" size={18} />
+                <div className="text-sm">
+                  <div className="font-semibold">Account Temporarily Locked</div>
+                  <div>Too many failed login attempts. Please try again in {getRemainingLockoutTime()} minutes.</div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Remaining Attempts Warning */}
+            {!isLockedOut() && rateLimitState.attempts > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 bg-orange-50 border border-orange-200 rounded-xl flex items-center gap-3 text-orange-800 text-sm"
+              >
+                <AlertCircle className="flex-shrink-0" size={16} />
+                <div>
+                  {MAX_ATTEMPTS - rateLimitState.attempts} attempts remaining before account lockout.
+                </div>
               </motion.div>
             )}
 
@@ -161,7 +272,7 @@ export function Login() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || isLockedOut()}
               className="w-full py-4 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:hover:scale-100"
             >
               {loading ? (

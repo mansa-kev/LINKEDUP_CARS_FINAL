@@ -1,10 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import { Car } from '../../../types';
-import { Upload, ArrowRight, ArrowLeft, User, Mail, Phone, MapPin, FileText, CheckCircle2, Loader2 } from 'lucide-react';
+import { Upload, ArrowRight, ArrowLeft, User, Mail, Phone, MapPin, FileText, CheckCircle2, Loader2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDropzone } from 'react-dropzone';
 import { bookingService } from '../../../services/bookingService';
 import { toast } from 'sonner';
+import { validateFile } from '../../../utils/fileValidation';
 
 interface Step2Props {
   car: Car;
@@ -31,11 +32,19 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
 
     setUploading(type);
     try {
+      // Validate file before upload
+      const validation = await validateFile(file);
+      if (!validation.isValid) {
+        toast.error(`File validation failed: ${validation.error}`);
+        return;
+      }
+
       const url = await bookingService.uploadDocument(file, type, `temp_${Date.now()}`);
       setFormData(prev => ({ ...prev, [`${type}Url`]: url }));
       toast.success(`${type.replace(/([A-Z])/g, ' $1')} uploaded successfully`);
     } catch (error) {
-      toast.error(`Failed to upload ${type}`);
+      console.error('Upload error:', error);
+      toast.error(`Failed to upload ${type}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setUploading(null);
     }
