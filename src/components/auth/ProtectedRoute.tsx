@@ -9,7 +9,34 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  // TEMPORARILY BYPASSED FOR DEVELOPMENT
-  // All authentication checks are disabled so you can focus on UI refinement.
+  const { user, profile, loading } = useAuth();
+  const location = useLocation();
+
+  // Show loading spinner while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin w-8 h-8 text-primary" />
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Check role-based access if requiredRole is specified
+  if (requiredRole && profile?.role !== requiredRole) {
+    // Redirect to appropriate portal based on user role
+    const userRole = profile?.role || 'client';
+    const redirectPath = userRole === 'admin' ? '/admin' : 
+                        userRole === 'fleet_owner' ? '/fleet' : 
+                        '/client';
+    
+    return <Navigate to={redirectPath} replace />;
+  }
+
+  // User is authenticated and has correct role
   return <>{children}</>;
 }

@@ -19,31 +19,63 @@ export function Login() {
     setLoading(true);
     setError(null);
 
+    // Basic validation
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Real authentication with Supabase
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      // Determine redirect path based on current subdomain
-      const hostname = window.location.hostname;
-      const isDev = hostname.includes('run.app') || hostname === 'localhost' || hostname.includes('google.com');
+      if (signInError) {
+        console.error('Supabase auth error:', signInError);
+        setError(signInError.message || 'Invalid email or password');
+        return;
+      }
 
-      // For development, we'll just use the preview subdomain switcher
-      // If they are on www, redirect to app (client portal) by default
-      const targetSubdomain = location.pathname.includes('/admin') ? 'admin' 
-                            : location.pathname.includes('/fleet') ? 'fleet' 
-                            : 'app';
+      if (data.user) {
+        // Get user profile to determine role
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
 
-      if (isDev) {
-        setPreviewSubdomain(targetSubdomain);
-        if (targetSubdomain === 'admin') navigate('/admin');
-        else if (targetSubdomain === 'fleet') navigate('/fleet');
-        else navigate('/client');
-      } else {
-        window.location.href = `https://${targetSubdomain}.${hostname.split('.').slice(1).join('.')}/${targetSubdomain === 'app' ? 'client' : targetSubdomain}`;
+        if (profileError) {
+          console.error('Profile fetch error:', profileError);
+          setError('Unable to fetch user profile. Please contact support.');
+          return;
+        }
+
+        // Determine redirect path based on user role
+        const userRole = profile?.role || 'client';
+        const targetSubdomain = location.pathname.includes('/admin') ? 'admin' 
+                              : location.pathname.includes('/fleet') ? 'fleet' 
+                              : userRole === 'admin' ? 'admin'
+                              : userRole === 'fleet_owner' ? 'fleet'
+                              : 'app';
+
+        const hostname = window.location.hostname;
+        const isDev = hostname.includes('run.app') || hostname === 'localhost' || hostname.includes('google.com');
+
+        if (isDev) {
+          setPreviewSubdomain(targetSubdomain);
+          if (targetSubdomain === 'admin') navigate('/admin');
+          else if (targetSubdomain === 'fleet') navigate('/fleet');
+          else navigate('/client');
+        } else {
+          window.location.href = `https://${targetSubdomain}.${hostname.split('.').slice(1).join('.')}/${targetSubdomain === 'app' ? 'client' : targetSubdomain}`;
+        }
       }
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Failed to sign in. Please check your credentials.');
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }

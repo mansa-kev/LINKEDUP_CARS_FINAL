@@ -14,17 +14,11 @@ export function SubdomainProvider({ children }: { children: ReactNode }) {
 
   const detectSubdomain = () => {
     const hostname = window.location.hostname;
-    const searchParams = new URLSearchParams(window.location.search);
     
-    // 1. Check for query parameter override (for preview environment)
-    const siteParam = searchParams.get('site');
-    if (siteParam === 'app' || siteParam === 'admin' || siteParam === 'www' || siteParam === 'fleet') {
-      console.log('[SubdomainContext] Detected via query param:', siteParam);
-      setSubdomain(siteParam as Subdomain);
-      return;
-    }
-
-    // 2. Check actual subdomain (for production)
+    // SECURITY: Removed query parameter override to prevent unauthorized access
+    // Admin access now requires proper authentication
+    
+    // Check actual subdomain (for production)
     if (hostname.startsWith('admin.')) {
       console.log('[SubdomainContext] Detected via hostname: admin');
       setSubdomain('admin');
@@ -50,9 +44,8 @@ export function SubdomainProvider({ children }: { children: ReactNode }) {
 
   const setPreviewSubdomain = (newSubdomain: Subdomain) => {
     console.log('[SubdomainContext] Manually switching to:', newSubdomain);
-    const url = new URL(window.location.href);
-    url.searchParams.set('site', newSubdomain);
-    window.history.pushState({}, '', url.toString());
+    // SECURITY: Removed URL parameter manipulation to prevent unauthorized access
+    // This function now only updates the internal state for development
     setSubdomain(newSubdomain);
   };
 
