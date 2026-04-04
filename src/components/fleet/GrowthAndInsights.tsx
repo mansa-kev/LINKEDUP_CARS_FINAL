@@ -63,7 +63,7 @@ export function GrowthAndInsights() {
         <div className="space-y-4">
           <h3 className="text-lg font-semibold flex items-center gap-2"><BarChart2 size={20} /> Market Insights</h3>
           <div className="bg-card p-6 rounded-2xl border border-border shadow-sm h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={300}>
               <BarChart data={insights.marketInsights?.topQueries || []}>
                 <XAxis dataKey="query" />
                 <YAxis />

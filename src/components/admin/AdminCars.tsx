@@ -34,7 +34,7 @@ type MaintenanceStatus = 'ok' | 'due' | 'in_progress';
 
 interface CarItem {
   id: string;
-  fleet_owner_id: string;
+  fleet_owner: string; // Changed from fleet_owner_id to match database
   make: string;
   model: string;
   year: number;
@@ -59,7 +59,7 @@ interface CarItem {
   overtime_rate: number;
   security_deposit: number;
   created_at: string;
-  fleet_owner?: { 
+  fleet_owner_details?: { 
     full_name: string; 
     fleet_owner_settings?: Array<{ company_name?: string }>;
   };
@@ -124,13 +124,14 @@ export function AdminCars() {
   const [formStep, setFormStep] = useState(1);
   const [primaryImageFile, setPrimaryImageFile] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [uploadedGalleryUrls, setUploadedGalleryUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [formData, setFormData] = useState<Partial<CarItem>>({
     make: '', model: '', year: new Date().getFullYear(), license_plate: '', color: '', category: 'SUV', description: '',
     daily_rate: 0, overtime_rate: 0, security_deposit: 0, status: 'available',
     primary_image_url: '', photos: [], video_url: '',
     transmission: 'Automatic', fuel_type: 'Petrol', seats: 5, features: [],
-    fleet_owner_id: '', maintenance_status: 'ok', next_service_date: ''
+    fleet_owner: '', maintenance_status: 'ok', next_service_date: ''
   });
 
   const fetchData = async () => {
@@ -158,6 +159,26 @@ export function AdminCars() {
     fetchData();
   }, [page]);
 
+  const validateStep = (step: number): boolean => {
+    switch (step) {
+      case 1:
+        return !!(formData.make && formData.model && formData.year && 
+                 formData.license_plate && formData.color && formData.category && 
+                 formData.description);
+      case 2:
+        return !!(formData.daily_rate && formData.overtime_rate !== undefined && 
+                 formData.security_deposit !== undefined && formData.status);
+      case 3:
+        return !!(primaryImageFile || formData.primary_image_url);
+      case 4:
+        return !!(formData.transmission && formData.fuel_type && formData.seats);
+      case 5:
+        return !!(formData.fleet_owner !== undefined && formData.maintenance_status);
+      default:
+        return false;
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUploading(true);
@@ -170,6 +191,8 @@ export function AdminCars() {
       let finalGalleryUrls = [...(formData.photos || [])];
       if (galleryFiles.length > 0) {
         const uploadedUrls = await Promise.all(galleryFiles.map(f => adminService.uploadCarImage(f)));
+        // Filter out the temporary blob URLs and replace with uploaded URLs
+        finalGalleryUrls = finalGalleryUrls.filter(url => !uploadedGalleryUrls.includes(url));
         finalGalleryUrls = [...finalGalleryUrls, ...uploadedUrls];
       }
 
@@ -177,7 +200,7 @@ export function AdminCars() {
         ...formData, 
         primary_image_url: finalPrimaryUrl, 
         photos: finalGalleryUrls,
-        fleet_owner_id: formData.fleet_owner_id === '' ? null : formData.fleet_owner_id
+        fleet_owner: formData.fleet_owner === '' ? null : formData.fleet_owner
       };
 
       if (selectedCar && selectedCar.id) {
@@ -189,6 +212,7 @@ export function AdminCars() {
       setSelectedCar(null);
       setPrimaryImageFile(null);
       setGalleryFiles([]);
+      setUploadedGalleryUrls([]);
       fetchData();
     })();
 
@@ -221,12 +245,15 @@ export function AdminCars() {
   const openAddModal = () => {
     setSelectedCar(null);
     setFormStep(1);
+    setPrimaryImageFile(null);
+    setGalleryFiles([]);
+    setUploadedGalleryUrls([]);
     setFormData({
       make: '', model: '', year: new Date().getFullYear(), license_plate: '', color: '', category: 'SUV', description: '',
       daily_rate: 0, overtime_rate: 0, security_deposit: 0, status: 'available',
       primary_image_url: '', photos: [], video_url: '',
       transmission: 'Automatic', fuel_type: 'Petrol', seats: 5, features: [],
-      fleet_owner_id: fleetOwners[0]?.id || '', maintenance_status: 'ok', next_service_date: ''
+      fleet_owner: fleetOwners[0]?.id || '', maintenance_status: 'ok', next_service_date: ''
     });
     setIsFormModalOpen(true);
   };
@@ -234,6 +261,9 @@ export function AdminCars() {
   const openEditModal = (car: CarItem) => {
     setSelectedCar(car);
     setFormStep(1);
+    setPrimaryImageFile(null);
+    setGalleryFiles([]);
+    setUploadedGalleryUrls([]);
     setFormData({ ...car });
     setIsFormModalOpen(true);
   };
@@ -459,7 +489,7 @@ export function AdminCars() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm font-bold text-foreground">${car.daily_rate}/day</span>
+                    <span className="text-sm font-bold text-foreground">KES {car.daily_rate}/day</span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1 items-start">
@@ -634,15 +664,15 @@ export function AdminCars() {
                     <div className="bg-muted/30 p-4 rounded-xl space-y-4">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Daily Rate</span>
-                        <span className="text-xl font-bold text-primary">${selectedCar.daily_rate}</span>
+                        <span className="text-xl font-bold text-primary">KES {selectedCar.daily_rate}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Overtime Rate (per hour)</span>
-                        <span className="text-sm font-bold">${selectedCar.overtime_rate}</span>
+                        <span className="text-sm font-bold">KES {selectedCar.overtime_rate}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Security Deposit</span>
-                        <span className="text-sm font-bold">${selectedCar.security_deposit}</span>
+                        <span className="text-sm font-bold">KES {selectedCar.security_deposit}</span>
                       </div>
                     </div>
                   </section>
@@ -846,15 +876,15 @@ export function AdminCars() {
                   <h4 className="font-bold text-lg border-b border-border pb-2">2. Pricing & Availability</h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Daily Rate ($) *</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Daily Rate (KES) *</label>
                       <input type="number" required min="1" value={formData.daily_rate || ''} onChange={(e) => setFormData({ ...formData, daily_rate: e.target.value === '' ? undefined : parseFloat(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Overtime Rate ($/hr) *</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Overtime Rate (KES/hr) *</label>
                       <input type="number" required min="0" value={formData.overtime_rate || ''} onChange={(e) => setFormData({ ...formData, overtime_rate: e.target.value === '' ? undefined : parseFloat(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Security Deposit ($) *</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Security Deposit (KES) *</label>
                       <input type="number" required min="0" value={formData.security_deposit || ''} onChange={(e) => setFormData({ ...formData, security_deposit: e.target.value === '' ? undefined : parseFloat(e.target.value) })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50" />
                     </div>
                     <div className="col-span-1 md:col-span-3 space-y-2">
@@ -892,11 +922,27 @@ export function AdminCars() {
                         />
                       </div>
                       {formData.primary_image_url && (
-                        <div className="mt-2 w-32 h-24 rounded-lg overflow-hidden border border-border">
-                          <img src={formData.primary_image_url} alt="Preview" className="w-full h-full object-cover" />
+                        <div className="mt-2 flex items-center gap-2">
+                          <div className="relative w-32 h-24 rounded-lg overflow-hidden border border-border">
+                            <img src={formData.primary_image_url} alt="Preview" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPrimaryImageFile(null);
+                                setFormData({ ...formData, primary_image_url: '' });
+                                // Clear the file input
+                                const fileInput = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+                                if (fileInput) fileInput.value = '';
+                              }}
+                              className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                          <span className="text-xs text-muted-foreground">Click X to remove</span>
                         </div>
                       )}
-                      <p className="text-xs text-muted-foreground">The main high-res image shown on the search grid.</p>
+                      <p className="text-xs text-muted-foreground">The main high-res image shown on the search grid. Click X to remove and select a different image.</p>
                     </div>
                     
                     <div className="space-y-2">
@@ -910,6 +956,7 @@ export function AdminCars() {
                             const filesArray = Array.from(e.target.files);
                             setGalleryFiles(filesArray);
                             const newUrls = filesArray.map(f => URL.createObjectURL(f as any));
+                            setUploadedGalleryUrls(newUrls);
                             setFormData({ ...formData, photos: [...(formData.photos || []), ...newUrls] });
                           }
                         }} 
@@ -918,12 +965,35 @@ export function AdminCars() {
                       {formData.photos && formData.photos.length > 0 && (
                         <div className="flex gap-2 mt-2 flex-wrap">
                           {formData.photos.map((url, idx) => (
-                            <div key={idx} className="w-20 h-20 rounded-lg overflow-hidden border border-border">
+                            <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-border">
                               <img src={url} alt={`Gallery ${idx}`} className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // Remove from photos array
+                                  const newPhotos = formData.photos?.filter((_, i) => i !== idx) || [];
+                                  setFormData({ ...formData, photos: newPhotos });
+                                  
+                                  // Check if this is a newly uploaded file (from uploadedGalleryUrls)
+                                  const urlToRemove = formData.photos?.[idx];
+                                  const uploadedIndex = uploadedGalleryUrls.indexOf(urlToRemove);
+                                  if (uploadedIndex !== -1) {
+                                    // Remove from both galleryFiles and uploadedGalleryUrls
+                                    const newGalleryFiles = galleryFiles.filter((_, i) => i !== uploadedIndex);
+                                    const newUploadedUrls = uploadedGalleryUrls.filter((_, i) => i !== uploadedIndex);
+                                    setGalleryFiles(newGalleryFiles);
+                                    setUploadedGalleryUrls(newUploadedUrls);
+                                  }
+                                }}
+                                className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                              >
+                                <X size={10} />
+                              </button>
                             </div>
                           ))}
                         </div>
                       )}
+                      <p className="text-xs text-muted-foreground">Add multiple images to showcase the car from different angles. Click X on any image to remove it.</p>
                     </div>
 
                     <div className="space-y-2">
@@ -1023,7 +1093,7 @@ export function AdminCars() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Assign to Fleet Owner *</label>
-                      <select required value={formData.fleet_owner_id} onChange={(e) => setFormData({ ...formData, fleet_owner_id: e.target.value })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50">
+                      <select required value={formData.fleet_owner} onChange={(e) => setFormData({ ...formData, fleet_owner: e.target.value })} className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50">
                         <option value="">Platform Owned (No Owner)</option>
                         {fleetOwners.map(owner => {
                           const settings = owner.fleet_owner_settings?.[0] || {};
@@ -1066,7 +1136,13 @@ export function AdminCars() {
               {formStep < 5 ? (
                 <button 
                   type="button"
-                  onClick={() => setFormStep(Math.min(5, formStep + 1))}
+                  onClick={() => {
+                    if (validateStep(formStep)) {
+                      setFormStep(Math.min(5, formStep + 1));
+                    } else {
+                      toast.error('Please fill in all required fields marked with * before proceeding.');
+                    }
+                  }}
                   className="px-6 py-2 rounded-xl font-bold bg-primary text-white hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 flex items-center gap-2"
                 >
                   Next <ChevronRight size={16} />

@@ -40,8 +40,10 @@ export function CarShowroom() {
         
         if (result && 'data' in result) {
           setCars(result.data || []);
+          console.log('CarShowroom cars data:', result.data); // Debug log
         } else if (Array.isArray(result)) {
           setCars(result);
+          console.log('CarShowroom cars array:', result); // Debug log
         }
         setHasMore(false); // Simplified for now
       } catch (error) {
@@ -91,10 +93,14 @@ export function CarShowroom() {
                       <Link to={`/cars/${car.id}`}>
                         <div className="relative aspect-[16/10] rounded-[40px] overflow-hidden mb-6 bg-card border border-white/5">
                           <img 
-                            src={car.primary_image_url || `https://picsum.photos/seed/${car.id}/800/500`} 
+                            src={car.primary_image_url || car.photos?.[0] || `https://picsum.photos/seed/${car.id}/800/500`} 
                             alt={`${car.make} ${car.model}`} 
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                             referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              console.log('CarShowroom image failed to load:', car.primary_image_url);
+                              e.currentTarget.src = `https://picsum.photos/seed/showroom-${car.id}/800/500`;
+                            }}
                           />
                           <div className="absolute top-6 right-6 px-4 py-2 glass rounded-full text-[10px] font-black uppercase tracking-widest text-white">
                             {car.category}
@@ -113,7 +119,7 @@ export function CarShowroom() {
                               </div>
                             </div>
                             <div className="text-right">
-                              <span className="text-primary font-black text-2xl tracking-tighter">${car.daily_rate}</span>
+                              <span className="text-primary font-black text-2xl tracking-tighter">KES {car.daily_rate}</span>
                               <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest block">/day</span>
                             </div>
                           </div>

@@ -35,6 +35,7 @@ export function CarDetails() {
           fleetService.getCarById(id),
           fleetService.getReviews(id)
         ]);
+        console.log('Car data received:', carData); // Debug log
         setCar(carData);
         setReviews(reviewsData || []);
       } catch (error) {
@@ -48,7 +49,35 @@ export function CarDetails() {
 
   if (loading || !car) return <div className="min-h-screen flex items-center justify-center bg-background">Loading...</div>;
 
-  const images = (car.images && car.images.length > 0) ? car.images : (car.photos && car.photos.length > 0 ? car.photos : [`https://picsum.photos/seed/${car.id}/1200/800`]);
+  // Debug image data
+  console.log('Car photos:', car.photos);
+  console.log('Car primary_image_url:', car.primary_image_url);
+  console.log('Car images array:', car.images);
+
+  // Handle multiple image field possibilities
+  const images = [];
+  
+  // Try photos array first
+  if (car.photos && Array.isArray(car.photos) && car.photos.length > 0) {
+    images.push(...car.photos);
+  }
+  
+  // Try images array as fallback
+  if (car.images && Array.isArray(car.images) && car.images.length > 0) {
+    images.push(...car.images);
+  }
+  
+  // Add primary image as fallback
+  if (car.primary_image_url) {
+    images.push(car.primary_image_url);
+  }
+  
+  // Final fallback to placeholder
+  if (images.length === 0) {
+    images.push(`https://picsum.photos/seed/${car.id}/1200/800`);
+  }
+
+  console.log('Final images array:', images);
 
   return (
     <div className="relative bg-background min-h-screen overflow-hidden">
@@ -80,6 +109,11 @@ export function CarDetails() {
                   alt={`${car.make} ${car.model}`}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    console.log('Image failed to load:', images[activeImage]);
+                    // Fallback to placeholder
+                    e.currentTarget.src = `https://picsum.photos/seed/fallback-${car.id}/1200/800`;
+                  }}
                 />
                 <button className="absolute top-6 right-6 p-4 glass rounded-full text-white hover:text-primary hover:scale-110 transition-all">
                   <Heart size={24} />
@@ -94,7 +128,16 @@ export function CarDetails() {
                       whileHover={{ scale: 1.05 }}
                       className={`w-20 h-20 rounded-2xl overflow-hidden border-2 shrink-0 transition-all ${activeImage === idx ? 'border-primary shadow-lg shadow-primary/20' : 'border-white/10'}`}
                     >
-                      <img src={img} alt="thumbnail" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <img 
+                        src={img} 
+                        alt="thumbnail" 
+                        className="w-full h-full object-cover" 
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          console.log('Thumbnail failed to load:', img);
+                          e.currentTarget.src = `https://picsum.photos/seed/thumb-${car.id}-${idx}/80/80`;
+                        }}
+                      />
                     </motion.button>
                   ))}
                 </div>
@@ -113,7 +156,7 @@ export function CarDetails() {
                 </h1>
                 <p className="text-lg text-muted-foreground mb-8 leading-relaxed">{car.description}</p>
                 <p className="text-4xl font-black mb-8 text-white">
-                  <span className="text-primary">${car.daily_rate}</span>
+                  <span className="text-primary">KES {car.daily_rate}</span>
                   <span className="text-sm text-muted-foreground font-bold">/day</span>
                 </p>
                 

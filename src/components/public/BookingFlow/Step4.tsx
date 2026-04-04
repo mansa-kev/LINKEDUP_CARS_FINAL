@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Car } from '../../../types';
-import { ArrowLeft, CreditCard, ShieldCheck, CheckCircle2, Loader2, Phone, Info, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CreditCard, ShieldCheck, CheckCircle2, Loader2, Phone, Info, AlertCircle, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../../../services/bookingService';
+import { enhancedContractService } from '../../../services/enhancedContractService';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -26,12 +27,18 @@ export function Step4({ car, bookingData, onPrev }: Step4Props) {
 
     setIsSubmitting(true);
     try {
+      // Create booking with contract data
       const result = await bookingService.createBooking({
         ...bookingData,
         carId: car.id,
-        paymentMethod,
-        mpesaCode: paymentMethod === 'mpesa' ? mpesaCode : null
+        payment_method: paymentMethod,
+        mpesa_code: paymentMethod === 'mpesa' ? mpesaCode : null
       });
+
+      // Release payment hold after successful booking
+      if (bookingData.contractId) {
+        await enhancedContractService.releasePaymentHold(bookingData.contractId);
+      }
 
       if (result.id) {
         toast.success('Booking initiated successfully!');
@@ -49,9 +56,20 @@ export function Step4({ car, bookingData, onPrev }: Step4Props) {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="space-y-2">
+      <div className="space-y-6">
         <h3 className="text-3xl font-serif font-black italic text-white">Secure Payment</h3>
         <p className="text-muted-foreground text-sm">Choose your preferred payment method to finalize your booking.</p>
+        
+        {/* Contract Status */}
+        {bookingData.contractSigned && (
+          <div className="p-4 bg-success/10 rounded-[20px] border border-success/20 flex gap-3">
+            <Lock className="text-success" size={16} />
+            <div>
+              <p className="text-xs text-success font-bold uppercase tracking-widest">Contract Secured</p>
+              <p className="text-[10px] text-success/80">Payment authorization hold placed on your payment method</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -107,7 +125,7 @@ export function Step4({ car, bookingData, onPrev }: Step4Props) {
                       <li>Select Lipa na M-Pesa &gt; Paybill</li>
                     <li>Enter Business No: <span className="font-black text-white">4040404</span></li>
                     <li>Enter Account No: <span className="font-black text-white">RENTAL_{Math.floor(1000 + Math.random() * 9000)}</span></li>
-                    <li>Enter Amount: <span className="font-black text-white">${bookingData.totalAmount?.toLocaleString()}</span></li>
+                    <li>Enter Amount: <span className="font-black text-white">KES {bookingData.totalAmount?.toLocaleString()}</span></li>
                   </ol>
                 </div>
                 <div className="group relative">
@@ -133,7 +151,7 @@ export function Step4({ car, bookingData, onPrev }: Step4Props) {
             <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Payable Total</p>
             <p className="text-sm text-white/60">{bookingData.days} Days Rental</p>
           </div>
-          <p className="text-4xl font-black text-primary">${bookingData.totalAmount?.toLocaleString()}</p>
+          <p className="text-4xl font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
         </div>
       </div>
 

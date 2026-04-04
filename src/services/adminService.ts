@@ -251,18 +251,39 @@ export const adminService = {
   },
 
   addCar: async (car: any) => {
+    // Handle empty date fields - convert empty strings to null
+    // Remove fleet_owner from car data to avoid sending it to database
+    const { fleet_owner, ...cleanCar } = car;
+    
+    const processedCar = {
+      ...cleanCar,
+      next_service_date: cleanCar.next_service_date || null,
+      last_maintenance_date: cleanCar.last_maintenance_date || null
+    };
+    
     const { data, error } = await supabase
       .from('cars')
-      .insert([car])
+      .insert([processedCar])
       .select();
     if (error) return handleSupabaseError(error, 'addCar');
     return data;
   },
 
   updateCar: async (id: string, updates: any) => {
+    // Remove fleet_owner from updates to avoid sending it to database
+    // since database expects fleet_owner column, not fleet_owner_id
+    const { fleet_owner, ...cleanUpdates } = updates;
+    
+    // Handle empty date fields
+    const processedUpdates = {
+      ...cleanUpdates,
+      next_service_date: cleanUpdates.next_service_date || null,
+      last_maintenance_date: cleanUpdates.last_maintenance_date || null
+    };
+    
     const { data, error } = await supabase
       .from('cars')
-      .update(updates)
+      .update(processedUpdates)
       .eq('id', id)
       .select();
     if (error) return handleSupabaseError(error, 'updateCar');

@@ -102,7 +102,7 @@ export function FleetDashboard() {
         <div className="bg-card p-6 rounded-2xl border border-border shadow-sm">
           <h3 className="text-muted-foreground text-sm font-bold uppercase tracking-wider mb-6">Monthly Earnings Trend</h3>
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={300}>
               <LineChart data={stats.monthlyEarningsTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="month" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
@@ -137,7 +137,7 @@ export function FleetDashboard() {
           <div className="bg-card p-6 rounded-2xl border border-border shadow-sm">
             <h3 className="text-muted-foreground text-sm font-bold uppercase tracking-wider mb-6">Days with Most Bookings</h3>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={300}>
                 <BarChart data={stats.bookingsByDay}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="day" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />

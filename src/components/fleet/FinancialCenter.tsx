@@ -76,7 +76,7 @@ export function FinancialCenter() {
       <div className="bg-card p-6 rounded-2xl border border-border shadow-sm">
         <h3 className="text-xl font-bold mb-6">Earnings vs Payouts</h3>
         <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={300}>
             <LineChart data={data.bookings}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
               <XAxis dataKey="start_date" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />

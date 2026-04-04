@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { CheckCircle, Download, UserPlus, ArrowRight, Calendar, MapPin, Car, ShieldCheck, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { Car, CheckCircle2, Download, Calendar, MapPin, CreditCard, FileText, ShieldCheck, Clock, AlertCircle, UserPlus, ArrowRight, Loader2 } from 'lucide-react';
 import { bookingService } from '../../services/bookingService';
+import { enhancedContractService } from '../../services/enhancedContractService';
+import { toast } from 'sonner';
 
 export function BookingConfirmation() {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -62,7 +63,7 @@ export function BookingConfirmation() {
         >
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
           <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-8">
-            <CheckCircle className="text-primary" size={48} />
+            <CheckCircle2 className="text-primary" size={48} />
           </div>
           <h1 className="text-5xl font-serif font-black italic text-white mb-4 tracking-tight">Booking Confirmed!</h1>
           <p className="text-primary font-black uppercase tracking-[0.3em] text-sm mb-8">Your Adventure Awaits</p>
@@ -75,6 +76,28 @@ export function BookingConfirmation() {
               Status: <span className="text-primary uppercase">{booking?.status?.replace('_', ' ')}</span>
             </div>
           </div>
+
+          {/* Contract Status */}
+          {booking?.contract_signed && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="p-6 bg-success/5 rounded-[24px] border border-success/20 space-y-4"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <ShieldCheck className="text-success" size={20} />
+                <div>
+                  <p className="text-sm font-bold text-success">Contract Secured</p>
+                  <p className="text-xs text-success/80">Digital signature captured and stored</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Clock className="text-success" size={16} />
+                <p className="text-xs text-success/80">Payment authorization hold active</p>
+              </div>
+            </motion.div>
+          )}
 
           <button className="px-10 py-5 bg-white text-black font-black uppercase tracking-widest text-xs rounded-full flex items-center gap-3 mx-auto hover:bg-primary transition-all hover:scale-105 active:scale-95 shadow-xl shadow-white/5">
             <Download size={18} /> Download Rental Contract
@@ -129,7 +152,7 @@ export function BookingConfirmation() {
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Total Paid</p>
-                  <p className="text-2xl font-black text-white">${booking?.total_amount?.toLocaleString()}</p>
+                  <p className="text-2xl font-black text-white">KES {booking?.total_amount?.toLocaleString()}</p>
                 </div>
               </div>
             </div>

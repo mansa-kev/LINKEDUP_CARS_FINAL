@@ -77,11 +77,11 @@ export function BookingForm({ car }: BookingFormProps) {
           <div className="p-6 rounded-3xl bg-white/5 border border-white/5 space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground font-medium">Daily Rate</span>
-              <span className="text-lg font-bold text-white">${car.daily_rate}</span>
+              <span className="text-lg font-bold text-white">KES {car.daily_rate}</span>
             </div>
             <div className="flex justify-between items-center pt-4 border-t border-white/5">
               <span className="text-sm text-white font-black uppercase tracking-widest">Estimated Total</span>
-              <span className="text-2xl font-black text-primary">${calculateTotal()}</span>
+              <span className="text-2xl font-black text-primary">KES {calculateTotal()}</span>
             </div>
           </div>
 
