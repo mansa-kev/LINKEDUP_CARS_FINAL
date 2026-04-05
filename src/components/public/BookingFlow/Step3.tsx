@@ -106,7 +106,14 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
           </div>
           <div className="space-y-1 text-right">
             <p className="text-[10px] font-black uppercase tracking-widest text-primary/60">Total Amount</p>
-            <p className="text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
+            {bookingData.discount > 0 ? (
+              <div>
+                <p className="text-xs text-white/40 line-through">KES {bookingData.originalAmount?.toLocaleString()}</p>
+                <p className="text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
+              </div>
+            ) : (
+              <p className="text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
+            )}
           </div>
         </div>
 

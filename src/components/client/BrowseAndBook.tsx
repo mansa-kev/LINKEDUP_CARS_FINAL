@@ -21,6 +21,7 @@ import { Car } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
+import { promotionService, Promotion } from '../../services/promotionService';
 
 type BookingStep = 'browse' | 'details' | 'dates' | 'confirm';
 
@@ -38,6 +39,7 @@ export function BrowseAndBook() {
   const [returnDate, setReturnDate] = useState('');
   const [pickupLocation, setPickupLocation] = useState('');
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [activePromo, setActivePromo] = useState<Promotion | null>(null);
 
   useEffect(() => {
     fetchCars();
@@ -75,12 +77,19 @@ export function BrowseAndBook() {
     return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   })();
 
-  const totalAmount = selectedCar ? selectedCar.daily_rate * totalDays : 0;
+  const originalAmount = selectedCar ? selectedCar.daily_rate * totalDays : 0;
+  const discountedAmount = selectedCar && activePromo
+    ? totalDays * promotionService.applyDiscount(selectedCar.daily_rate, activePromo).discounted
+    : originalAmount;
+  const totalAmount = discountedAmount;
+  const discountSavings = originalAmount - discountedAmount;
 
-  const handleSelectCar = (car: Car) => {
+  const handleSelectCar = async (car: Car) => {
     setSelectedCar(car);
     setBookingStep('dates');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    const promo = await promotionService.getForCategory(car.category || '');
+    setActivePromo(promo);
   };
 
   const handleConfirmBooking = async () => {
@@ -207,9 +216,23 @@ export function BrowseAndBook() {
             </div>
 
             {totalDays > 0 && (
-              <div className="p-4 bg-muted rounded-xl flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">{totalDays} day{totalDays !== 1 ? 's' : ''} x KES {selectedCar.daily_rate?.toLocaleString()}</span>
-                <span className="font-bold text-lg">KES {totalAmount.toLocaleString()}</span>
+              <div className="p-4 bg-muted rounded-xl space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">{totalDays} day{totalDays !== 1 ? 's' : ''} x KES {selectedCar.daily_rate?.toLocaleString()}</span>
+                  <span className={`font-bold ${discountSavings > 0 ? 'text-sm line-through text-muted-foreground' : 'text-lg'}`}>KES {originalAmount.toLocaleString()}</span>
+                </div>
+                {discountSavings > 0 && activePromo && (
+                  <>
+                    <div className="flex justify-between items-center text-green-500">
+                      <span className="text-xs font-bold">{activePromo.title} (-{activePromo.discount_type === 'percentage' ? `${activePromo.discount_value}%` : `KES ${activePromo.discount_value}`})</span>
+                      <span className="text-xs font-bold">- KES {discountSavings.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-border">
+                      <span className="text-sm font-bold">You Pay</span>
+                      <span className="font-bold text-lg text-primary">KES {totalAmount.toLocaleString()}</span>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -253,6 +276,12 @@ export function BrowseAndBook() {
                 <span className="text-sm text-muted-foreground">Email</span>
                 <span className="text-sm font-bold">{profile?.email}</span>
               </div>
+              {discountSavings > 0 && activePromo && (
+                <div className="p-4 flex justify-between text-green-500">
+                  <span className="text-sm font-bold">{activePromo.title}</span>
+                  <span className="text-sm font-bold">- KES {discountSavings.toLocaleString()}</span>
+                </div>
+              )}
               <div className="p-4 flex justify-between bg-primary/5">
                 <span className="text-sm font-bold">Total</span>
                 <span className="text-lg font-black text-primary">KES {totalAmount.toLocaleString()}</span>

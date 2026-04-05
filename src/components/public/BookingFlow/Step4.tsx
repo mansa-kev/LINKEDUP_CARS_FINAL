@@ -146,12 +146,21 @@ export function Step4({ car, bookingData, onPrev }: Step4Props) {
         </AnimatePresence>
 
         {/* Total Summary */}
-        <div className="flex justify-between items-end px-2 md:px-4">
-          <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Payable Total</p>
-            <p className="text-sm text-white/60">{bookingData.days} Days Rental</p>
+        <div className="px-2 md:px-4 space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-white/60">{bookingData.days} Days Rental</span>
+            <span className="text-sm text-white/60">KES {(bookingData.originalAmount || bookingData.totalAmount)?.toLocaleString()}</span>
           </div>
-          <p className="text-2xl md:text-4xl font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
+          {bookingData.discount > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-green-400 font-bold">{bookingData.promoTitle || 'Discount'}</span>
+              <span className="text-sm text-green-400 font-bold">- KES {bookingData.discount?.toLocaleString()}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-end pt-2 border-t border-white/10">
+            <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Payable Total</p>
+            <p className="text-2xl md:text-4xl font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
+          </div>
         </div>
 
         <div className="p-3 bg-primary/5 rounded-[16px] flex gap-2 items-center border border-primary/10">

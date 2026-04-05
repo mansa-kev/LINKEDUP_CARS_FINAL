@@ -20,6 +20,10 @@ import { Contact } from './components/public/Contact';
 import { BrowseCars } from './components/public/BrowseCars';
 import { CarDetails } from './components/public/CarDetails';
 import { BookingConfirmation } from './components/public/BookingConfirmation';
+import { HowItWorks } from './components/public/HowItWorks';
+import { FAQ } from './components/public/FAQ';
+import { Terms } from './components/public/Terms';
+import { Privacy } from './components/public/Privacy';
 import { SunsetRays } from './components/SunsetRays';
 import { Analytics } from '@vercel/analytics/react';
 
@@ -47,6 +51,10 @@ export default function App() {
                       <Route path="/cars" element={<BrowseCars />} />
                       <Route path="/cars/:id" element={<CarDetails />} />
                       <Route path="/booking-confirmation/:bookingId" element={<BookingConfirmation />} />
+                      <Route path="/how-it-works" element={<HowItWorks />} />
+                      <Route path="/faq" element={<FAQ />} />
+                      <Route path="/terms" element={<Terms />} />
+                      <Route path="/privacy" element={<Privacy />} />
                       <Route path="/debug-contracts" element={<ContractDebug />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

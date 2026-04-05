@@ -52,6 +52,7 @@ import { AdminSystemHealth } from './admin/AdminSystemHealth';
 import { AdminSettings } from './admin/AdminSettings';
 import { AdminLogout } from './admin/AdminLogout';
 import { AdminOutsourcedCars } from './admin/AdminOutsourcedCars';
+import { AdminPromotions } from './admin/AdminPromotions';
 
 type ModuleCategory = {
   title: string;
@@ -91,7 +92,7 @@ const MODULE_CATEGORIES: ModuleCategory[] = [
     items: [
       { id: 'financials', label: 'Financials', icon: Wallet },
       { id: 'car-earnings', label: 'Car Earnings', icon: TrendingUp },
-      { id: 'pricing', label: 'Pricing', icon: Tag },
+      { id: 'pricing', label: 'Pricing & Promotions', icon: Tag },
       { id: 'reports', label: 'Reports', icon: BarChart3 },
     ]
   },
@@ -304,7 +305,7 @@ export function AdminPortal() {
               <Route path="verification" element={<AdminVerification />} />
               <Route path="financials" element={<AdminFinancials />} />
               <Route path="car-earnings" element={<AdminCarEarnings />} />
-              <Route path="pricing" element={<AdminPricing />} />
+              <Route path="pricing" element={<AdminPromotions />} />
               <Route path="reports" element={<AdminReports />} />
               <Route path="inbox" element={<AdminInbox />} />
               <Route path="reviews" element={<AdminReviews />} />
