@@ -214,17 +214,28 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* Desktop Footer */}
-      <footer className="hidden md:block bg-card border-t border-border py-20 px-8">
-        <div className="max-w-7xl mx-auto grid grid-cols-4 gap-12">
+      <footer className="hidden md:block relative bg-card border-t border-border py-20 px-8 overflow-hidden">
+        {/* Glow Effect */}
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-primary/15 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-0 left-1/4 w-[300px] h-[200px] bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 w-[300px] h-[200px] bg-amber-500/10 rounded-full blur-[80px] pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto grid grid-cols-4 gap-12 relative z-10">
           <div className="col-span-2">
             <span className="text-3xl font-serif font-black tracking-tighter text-primary italic mb-6 block">LINKEDUP</span>
             <p className="text-muted-foreground max-w-sm leading-relaxed">
               Experience the pinnacle of luxury car rentals. Our curated fleet and personalized service ensure every journey is unforgettable.
             </p>
+            <div className="mt-6 space-y-2 text-sm text-muted-foreground">
+              <p>Lanphil Arcade, Ridgeways, Kiambu Road</p>
+              <p>info@linkedupcarsrentals.com</p>
+              <p>+254 700 000 000</p>
+            </div>
           </div>
           <div>
             <h4 className="font-bold uppercase tracking-widest text-xs mb-6 text-foreground">Quick Links</h4>
             <div className="flex flex-col gap-4">
+              <Link to="/cars" className="text-sm text-muted-foreground hover:text-primary transition-colors">Browse Cars</Link>
               {secondaryNav.slice(0, 4).map(item => (
                 <Link key={item.path} to={item.path} className="text-sm text-muted-foreground hover:text-primary transition-colors">
                   {item.label}
@@ -240,11 +251,19 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   {item.label}
                 </Link>
               ))}
+              <LoginButton className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                Login / Sign Up
+              </LoginButton>
             </div>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-border flex justify-between items-center">
+        <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-border flex justify-between items-center relative z-10">
           <p className="text-xs text-muted-foreground">© 2026 LinkedUp Car Rentals. All rights reserved.</p>
+          <div className="flex gap-6">
+            <Link to="/terms" className="text-xs text-muted-foreground hover:text-primary transition-colors">Terms</Link>
+            <Link to="/privacy" className="text-xs text-muted-foreground hover:text-primary transition-colors">Privacy</Link>
+            <Link to="/contact" className="text-xs text-muted-foreground hover:text-primary transition-colors">Contact</Link>
+          </div>
         </div>
       </footer>
     </div>

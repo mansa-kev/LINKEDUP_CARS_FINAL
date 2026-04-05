@@ -3,6 +3,7 @@ import { Car } from '../../../types';
 import { Calendar, MapPin, ArrowRight, Clock, ShieldCheck, Users, Star, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { supabase } from '../../../lib/supabase';
+import { promotionService, Promotion } from '../../../services/promotionService';
 
 interface Step1Props {
   car: Car;
@@ -29,6 +30,13 @@ export function Step1({ car, onNext }: Step1Props) {
   const [loadingDrivers, setLoadingDrivers] = useState(false);
   const [days, setDays] = useState(0);
   const [total, setTotal] = useState(0);
+  const [activePromo, setActivePromo] = useState<Promotion | null>(null);
+  const [discountedTotal, setDiscountedTotal] = useState(0);
+
+  // Fetch active promo for this car's category
+  useEffect(() => {
+    promotionService.getForCategory(car.category || '').then(setActivePromo);
+  }, [car.category]);
 
   useEffect(() => {
     if (startDate && endDate) {
@@ -37,9 +45,17 @@ export function Step1({ car, onNext }: Step1Props) {
       const diffTime = Math.abs(end.getTime() - start.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
       setDays(diffDays);
-      setTotal(diffDays * car.daily_rate);
+      const originalTotal = diffDays * car.daily_rate;
+      setTotal(originalTotal);
+
+      if (activePromo) {
+        const { discounted } = promotionService.applyDiscount(car.daily_rate, activePromo);
+        setDiscountedTotal(diffDays * discounted);
+      } else {
+        setDiscountedTotal(originalTotal);
+      }
     }
-  }, [startDate, endDate, car.daily_rate]);
+  }, [startDate, endDate, car.daily_rate, activePromo]);
 
   useEffect(() => {
     if (needsChauffeur) {
@@ -98,7 +114,10 @@ export function Step1({ car, onNext }: Step1Props) {
       dropoffLocation: sameAsPickup ? pickupLocation : dropoffLocation,
       needsChauffeur,
       driverId: needsChauffeur ? selectedDriver : null,
-      totalAmount: total,
+      totalAmount: activePromo ? discountedTotal : total,
+      originalAmount: total,
+      discount: activePromo ? total - discountedTotal : 0,
+      promoTitle: activePromo?.title || null,
       days
     });
   };
@@ -287,9 +306,35 @@ export function Step1({ car, onNext }: Step1Props) {
             </div>
             <div className="text-right">
               <p className="text-[10px] font-black uppercase tracking-widest text-primary/60">Total Amount</p>
-              <p className="text-xl md:text-2xl font-black text-primary">KES {total.toLocaleString()}</p>
+              {activePromo && discountedTotal < total ? (
+                <div>
+                  <p className="text-sm text-white/40 line-through">KES {total.toLocaleString()}</p>
+                  <p className="text-xl md:text-2xl font-black text-primary">KES {discountedTotal.toLocaleString()}</p>
+                </div>
+              ) : (
+                <p className="text-xl md:text-2xl font-black text-primary">KES {total.toLocaleString()}</p>
+              )}
             </div>
           </div>
+
+          {/* Promo discount breakdown */}
+          {activePromo && discountedTotal < total && (
+            <div className="pt-3 border-t border-primary/10 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-white/60">Rental ({days} days x KES {car.daily_rate.toLocaleString()})</span>
+                <span className="text-white/60">KES {total.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-green-400 font-bold">{activePromo.title} (-{activePromo.discount_type === 'percentage' ? `${activePromo.discount_value}%` : `KES ${activePromo.discount_value}`})</span>
+                <span className="text-green-400 font-bold">- KES {(total - discountedTotal).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm font-bold pt-2 border-t border-primary/10">
+                <span className="text-white">You Pay</span>
+                <span className="text-primary font-black">KES {discountedTotal.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+
           <div className="pt-4 border-t border-primary/10 flex items-center gap-2 text-[10px] text-primary/60 font-bold uppercase tracking-widest">
             <ShieldCheck size={14} />
             Includes Basic Insurance & 24/7 Roadside Assistance

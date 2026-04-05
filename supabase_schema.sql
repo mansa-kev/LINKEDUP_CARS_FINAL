@@ -261,6 +261,46 @@ CREATE TABLE IF NOT EXISTS coupons (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 14a. Promotions
+CREATE TABLE IF NOT EXISTS promotions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  description TEXT,
+  discount_type TEXT NOT NULL DEFAULT 'percentage', -- 'percentage' or 'fixed'
+  discount_value NUMERIC NOT NULL,
+  category TEXT DEFAULT 'all', -- 'all', 'suv', 'sedan', 'luxury', etc.
+  start_date TIMESTAMPTZ NOT NULL,
+  end_date TIMESTAMPTZ NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  banner_text TEXT, -- text shown in the marquee banner
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE promotions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public can read active promotions" ON promotions FOR SELECT USING (is_active = true AND NOW() BETWEEN start_date AND end_date);
+CREATE POLICY "Admins can manage promotions" ON promotions FOR ALL USING (
+  EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- 14b. Contact Messages
+CREATE TABLE IF NOT EXISTS contact_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  subject TEXT,
+  message TEXT NOT NULL,
+  status TEXT DEFAULT 'unread', -- 'unread', 'read', 'replied'
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE contact_messages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins can manage contact messages" ON contact_messages FOR ALL USING (
+  EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
+);
+CREATE POLICY "Anyone can insert contact messages" ON contact_messages FOR INSERT WITH CHECK (true);
+
 -- 14. Reviews
 CREATE TABLE IF NOT EXISTS reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

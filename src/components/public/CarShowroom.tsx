@@ -13,6 +13,7 @@ import { fleetService } from '../../services/fleetService';
 import { Car } from '../../types';
 import { SearchControls } from './SearchControls';
 import { FilterPanel } from './FilterPanel';
+import { PromoBadge } from './PromoBadge';
 
 interface Filters {
   category: string;
@@ -125,6 +126,7 @@ export function CarShowroom() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PromoBadge />
       <SearchControls onSearch={setSearchParams} initialParams={searchParams} />
 
       <section className="py-8 md:py-20 px-4 md:px-6 relative overflow-hidden">
