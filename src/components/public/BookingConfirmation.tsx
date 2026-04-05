@@ -49,9 +49,14 @@ export function BookingConfirmation() {
     setCreatingAccount(true);
     try {
       // Sign up with Supabase Auth
+      const appUrl = import.meta.env.VITE_APP_URL || 'https://app.linkedupcarsrentals.com';
+
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${appUrl}/login`,
+        },
       });
 
       if (authError) throw authError;

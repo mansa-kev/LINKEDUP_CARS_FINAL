@@ -114,7 +114,7 @@ export function AdminFleetOwners() {
       contact_name: '',
       email: '',
       phone_number: '',
-      password: Math.random().toString(36).slice(-8),
+      password: 'Fleet123!',
       commission_rate: 0.15,
       status: 'pending_verification'
     });

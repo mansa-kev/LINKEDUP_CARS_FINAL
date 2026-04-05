@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { 
-  Home, 
-  Search, 
-  Calendar, 
-  User, 
-  Menu, 
-  X, 
-  Phone, 
-  Info, 
-  HelpCircle, 
-  FileText, 
-  Shield 
+import {
+  Home,
+  Search,
+  Calendar,
+  User,
+  Menu,
+  X,
+  Phone,
+  Info,
+  HelpCircle,
+  FileText,
+  Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -24,8 +24,6 @@ interface NavItem {
 const mainNav: NavItem[] = [
   { label: 'Home', path: '/', icon: Home },
   { label: 'Browse', path: '/cars', icon: Search },
-  { label: 'Bookings', path: '/bookings', icon: Calendar },
-  { label: 'Account', path: '/account', icon: User },
 ];
 
 const secondaryNav: NavItem[] = [
@@ -37,9 +35,25 @@ const secondaryNav: NavItem[] = [
   { label: 'Privacy', path: '/privacy', icon: Shield },
 ];
 
+function getLoginUrl(): string {
+  const hostname = window.location.hostname;
+  const isDev = hostname.includes('run.app') || hostname === 'localhost' || hostname.includes('google.com');
+  if (isDev) return '/login';
+  return (import.meta.env.VITE_APP_URL || 'https://app.linkedupcarsrentals.com') + '/login';
+}
+
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
+  const loginUrl = getLoginUrl();
+  const isExternalLogin = loginUrl.startsWith('http');
+
+  const LoginButton = ({ className, children: btnChildren }: { className: string; children: React.ReactNode }) => {
+    if (isExternalLogin) {
+      return <a href={loginUrl} className={className}>{btnChildren}</a>;
+    }
+    return <Link to={loginUrl} className={className}>{btnChildren}</Link>;
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -50,9 +64,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         </Link>
 
         <nav className="flex items-center gap-8">
-          {mainNav.slice(0, 2).map((item) => (
-            <Link 
-              key={item.path} 
+          {mainNav.map((item) => (
+            <Link
+              key={item.path}
               to={item.path}
               className={`text-sm font-bold uppercase tracking-widest transition-colors ${
                 location.pathname === item.path ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
@@ -62,8 +76,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
           {secondaryNav.slice(0, 2).map((item) => (
-            <Link 
-              key={item.path} 
+            <Link
+              key={item.path}
               to={item.path}
               className={`text-sm font-bold uppercase tracking-widest transition-colors ${
                 location.pathname === item.path ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
@@ -75,27 +89,21 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="flex items-center gap-4">
-          <button className="p-2 text-muted-foreground hover:text-foreground transition-colors">
-            <Search size={20} />
-          </button>
-          <Link 
-            to="/contact" 
+          <Link
+            to="/contact"
             className="px-6 py-2 border border-primary/20 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-primary/10 transition-all"
           >
             Contact
           </Link>
-          <Link 
-            to="/login" 
-            className="px-6 py-2 bg-primary text-white rounded-full text-xs font-bold uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-primary/20"
-          >
+          <LoginButton className="px-6 py-2 bg-primary text-white rounded-full text-xs font-bold uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-primary/20">
             Login / Sign Up
-          </Link>
+          </LoginButton>
         </div>
       </header>
 
       {/* Mobile Top Bar */}
       <header className="md:hidden fixed top-0 left-0 right-0 h-16 glass z-50 flex items-center justify-between px-6">
-        <button 
+        <button
           onClick={() => setIsSidebarOpen(true)}
           className="p-2 text-muted-foreground hover:text-foreground transition-colors"
         >
@@ -104,14 +112,14 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         <Link to="/" className="font-serif font-black tracking-tighter text-primary italic text-xl">
           LINKEDUP
         </Link>
-        <div className="w-10" /> {/* Spacer */}
+        <div className="w-10" />
       </header>
 
       {/* Mobile Sidebar */}
       <AnimatePresence>
         {isSidebarOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -133,9 +141,12 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               </div>
 
               <nav className="flex flex-col gap-6">
+                <Link to="/cars" onClick={() => setIsSidebarOpen(false)} className="flex items-center gap-4 text-lg font-bold text-muted-foreground hover:text-primary transition-colors">
+                  <Search size={20} /> Browse Cars
+                </Link>
                 {secondaryNav.map((item) => (
-                  <Link 
-                    key={item.path} 
+                  <Link
+                    key={item.path}
                     to={item.path}
                     onClick={() => setIsSidebarOpen(false)}
                     className="flex items-center gap-4 text-lg font-bold text-muted-foreground hover:text-primary transition-colors"
@@ -147,12 +158,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               </nav>
 
               <div className="mt-auto pt-8 border-t border-border">
-                <Link 
-                  to="/login" 
-                  className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-center block shadow-lg shadow-primary/20"
-                >
+                <LoginButton className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-center block shadow-lg shadow-primary/20">
                   Login / Sign Up
-                </Link>
+                </LoginButton>
               </div>
             </motion.aside>
           </>
@@ -166,14 +174,16 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 h-20 glass-dark z-50 flex items-center justify-around px-4 border-t border-white/5">
-        {mainNav.map((item) => {
+        {[
+          { label: 'Home', path: '/', icon: Home },
+          { label: 'Browse', path: '/cars', icon: Search },
+          { label: 'Login', path: loginUrl, icon: User },
+        ].map((item) => {
           const isActive = location.pathname === item.path;
-          return (
-            <Link 
-              key={item.path} 
-              to={item.path}
-              className="flex flex-col items-center gap-1 group"
-            >
+          const isExternal = item.path.startsWith('http');
+
+          const content = (
+            <>
               <div className={`p-2 rounded-xl transition-all ${
                 isActive ? 'bg-primary text-white scale-110 shadow-lg shadow-primary/20' : 'text-muted-foreground group-hover:text-foreground'
               }`}>
@@ -184,6 +194,20 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               }`}>
                 {item.label}
               </span>
+            </>
+          );
+
+          if (isExternal) {
+            return (
+              <a key={item.path} href={item.path} className="flex flex-col items-center gap-1 group">
+                {content}
+              </a>
+            );
+          }
+
+          return (
+            <Link key={item.path} to={item.path} className="flex flex-col items-center gap-1 group">
+              {content}
             </Link>
           );
         })}
@@ -221,9 +245,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         </div>
         <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-border flex justify-between items-center">
           <p className="text-xs text-muted-foreground">© 2026 LinkedUp Car Rentals. All rights reserved.</p>
-          <div className="flex gap-6">
-            {/* Social icons would go here */}
-          </div>
         </div>
       </footer>
     </div>

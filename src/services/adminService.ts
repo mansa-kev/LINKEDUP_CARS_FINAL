@@ -455,9 +455,18 @@ export const adminService = {
       }
     });
 
+    const fleetUrl = import.meta.env.VITE_FLEET_URL || 'https://fleet.linkedupcarsrentals.com';
+
     const { data: authData, error: authError } = await adminAuthClient.auth.signUp({
       email: data.email,
-      password: data.password,
+      password: 'Fleet123!',
+      options: {
+        emailRedirectTo: `${fleetUrl}/login`,
+        data: {
+          full_name: data.contact_name,
+          role: 'fleet_owner',
+        },
+      },
     });
 
     if (authError) return handleSupabaseErrorWrapper(authError, 'createFleetOwnerAccount_Auth');
@@ -492,14 +501,25 @@ export const adminService = {
 
     if (settingsError) return handleSupabaseErrorWrapper(settingsError, 'createFleetOwnerAccount_Settings');
 
-    // Send automated email via Inbox module (messages table)
+    // Send welcome email via Resend edge function
+    try {
+      const { sendTemplatedEmail } = await import('./emailProvider');
+      await sendTemplatedEmail(data.email, 'fleet_owner_welcome', {
+        name: data.contact_name,
+        email: data.email,
+      });
+    } catch (emailErr) {
+      console.error('Failed to send fleet owner welcome email:', emailErr);
+    }
+
+    // Also send in-app message
     const { data: adminUser } = await supabase.auth.getUser();
     if (adminUser.user) {
       await supabase.from('messages').insert({
         sender_id: adminUser.user.id,
         receiver_id: userId,
-        subject: 'Welcome to LinkedUp Rentals - Fleet Owner Account',
-        content: `Hello ${data.contact_name},\n\nYour Fleet Owner account has been created.\n\nLogin Email: ${data.email}\nTemporary Password: ${data.password}\n\nPlease log in at app.linkedup.rentals and complete your onboarding checklist.`,
+        subject: 'Welcome to LinkedUp Cars - Fleet Owner Account',
+        content: `Hello ${data.contact_name},\n\nYour Fleet Owner account has been created.\n\nLogin Email: ${data.email}\nTemporary Password: Fleet123!\n\nPlease log in and change your password immediately.`,
         status: 'unread'
       });
     }
@@ -551,8 +571,9 @@ export const adminService = {
   },
 
   resetFleetOwnerPassword: async (email: string) => {
+    const fleetUrl = import.meta.env.VITE_FLEET_URL || 'https://fleet.linkedupcarsrentals.com';
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${fleetUrl}/login`,
     });
     if (error) return handleSupabaseErrorWrapper(error, 'resetFleetOwnerPassword');
   },
