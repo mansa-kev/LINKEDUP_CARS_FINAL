@@ -42,7 +42,7 @@ export function BookingForm({ car }: BookingFormProps) {
       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-[60px] -translate-y-1/2 translate-x-1/2" />
       
       <div className="relative z-10">
-        <h3 className="text-2xl font-serif font-black italic text-white mb-6">Reserve This Vehicle</h3>
+        <h3 className="text-2xl font-serif font-black italic text-foreground mb-6">Reserve This Vehicle</h3>
         
         <form onSubmit={handleBooking} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -55,7 +55,7 @@ export function BookingForm({ car }: BookingFormProps) {
                   required
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm text-white focus:ring-2 focus:ring-primary/50 outline-none transition-all"
+                  className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-2xl text-sm text-foreground focus:ring-2 focus:ring-primary/50 outline-none transition-all"
                 />
               </div>
             </div>
@@ -68,19 +68,19 @@ export function BookingForm({ car }: BookingFormProps) {
                   required
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm text-white focus:ring-2 focus:ring-primary/50 outline-none transition-all"
+                  className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-2xl text-sm text-foreground focus:ring-2 focus:ring-primary/50 outline-none transition-all"
                 />
               </div>
             </div>
           </div>
 
-          <div className="p-6 rounded-3xl bg-white/5 border border-white/5 space-y-4">
+          <div className="p-6 rounded-3xl bg-card/50 border border-border space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground font-medium">Daily Rate</span>
-              <span className="text-lg font-bold text-white">KES {car.daily_rate}</span>
+              <span className="text-lg font-bold text-foreground">KES {car.daily_rate}</span>
             </div>
-            <div className="flex justify-between items-center pt-4 border-t border-white/5">
-              <span className="text-sm text-white font-black uppercase tracking-widest">Estimated Total</span>
+            <div className="flex justify-between items-center pt-4 border-t border-border">
+              <span className="text-sm text-foreground font-black uppercase tracking-widest">Estimated Total</span>
               <span className="text-2xl font-black text-primary">KES {calculateTotal()}</span>
             </div>
           </div>

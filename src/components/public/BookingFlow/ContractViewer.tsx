@@ -159,28 +159,28 @@ export function ContractViewer({ contract, bookingData, car, onContractLoaded }:
       <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-2 block">E-Contract Display</label>
       
       {/* Controls */}
-      <div className="flex items-center justify-between p-4 bg-white/5 rounded-[20px] border border-white/10">
+      <div className="flex items-center justify-between p-4 bg-card/50 rounded-[20px] border border-border">
         <div className="flex items-center gap-2">
           <button
             onClick={handleZoomOut}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="p-2 hover:bg-card/70 rounded-lg transition-colors"
             title="Zoom Out"
           >
             <ZoomOut size={16} />
           </button>
-          <span className="text-xs text-white/60 min-w-[3rem] text-center">
+          <span className="text-xs text-muted-foreground min-w-[3rem] text-center">
             {Math.round(scale * 100)}%
           </span>
           <button
             onClick={handleZoomIn}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="p-2 hover:bg-card/70 rounded-lg transition-colors"
             title="Zoom In"
           >
             <ZoomIn size={16} />
           </button>
           <button
             onClick={handleRotate}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="p-2 hover:bg-card/70 rounded-lg transition-colors"
             title="Rotate"
           >
             <RotateCw size={16} />
@@ -199,11 +199,11 @@ export function ContractViewer({ contract, bookingData, car, onContractLoaded }:
       {/* Contract Display */}
       <div 
         ref={containerRef}
-        className="relative bg-white rounded-[24px] overflow-hidden shadow-2xl"
+        className="relative bg-card rounded-[24px] overflow-hidden shadow-2xl"
         style={{ maxHeight: '600px' }}
       >
         {loading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/90">
+          <div className="absolute inset-0 flex items-center justify-center bg-card/90">
             <div className="text-center space-y-3">
               <Loader2 className="animate-spin text-primary mx-auto" size={32} />
               <p className="text-sm font-bold text-foreground">Loading contract...</p>
@@ -252,10 +252,10 @@ export function ContractViewer({ contract, bookingData, car, onContractLoaded }:
           <span className="text-primary font-bold">Dynamic Data Overlay Active</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-          <div><span className="text-muted-foreground">Client:</span> <span className="text-white font-bold">{bookingData?.firstName || 'N/A'} {bookingData?.lastName || 'N/A'}</span></div>
-          <div><span className="text-muted-foreground">Vehicle:</span> <span className="text-white font-bold">{car?.make || 'N/A'} {car?.model || 'N/A'}</span></div>
-          <div><span className="text-muted-foreground">Period:</span> <span className="text-white font-bold">{bookingData?.startDate || 'N/A'} to {bookingData?.endDate || 'N/A'}</span></div>
-          <div><span className="text-muted-foreground">Total:</span> <span className="text-white font-bold">KES {bookingData?.totalCost?.toLocaleString() || '0'}</span></div>
+          <div><span className="text-muted-foreground">Client:</span> <span className="text-foreground font-bold">{bookingData?.firstName || 'N/A'} {bookingData?.lastName || 'N/A'}</span></div>
+          <div><span className="text-muted-foreground">Vehicle:</span> <span className="text-foreground font-bold">{car?.make || 'N/A'} {car?.model || 'N/A'}</span></div>
+          <div><span className="text-muted-foreground">Period:</span> <span className="text-foreground font-bold">{bookingData?.startDate || 'N/A'} to {bookingData?.endDate || 'N/A'}</span></div>
+          <div><span className="text-muted-foreground">Total:</span> <span className="text-foreground font-bold">KES {bookingData?.totalCost?.toLocaleString() || '0'}</span></div>
         </div>
         <p className="text-[10px] text-primary/80 italic">
           Yellow highlights indicate dynamically inserted booking-specific data

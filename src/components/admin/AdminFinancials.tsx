@@ -23,6 +23,7 @@ import {
   Tooltip, 
   ResponsiveContainer 
 } from 'recharts';
+import { logger } from '../../utils/logger';
 
 // --- Types ---
 
@@ -53,17 +54,28 @@ const TransactionStatus = ({ status }: { status: Transaction['status'] }) => {
 
 export function AdminFinancials() {
   const [data, setData] = useState<{ transactions: any[], expenses: any[], totalRevenue: number, totalPayouts: number, totalExpenses: number, chartData: any[] }>({ transactions: [], expenses: [], totalRevenue: 0, totalPayouts: 0, totalExpenses: 0, chartData: [] });
+  const [reservationStats, setReservationStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'approvals' | 'payouts'>('overview');
   const [txTab, setTxTab] = useState<'all' | 'payment_in' | 'payout_out'>('all');
 
   const fetchFinancials = async () => {
+    logger.log('AdminFinancials: fetchFinancials called');
     setLoading(true);
     try {
       const result = await adminService.getFinancials();
+      logger.log('AdminFinancials: Data received', result);
       setData(result);
+
+      // Fetch reservation stats
+      try {
+        const resStats = await adminService.getReservationStats();
+        setReservationStats(resStats);
+      } catch (resError) {
+        logger.error('Failed to fetch reservation stats:', resError);
+      }
     } catch (error) {
-      console.error('Failed to fetch financials:', error);
+      logger.error('Failed to fetch financials:', error);
     } finally {
       setLoading(false);
     }
@@ -130,7 +142,7 @@ export function AdminFinancials() {
                 </div>
               </div>
               <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-wider mb-1">Total Platform Revenue</h3>
-              <p className="text-2xl font-bold text-foreground">Ksh {totalRevenue.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-foreground">KSh {totalRevenue.toLocaleString()}</p>
             </div>
 
             <div className="bg-card p-6 rounded-2xl border border-border shadow-sm">
@@ -140,7 +152,7 @@ export function AdminFinancials() {
                 </div>
               </div>
               <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-wider mb-1">Total Payouts</h3>
-              <p className="text-2xl font-bold text-foreground">Ksh {totalPayouts.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-foreground">KSh {totalPayouts.toLocaleString()}</p>
             </div>
 
             <div className="bg-card p-6 rounded-2xl border border-border shadow-sm">
@@ -150,7 +162,7 @@ export function AdminFinancials() {
                 </div>
               </div>
               <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-wider mb-1">Total Expenses</h3>
-              <p className="text-2xl font-bold text-foreground">Ksh {totalExpenses.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-foreground">KSh {totalExpenses.toLocaleString()}</p>
             </div>
 
             <div className="bg-card p-6 rounded-2xl border border-border shadow-sm">
@@ -160,7 +172,7 @@ export function AdminFinancials() {
                 </div>
               </div>
               <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-wider mb-1">Pending Payouts</h3>
-              <p className="text-2xl font-bold text-foreground">Ksh {pendingPayouts.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-foreground">KSh {pendingPayouts.toLocaleString()}</p>
             </div>
           </div>
 
@@ -286,7 +298,7 @@ export function AdminFinancials() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`text-sm font-bold ${tx.amount > 0 ? 'text-success' : 'text-foreground'}`}>
-                          {tx.amount > 0 ? '+' : ''}Ksh {Number(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          {tx.amount > 0 ? '+' : ''}KSh {Number(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </td>
                       <td className="px-6 py-4">

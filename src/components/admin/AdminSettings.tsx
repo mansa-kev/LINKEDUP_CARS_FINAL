@@ -12,14 +12,17 @@ import {
   Save,
   Plus,
   Trash2,
-  Loader2
+  Loader2,
+  Image
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { AdminLogoManager } from './AdminLogoManager';
+import { AdminImageManager } from './AdminImageManager';
 
 // --- Components ---
 
 export function AdminSettings() {
-  const [activeSection, setActiveSection] = useState<'general' | 'auth' | 'notifications' | 'admins' | 'payments' | 'compliance' | 'integrations'>('general');
+  const [activeSection, setActiveSection] = useState<'general' | 'logo' | 'images' | 'auth' | 'notifications' | 'admins' | 'payments' | 'compliance' | 'integrations'>('general');
   const [settings, setSettings] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,6 +110,22 @@ export function AdminSettings() {
           }`}
         >
           <Globe size={18} /> General
+        </button>
+        <button
+          onClick={() => setActiveSection('logo')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+            activeSection === 'logo' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-card text-muted-foreground hover:bg-muted'
+          }`}
+        >
+          <Image size={18} /> Logo
+        </button>
+        <button
+          onClick={() => setActiveSection('images')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+            activeSection === 'images' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-card text-muted-foreground hover:bg-muted'
+          }`}
+        >
+          <Image size={18} /> Images
         </button>
         <button
           onClick={() => setActiveSection('auth')}
@@ -206,6 +225,14 @@ export function AdminSettings() {
               </div>
             </div>
           </div>
+        )}
+
+        {activeSection === 'logo' && (
+          <AdminLogoManager />
+        )}
+
+        {activeSection === 'images' && (
+          <AdminImageManager />
         )}
 
         {activeSection === 'auth' && (
@@ -320,11 +347,45 @@ export function AdminSettings() {
         {activeSection === 'payments' && (
           <div className="bg-card p-8 rounded-2xl border border-border shadow-sm space-y-8">
             <h3 className="text-xl font-bold border-b border-border pb-4">Payment Gateway Configuration</h3>
-            <div className="space-y-4">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">M-Pesa API Key</label>
-              <input type="password" onBlur={(e) => handleUpdateSetting('mpesa_api_key', e.target.value)} className="w-full px-4 py-2 bg-muted border-none rounded-xl text-sm" />
-              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">M-Pesa API Secret</label>
-              <input type="password" onBlur={(e) => handleUpdateSetting('mpesa_api_secret', e.target.value)} className="w-full px-4 py-2 bg-muted border-none rounded-xl text-sm" />
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <h4 className="font-bold text-lg text-warning">Reservation Fee Settings</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Reservation Fee (KES)</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      defaultValue={getSettingValue('reservation_fee', 500)}
+                      onBlur={(e) => handleUpdateSetting('reservation_fee', parseInt(e.target.value) || 500)}
+                      className="w-full px-4 py-2 bg-muted border-none rounded-xl text-sm focus:ring-2 focus:ring-warning/20" 
+                    />
+                    <p className="text-xs text-muted-foreground">Fee charged to reserve a car for 24 hours</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Reservation Expiry (Hours)</label>
+                    <select 
+                      defaultValue={getSettingValue('reservation_expiry_hours', 24)}
+                      onChange={(e) => handleUpdateSetting('reservation_expiry_hours', parseInt(e.target.value))}
+                      className="w-full px-4 py-2 bg-muted border-none rounded-xl text-sm focus:ring-2 focus:ring-warning/20"
+                    >
+                      <option value="12">12 Hours</option>
+                      <option value="24">24 Hours</option>
+                      <option value="48">48 Hours</option>
+                      <option value="72">72 Hours</option>
+                    </select>
+                    <p className="text-xs text-muted-foreground">Time before reservation expires</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-4 pt-6 border-t border-border">
+                <h4 className="font-bold text-lg">M-Pesa Configuration</h4>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">M-Pesa API Key</label>
+                <input type="password" onBlur={(e) => handleUpdateSetting('mpesa_api_key', e.target.value)} className="w-full px-4 py-2 bg-muted border-none rounded-xl text-sm" />
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">M-Pesa API Secret</label>
+                <input type="password" onBlur={(e) => handleUpdateSetting('mpesa_api_secret', e.target.value)} className="w-full px-4 py-2 bg-muted border-none rounded-xl text-sm" />
+              </div>
             </div>
           </div>
         )}

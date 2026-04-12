@@ -14,7 +14,8 @@ import {
   Clock,
   MoreHorizontal,
   AlertCircle,
-  Loader2
+  Loader2,
+  ChevronDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -64,6 +65,10 @@ export function AdminVerification() {
   const [verifications, setVerifications] = useState<VerificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeType, setActiveType] = useState<VerificationType | 'all'>('all');
+  
+  // Mobile expandable row state
+  const [isMobile, setIsMobile] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
   const fetchVerifications = async () => {
     setLoading(true);
@@ -137,6 +142,14 @@ export function AdminVerification() {
 
   useEffect(() => {
     fetchVerifications();
+  }, []);
+
+  // Mobile detection with resize listener
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   const handleApprove = async (item: VerificationItem) => {

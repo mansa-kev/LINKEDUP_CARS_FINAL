@@ -1,6 +1,8 @@
 import React from 'react';
+import { Helmet } from 'react-helmet-async';
 import { motion } from 'motion/react';
 import { Shield, Clock, Heart, Award, Target, Users, Sparkles, MapPin, Car, Headphones } from 'lucide-react';
+import { usePublicImagesFinal } from '../../hooks/usePublicImagesFinal';
 
 const values = [
   {
@@ -59,7 +61,26 @@ const whyLinkedUp = [
 ];
 
 export function AboutUs() {
+  const { images, loading } = usePublicImagesFinal();
+
+  // Fallback images if no custom images are uploaded
+  const heroImage = images.about_hero_image || 'https://picsum.photos/seed/luxury-fleet/1920/800';
+  const teamImage = images.about_team_image || 'https://picsum.photos/seed/team-linkedup/800/1000';
+  const missionImage = images.about_mission_image || 'https://picsum.photos/seed/mission-linkedup/600/400';
+
+  const showHeroImage = !loading && heroImage;
+  const showTeamImage = !loading && teamImage;
+  const showMissionImage = !loading && missionImage;
+
   return (
+    <>
+      <Helmet>
+        <title>About Us | LinkedUp Cars Rentals Nairobi</title>
+        <meta name="description" content="Learn about LinkedUp Cars Rentals — Nairobi's trusted car hire, chauffeur and corporate transport provider. Two offices: Lanphil Arcade Ridgeways and GoldenHeights Mirema." />
+        <link rel="canonical" href="https://linkedupcarsrentals.com/about" />
+        <meta property="og:title" content="About LinkedUp Cars Rentals | Nairobi" />
+        <meta property="og:url" content="https://linkedupcarsrentals.com/about" />
+      </Helmet>
     <div className="pt-32 pb-20">
       {/* Hero Section */}
       <section className="px-6 mb-32">
@@ -75,7 +96,7 @@ export function AboutUs() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-5xl md:text-8xl font-serif font-black tracking-tighter italic text-white leading-tight mb-12"
+            className="text-5xl md:text-8xl font-serif font-black tracking-tighter italic text-foreground leading-tight mb-12"
           >
             Redefining the <span className="text-primary">Art of Travel</span>
           </motion.h1>
@@ -97,14 +118,25 @@ export function AboutUs() {
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
-            className="relative aspect-[21/9] rounded-[60px] overflow-hidden border border-white/5"
+            className="relative aspect-[21/9] rounded-[60px] overflow-hidden border border-border"
           >
-            <img
-              src="https://picsum.photos/seed/luxury-fleet/1920/800"
-              alt="Our Luxury Fleet"
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
+            {showHeroImage ? (
+              <img
+                src={heroImage}
+                alt="Our Luxury Fleet"
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-muted">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-muted-foreground text-sm">
+                    {loading ? 'Loading image...' : 'No image set'}
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
           </motion.div>
         </div>
@@ -115,7 +147,7 @@ export function AboutUs() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <span className="text-primary text-xs font-black uppercase tracking-[0.3em] mb-4 block">What Drives Us</span>
-            <h2 className="text-3xl md:text-5xl font-serif font-black tracking-tighter italic text-white">Our Core Values</h2>
+            <h2 className="text-3xl md:text-5xl font-serif font-black tracking-tighter italic text-foreground">Our Core Values</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {values.map((value, index) => (
@@ -125,12 +157,12 @@ export function AboutUs() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.1 }}
-                className="p-10 rounded-[40px] bg-card border border-white/5 hover:border-primary/20 transition-all group"
+                className="p-10 rounded-[40px] bg-card border border-border hover:border-primary/20 transition-all group"
               >
                 <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform">
                   <value.icon className="w-8 h-8 text-primary" />
                 </div>
-                <h3 className="text-2xl font-serif font-black tracking-tight italic mb-4 text-white">
+                <h3 className="text-2xl font-serif font-black tracking-tight italic mb-4 text-foreground">
                   {value.title}
                 </h3>
                 <p className="text-muted-foreground font-medium leading-relaxed">
@@ -147,7 +179,7 @@ export function AboutUs() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <span className="text-primary text-xs font-black uppercase tracking-[0.3em] mb-4 block">The LinkedUp Advantage</span>
-            <h2 className="text-3xl md:text-5xl font-serif font-black tracking-tighter italic text-white">
+            <h2 className="text-3xl md:text-5xl font-serif font-black tracking-tighter italic text-foreground">
               Why Choose <span className="text-primary">LinkedUp</span>
             </h2>
           </div>
@@ -159,13 +191,13 @@ export function AboutUs() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.08 }}
-                className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-primary/10 transition-all group flex gap-6"
+                className="p-8 rounded-[32px] bg-card/50 border border-border hover:bg-card/70 hover:border-primary/10 transition-all group flex gap-6"
               >
                 <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                   <item.icon className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white mb-2">{item.title}</h3>
+                  <h3 className="text-lg font-bold text-foreground mb-2">{item.title}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
                 </div>
               </motion.div>
@@ -183,7 +215,7 @@ export function AboutUs() {
             viewport={{ once: true }}
           >
             <span className="text-primary text-xs font-black uppercase tracking-[0.3em] mb-4 block">Our Mission</span>
-            <h2 className="text-3xl md:text-5xl font-serif font-black tracking-tighter italic text-white mb-8 leading-tight">
+            <h2 className="text-3xl md:text-5xl font-serif font-black tracking-tighter italic text-foreground mb-8 leading-tight">
               More Than Cars. <span className="text-primary">We Deliver Freedom.</span>
             </h2>
             <p className="text-muted-foreground text-lg leading-relaxed mb-8">
@@ -197,22 +229,35 @@ export function AboutUs() {
             initial={{ opacity: 0, x: 30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            className="relative aspect-[4/5] rounded-[48px] overflow-hidden border border-white/5"
+            className="relative aspect-[4/5] rounded-[48px] overflow-hidden border border-border"
           >
-            <img
-              src="https://picsum.photos/seed/team-linkedup/800/1000"
-              alt="LinkedUp Team"
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
-            <div className="absolute bottom-8 left-8 right-8">
-              <div className="p-6 glass rounded-[32px]">
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary mb-2">Based In</p>
-                <p className="text-white font-bold text-lg">Nairobi, Kenya</p>
-                <p className="text-white/60 text-sm">Lanphil Arcade, Ridgeways, Kiambu Road</p>
+            {showTeamImage ? (
+              <>
+                <img
+                  src={teamImage}
+                  alt="LinkedUp Team"
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
+                <div className="absolute bottom-8 left-8 right-8">
+                  <div className="p-6 glass rounded-[32px]">
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary mb-2">Based In</p>
+                    <p className="text-foreground font-bold text-lg">Nairobi, Kenya</p>
+                    <p className="text-muted-foreground text-sm">Lanphil Arcade, Ridgeways, Kiambu Road</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-muted">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-muted-foreground text-sm">
+                    {loading ? 'Loading image...' : 'No image set'}
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </motion.div>
         </div>
       </section>
@@ -224,7 +269,7 @@ export function AboutUs() {
         </div>
 
         <div className="max-w-4xl mx-auto text-center relative z-10">
-          <h2 className="text-3xl md:text-5xl font-serif font-black tracking-tight italic text-white mb-12 leading-tight">
+          <h2 className="text-3xl md:text-5xl font-serif font-black tracking-tight italic text-foreground mb-12 leading-tight">
             "Our mission is to provide more than just a car; we provide the freedom to explore with confidence and style."
           </h2>
           <div className="flex items-center justify-center gap-4">
@@ -235,5 +280,6 @@ export function AboutUs() {
         </div>
       </section>
     </div>
+    </>
   );
 }

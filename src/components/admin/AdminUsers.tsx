@@ -18,7 +18,8 @@ import {
   KeyRound,
   Trash2,
   Activity,
-  Link as LinkIcon
+  Link as LinkIcon,
+  ChevronDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -87,6 +88,11 @@ export function AdminUsers() {
   // Modal State
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<UserItem | null>(null);
+  
+  // Mobile expandable row state
+  const [isMobile, setIsMobile] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -103,6 +109,14 @@ export function AdminUsers() {
 
   useEffect(() => {
     fetchUsers();
+  }, []);
+
+  // Mobile detection with resize listener
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   const handleUpdateRole = async (id: string, role: UserRole) => {
@@ -214,88 +228,203 @@ export function AdminUsers() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">User ID</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">User</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Role</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Last Login</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-muted/30 transition-colors group">
-                  <td className="px-6 py-4">
-                    <span className="text-xs font-mono text-muted-foreground">{user.id.substring(0, 8)}...</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-all overflow-hidden">
-                        {user.avatar_url ? (
-                          <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
+      {/* Table - Desktop View */}
+      {!isMobile && (
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">User ID</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">User</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Role</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Last Login</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-muted/30 transition-colors group">
+                    <td className="px-6 py-4">
+                      <span className="text-xs font-mono text-muted-foreground">{user.id.substring(0, 8)}...</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-all overflow-hidden">
+                          {user.avatar_url ? (
+                            <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
+                          ) : (
+                            user.role === 'fleet_owner' ? <Building2 size={20} /> : <User size={20} />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-foreground leading-none">{user.full_name || 'No Name'}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{user.email || 'No email provided'}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <RoleBadge role={user.role} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={user.status || 'active'} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-muted-foreground font-medium">
+                        {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => openProfile(user)} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" title="View Profile">
+                          <Eye size={18} />
+                        </button>
+                        {(user.status || 'active') === 'active' ? (
+                          <button onClick={() => handleUpdateStatus(user.id, 'suspended')} className="p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors" title="Suspend User">
+                            <UserX size={18} />
+                          </button>
                         ) : (
-                          user.role === 'fleet_owner' ? <Building2 size={20} /> : <User size={20} />
+                          <button onClick={() => handleUpdateStatus(user.id, 'active')} className="p-2 hover:bg-success/10 rounded-lg text-muted-foreground hover:text-success transition-colors" title="Activate User">
+                            <UserCheck size={18} />
+                          </button>
                         )}
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-foreground leading-none">{user.full_name || 'No Name'}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{user.email || 'No email provided'}</p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {filteredUsers.length === 0 && (
+            <div className="p-12 text-center">
+              <p className="text-muted-foreground">No users found matching your criteria.</p>
+            </div>
+          )}
+
+          <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-muted/10">
+            <span className="text-xs text-muted-foreground font-medium">Showing {filteredUsers.length} of {users.length} entries</span>
+            <div className="flex gap-2">
+              <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Previous</button>
+              <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Next</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Expandable Rows */}
+      {isMobile && (
+        <div className="space-y-2">
+          {filteredUsers.map((user) => (
+            <div key={user.id}>
+              {/* Summary Row */}
+              <div 
+                className="flex justify-between items-center px-4 py-3 bg-card border border-border rounded-xl cursor-pointer select-none hover:bg-muted/30 transition-colors"
+                onClick={() => setExpandedRowId(expandedRowId === user.id ? null : user.id)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground overflow-hidden">
+                    {user.avatar_url ? (
+                      <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
+                    ) : (
+                      user.role === 'fleet_owner' ? <Building2 size={20} /> : <User size={20} />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold">{user.full_name || 'No Name'}</p>
+                    <p className="text-xs text-muted-foreground">{user.email || 'No email provided'}</p>
+                  </div>
+                </div>
+                <ChevronDown 
+                  size={16} 
+                  className={`transition-transform duration-200 ${expandedRowId === user.id ? 'rotate-180' : ''}`}
+                />
+              </div>
+
+              {/* Expanded Card */}
+              {expandedRowId === user.id && (
+                <div className="bg-card border border-border rounded-xl p-4 mb-3 max-h-[65vh] overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">User ID</span>
+                      <p className="text-sm text-white font-medium break-all">{user.id}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Full Name</span>
+                      <p className="text-sm text-white font-medium">{user.full_name || 'No Name'}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Email</span>
+                      <p className="text-sm text-white font-medium break-all">{user.email || 'No email provided'}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Role</span>
+                      <div className="mt-1">
+                        <RoleBadge role={user.role} />
                       </div>
                     </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <RoleBadge role={user.role} />
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge status={user.status || 'active'} />
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-muted-foreground font-medium">
-                      {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openProfile(user)} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" title="View Profile">
-                        <Eye size={18} />
-                      </button>
-                      {(user.status || 'active') === 'active' ? (
-                        <button onClick={() => handleUpdateStatus(user.id, 'suspended')} className="p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors" title="Suspend User">
-                          <UserX size={18} />
-                        </button>
-                      ) : (
-                        <button onClick={() => handleUpdateStatus(user.id, 'active')} className="p-2 hover:bg-success/10 rounded-lg text-muted-foreground hover:text-success transition-colors" title="Activate User">
-                          <UserCheck size={18} />
-                        </button>
-                      )}
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Status</span>
+                      <div className="mt-1">
+                        <StatusBadge status={user.status || 'active'} />
+                      </div>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {filteredUsers.length === 0 && (
-          <div className="p-12 text-center">
-            <p className="text-muted-foreground">No users found matching your criteria.</p>
-          </div>
-        )}
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Last Login</span>
+                      <p className="text-sm text-white font-medium">
+                        {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
+                      </p>
+                    </div>
+                  </div>
 
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-muted/10">
-          <span className="text-xs text-muted-foreground font-medium">Showing {filteredUsers.length} of {users.length} entries</span>
-          <div className="flex gap-2">
-            <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Previous</button>
-            <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Next</button>
+                  {/* Action Buttons */}
+                  <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
+                    <button 
+                      onClick={() => openProfile(user)}
+                      className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-2"
+                    >
+                      <Eye size={12} />
+                      View Profile
+                    </button>
+                    {(user.status || 'active') === 'active' ? (
+                      <button 
+                        onClick={() => handleUpdateStatus(user.id, 'suspended')}
+                        className="px-3 py-1.5 bg-error text-white rounded-lg text-xs font-bold hover:bg-error/90 transition-colors flex items-center gap-2"
+                      >
+                        <UserX size={12} />
+                        Suspend
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => handleUpdateStatus(user.id, 'active')}
+                        className="px-3 py-1.5 bg-success text-white rounded-lg text-xs font-bold hover:bg-success/90 transition-colors flex items-center gap-2"
+                      >
+                        <UserCheck size={12} />
+                        Activate
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          
+          {filteredUsers.length === 0 && (
+            <div className="p-12 text-center bg-card border border-border rounded-xl">
+              <p className="text-muted-foreground">No users found matching your criteria.</p>
+            </div>
+          )}
+
+          <div className="px-4 py-3 bg-card border border-border rounded-xl flex items-center justify-between">
+            <span className="text-xs text-muted-foreground font-medium">Showing {filteredUsers.length} of {users.length} entries</span>
+            <div className="flex gap-2">
+              <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Previous</button>
+              <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Next</button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* User Profile Modal */}
       {isProfileModalOpen && selectedUser && (

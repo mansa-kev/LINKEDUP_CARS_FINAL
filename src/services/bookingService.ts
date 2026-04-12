@@ -1,4 +1,5 @@
 import { supabase, handleSupabaseErrorWrapper as handleSupabaseError } from '../lib/supabase';
+import { reservationService } from './reservationService';
 
 const DEFAULT_COMMISSION_RATE = 0.15; // 15% platform commission
 
@@ -8,7 +9,18 @@ export const bookingService = {
       // 1. Get current user if logged in
       const { data: { user } } = await supabase.auth.getUser();
 
-      // 2. Look up the car to get fleet_owner_id
+      // 2. Check availability first
+      const availability = await reservationService.checkAvailability(
+        bookingData.carId,
+        bookingData.startDate,
+        bookingData.endDate
+      );
+
+      if (!availability.available) {
+        throw new Error('Selected dates are not available. The car is either booked or reserved for these dates.');
+      }
+
+      // 3. Look up the car to get fleet_owner_id
       const { data: car, error: carError } = await supabase
         .from('cars')
         .select('fleet_owner_id')
@@ -19,11 +31,11 @@ export const bookingService = {
         throw new Error('Could not find the selected car. Please try again.');
       }
 
-      // 3. Calculate platform commission
+      // 4. Calculate platform commission
       const totalAmount = bookingData.totalAmount;
       const platformCommission = Math.round(totalAmount * DEFAULT_COMMISSION_RATE * 100) / 100;
 
-      // 4. Prepare the booking record
+      // 5. Prepare the booking record
       const payload = {
         car_id: bookingData.carId,
         client_id: user?.id || null,
@@ -44,7 +56,13 @@ export const bookingService = {
             license_number: bookingData.license
           } : null,
           signature_url: bookingData.signatureUrl,
-          documents: bookingData.documents
+          documents: bookingData.documents ?? {
+            facePhotoUrl:    bookingData.facePhotoUrl    || null,
+            licenseFrontUrl: bookingData.licenseFrontUrl || null,
+            licenseBackUrl:  bookingData.licenseBackUrl  || null,
+            idFrontUrl:      bookingData.idFrontUrl      || null,
+            idBackUrl:       bookingData.idBackUrl       || null,
+          }
         }
       };
 
@@ -56,7 +74,7 @@ export const bookingService = {
 
       if (error) throw error;
 
-      // 5. If M-Pesa, also log to pending_payments
+      // 6. If M-Pesa, also log to pending_payments
       if (bookingData.paymentMethod === 'mpesa' && bookingData.mpesaCode) {
         await supabase.from('pending_payments').insert([{
           booking_id: data.id,

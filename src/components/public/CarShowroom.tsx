@@ -14,6 +14,7 @@ import { Car } from '../../types';
 import { SearchControls } from './SearchControls';
 import { FilterPanel } from './FilterPanel';
 import { PromoBadge } from './PromoBadge';
+import { CarStatusBadges } from './CarStatusBadges';
 
 interface Filters {
   category: string;
@@ -24,6 +25,14 @@ interface Filters {
   minSeats: number;
   sortBy: string;
 }
+
+// Helper function to determine car status from database fields
+const getCarStatus = (car: Car): 'available' | 'booked' | 'reserved' | 'unavailable' => {
+  if (car.status === 'booked') return 'booked';
+  if (car.status === 'reserved') return 'reserved';
+  if (car.status === 'maintenance' || car.status === 'unavailable') return 'unavailable';
+  return 'available';
+};
 
 export function CarShowroom() {
   const [searchParamsURL] = useSearchParams();
@@ -130,10 +139,14 @@ export function CarShowroom() {
       <SearchControls onSearch={setSearchParams} initialParams={searchParams} />
 
       <section className="py-8 md:py-20 px-4 md:px-6 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4 md:gap-8">
-          <FilterPanel onFilterChange={setFilters} />
+        <div className="flex gap-6">
+          {/* Filter Sidebar - Desktop Only */}
+          <div className="hidden md:block w-72 flex-shrink-0">
+            <FilterPanel onFilterChange={setFilters} />
+          </div>
 
-          <div className="flex-1">
+          {/* Main Content Area */}
+          <div className="flex-1 min-w-0">
             {/* Results count */}
             {!loading && (
               <div className="mb-4 md:mb-6 flex items-center justify-between">
@@ -144,9 +157,15 @@ export function CarShowroom() {
             )}
 
             {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="aspect-[16/10] rounded-[24px] md:rounded-[40px] bg-card animate-pulse border border-white/5" />
+              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 lg:gap-5">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div key={i} className="bg-card rounded-2xl overflow-hidden shadow-md animate-pulse">
+                    <div className="h-44 md:h-48 bg-muted" />
+                    <div className="p-3 md:p-4">
+                      <div className="h-4 bg-muted rounded mb-2" />
+                      <div className="h-3 bg-muted rounded w-3/4" />
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : filteredCars.length === 0 ? (
@@ -155,7 +174,7 @@ export function CarShowroom() {
                 <p className="text-sm text-muted-foreground">Try adjusting your filters or search terms</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
+              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 lg:gap-5">
                 <AnimatePresence mode="popLayout">
                   {filteredCars.map((car, i) => (
                     <motion.div
@@ -168,63 +187,109 @@ export function CarShowroom() {
                       className="group cursor-pointer"
                     >
                       <Link to={`/cars/${car.id}`}>
-                        <div className="relative aspect-[16/10] rounded-[24px] md:rounded-[40px] overflow-hidden mb-4 md:mb-6 bg-card border border-white/5">
-                          <img
-                            src={car.primary_image_url || car.photos?.[0] || `https://picsum.photos/seed/${car.id}/800/500`}
-                            alt={`${car.make} ${car.model}`}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              e.currentTarget.src = `https://picsum.photos/seed/showroom-${car.id}/800/500`;
-                            }}
-                          />
-                          <div className="absolute top-4 right-4 md:top-6 md:right-6 px-3 py-1.5 md:px-4 md:py-2 glass rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest text-white">
-                            {car.category}
-                          </div>
-                        </div>
+                        <div className="bg-card dark:bg-card rounded-2xl overflow-hidden shadow-md group cursor-pointer">
+                          {/* Card Image Container */}
+                          <div className="relative h-44 md:h-48 overflow-hidden">
+                            <img
+                              src={(() => {
+                                const isValid = (url?: string | null) =>
+                                  !!url && !url.startsWith('blob:') && (url.startsWith('http') || url.startsWith('/'));
 
-                        <div className="px-2 md:px-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="min-w-0 flex-1">
-                              <h3 className="text-lg md:text-2xl font-serif font-black tracking-tight italic group-hover:text-primary transition-colors truncate">
-                                {car.make} {car.model} ({car.year})
-                              </h3>
-                              <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                <div className="flex items-center gap-1 text-amber-500">
-                                  <Star size={12} fill="currentColor" />
-                                  <span className="text-[10px] font-black uppercase tracking-widest">4.9</span>
+                                // Read cache — discard any stale blob: URLs
+                                const cached = localStorage.getItem(`car_image_${car.id}`);
+                                if (cached && isValid(cached)) return cached;
+                                if (cached && !isValid(cached)) localStorage.removeItem(`car_image_${car.id}`);
+
+                                // Use first valid URL from car data
+                                const candidates = [
+                                  car.primary_image_url,
+                                  ...(Array.isArray(car.photos) ? car.photos : []),
+                                ].filter(isValid) as string[];
+
+                                const url = candidates[0] ?? `https://picsum.photos/seed/${car.id}/800/500`;
+
+                                // Only cache real http URLs, never blob:
+                                if (isValid(url)) localStorage.setItem(`car_image_${car.id}`, url);
+
+                                return url;
+                              })()}
+                              alt={`${car.make} ${car.model}`}
+                              className="w-full h-44 md:h-48 object-cover group-hover:scale-110 transition-transform duration-700"
+                              loading={i < 8 ? "eager" : "lazy"}
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const fallbackUrl = `https://picsum.photos/seed/showroom-${car.id}/800/500`;
+                                e.currentTarget.src = fallbackUrl;
+                                localStorage.setItem(`car_image_${car.id}`, fallbackUrl);
+                              }}
+                            />
+                            <CarStatusBadges status={getCarStatus(car)} />
+                          </div>
+
+                          {/* Card Body */}
+                          <div className="p-3 md:p-4">
+                            {/* Car Name - No truncation, allow 2 lines */}
+                            <h3 className="font-bold text-sm md:text-base leading-tight mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+                              {car.make} {car.model} ({car.year})
+                            </h3>
+
+                            {/* Price */}
+                            <div className="font-black text-orange-500 text-base md:text-lg mb-2">
+                              KES {car.daily_rate?.toLocaleString()}
+                              <span className="text-xs text-muted-foreground font-normal">/day</span>
+                            </div>
+
+                            {/* Specs Row */}
+                            <div className="flex flex-wrap gap-1 mb-3">
+                              {car.transmission && (
+                                <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded">
+                                  <Settings size={12} className="w-3 h-3" />
+                                  <span>{car.transmission}</span>
                                 </div>
-                                {car.transmission && (
-                                  <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1">
-                                    <Settings size={10} /> {car.transmission}
-                                  </span>
-                                )}
-                                {car.fuel_type && (
-                                  <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1">
-                                    <Fuel size={10} /> {car.fuel_type}
-                                  </span>
-                                )}
-                                {car.seats > 0 && (
-                                  <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1">
-                                    <Users size={10} /> {car.seats}
-                                  </span>
-                                )}
-                              </div>
+                              )}
+                              {car.fuel_type && (
+                                <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded">
+                                  <Fuel size={12} className="w-3 h-3" />
+                                  <span>{car.fuel_type}</span>
+                                </div>
+                              )}
+                              {car.seats > 0 && (
+                                <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded">
+                                  <Users size={12} className="w-3 h-3" />
+                                  <span>{car.seats} seats</span>
+                                </div>
+                              )}
                             </div>
-                            <div className="text-right shrink-0 ml-3">
-                              <span className="text-primary font-black text-xl md:text-2xl tracking-tighter">KES {car.daily_rate?.toLocaleString()}</span>
-                              <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest block">/day</span>
-                            </div>
-                          </div>
 
-                          <div className="mt-4 md:mt-8 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-2 h-2 rounded-full ${car.status === 'available' ? 'bg-green-500' : 'bg-red-500'}`} />
-                              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{car.status}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-primary group-hover:translate-x-2 transition-transform">
-                              <span className="text-[10px] font-black uppercase tracking-widest">View Details</span>
-                              <ArrowRight size={16} />
+                            {/* BOOK NOW + View Details */}
+                            <div className="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-white/10 text-xs">
+                              {car.status === 'booked' ? (
+                                <button
+                                  disabled
+                                  className="bg-green-500 text-green-100 text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-full whitespace-nowrap cursor-not-allowed opacity-75"
+                                >
+                                  BOOKED
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    // Navigate to car details and open booking flow immediately
+                                    window.location.href = `/cars/${car.id}?booking=true`;
+                                  }}
+                                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-full transition-all cursor-pointer whitespace-nowrap"
+                                >
+                                  BOOK NOW
+                                </button>
+                              )}
+                              <Link 
+                                to={`/cars/${car.id}`}
+                                className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-white hover:underline underline-offset-2 whitespace-nowrap transition-colors"
+                              >
+                                VIEW DETAILS
+                                <ArrowRight size={14} />
+                              </Link>
                             </div>
                           </div>
                         </div>
@@ -236,6 +301,11 @@ export function CarShowroom() {
               </div>
             )}
           </div>
+        </div>
+        
+        {/* Mobile Filter Panel - Bottom Sheet Style */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4 z-40">
+          <FilterPanel onFilterChange={setFilters} />
         </div>
       </section>
     </div>

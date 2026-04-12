@@ -1,6 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSubdomain, Subdomain } from '../contexts/SubdomainContext';
+import { useSubdomain, type Subdomain } from '../contexts/SubdomainContext';
+import { logger } from '../utils/logger';
+import { supabase } from '../lib/supabase';
 
 const sites: { id: Subdomain; label: string; color: string; path: string }[] = [
   { id: 'www', label: 'Public Site', color: 'bg-orange-500', path: '/' },
@@ -27,8 +29,15 @@ export function SubdomainSwitcher() {
         {sites.map((site) => (
           <button
             key={site.id}
-            onClick={() => {
-              console.log('Switching to:', site.id);
+            onClick={async () => {
+              logger.log('Switching to:', site.id);
+
+              // Logout when switching to a different protected portal
+              // This allows testing different roles without redirect loops
+              if (site.id !== 'www' && site.id !== subdomain) {
+                await supabase.auth.signOut();
+              }
+
               setPreviewSubdomain(site.id);
               navigate(site.path);
             }}

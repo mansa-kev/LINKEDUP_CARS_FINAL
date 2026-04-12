@@ -52,29 +52,29 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
   };
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl overflow-hidden shadow-xl border border-slate-200">
+    <div className="bg-gradient-to-br from-card to-muted rounded-xl overflow-hidden shadow-xl border border-border">
       {/* Professional Header */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6">
+      <div className="bg-gradient-to-r from-foreground to-muted text-primary-foreground p-6">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold tracking-wide">
             RENTAL AGREEMENT
           </h1>
-          <div className="text-lg font-medium text-slate-200">
+          <div className="text-lg font-medium text-primary-foreground/80">
             This Rental Agreement is made and entered into on this{" "}
-            <span className="text-white font-semibold">
+            <span className="text-primary-foreground font-semibold">
               {formatDate(bookingData?.startDate || new Date())}
             </span>
             {" "}between:
           </div>
-          <div className="bg-slate-700/50 rounded-lg p-4 mt-3 max-w-3xl mx-auto">
+          <div className="bg-muted/50 rounded-lg p-4 mt-3 max-w-3xl mx-auto border border-border">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div className="text-left">
-                <div className="font-semibold text-slate-200">LinkedUp Cars Rentals</div>
-                <div className="text-slate-300">Hereinafter referred to as "the Company"</div>
+                <div className="font-semibold text-foreground">LinkedUp Cars Rentals</div>
+                <div className="text-muted-foreground">Hereinafter referred to as "the Company"</div>
               </div>
               <div className="text-right">
-                <div className="font-semibold text-slate-200">{getClientName()}</div>
-                <div className="text-slate-300">Hereinafter referred to as "the Client"</div>
+                <div className="font-semibold text-foreground">{getClientName()}</div>
+                <div className="text-muted-foreground">Hereinafter referred to as "the Client"</div>
               </div>
             </div>
           </div>
@@ -82,8 +82,8 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
       </div>
 
       {/* Optimized PDF Display - Mobile Full Screen */}
-      <div className="p-2 sm:p-6 bg-slate-50">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+      <div className="p-2 sm:p-6 bg-card">
+        <div className="bg-background rounded-lg shadow-lg overflow-hidden border border-border">
           {pdfUrl ? (
             <div className="relative">
               {/* Mobile-optimized iframe - full screen on mobile */}
@@ -118,66 +118,66 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
       </div>
 
       {/* Enhanced Booking Summary - Mobile Responsive */}
-      <div className="p-4 sm:p-6 bg-white border-t border-slate-200">
-        <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-6 text-slate-900 flex items-center gap-2">
+      <div className="p-4 sm:p-6 bg-card border-t border-border">
+        <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-6 text-foreground flex items-center gap-2">
           <div className="w-1 h-5 sm:h-6 bg-blue-600 rounded-full"></div>
           Booking Summary & Terms
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Client Information */}
-          <div className="bg-slate-50 rounded-lg p-3 sm:p-4">
-            <h3 className="font-semibold text-slate-900 mb-2 sm:mb-3 text-xs sm:text-sm uppercase tracking-wide">Client Information</h3>
+          <div className="bg-muted/50 rounded-lg p-3 sm:p-4 border border-border">
+            <h3 className="font-semibold text-foreground mb-2 sm:mb-3 text-xs sm:text-sm uppercase tracking-wide">Client Information</h3>
             <div className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
               <div className="flex justify-between">
-                <span className="text-slate-600">Name:</span>
-                <span className="font-medium text-slate-900 text-right">{getClientName()}</span>
+                <span className="text-muted-foreground">Name:</span>
+                <span className="font-medium text-foreground text-right">{getClientName()}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600">Email:</span>
-                <span className="font-medium text-slate-900 text-right">{bookingData?.email || 'N/A'}</span>
+                <span className="text-muted-foreground">Email:</span>
+                <span className="font-medium text-foreground text-right">{bookingData?.email || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600">Phone:</span>
-                <span className="font-medium text-slate-900 text-right">{bookingData?.phone || 'N/A'}</span>
+                <span className="text-muted-foreground">Phone:</span>
+                <span className="font-medium text-foreground text-right">{bookingData?.phone || 'N/A'}</span>
               </div>
             </div>
           </div>
 
           {/* Vehicle Information */}
-          <div className="bg-slate-50 rounded-lg p-3 sm:p-4">
-            <h3 className="font-semibold text-slate-900 mb-2 sm:mb-3 text-xs sm:text-sm uppercase tracking-wide">Vehicle Details</h3>
+          <div className="bg-muted/50 rounded-lg p-3 sm:p-4 border border-border">
+            <h3 className="font-semibold text-foreground mb-2 sm:mb-3 text-xs sm:text-sm uppercase tracking-wide">Vehicle Information</h3>
             <div className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
               <div className="flex justify-between">
-                <span className="text-slate-600">Make/Model:</span>
-                <span className="font-medium text-slate-900 text-right">{car?.make || 'N/A'} {car?.model || 'N/A'}</span>
+                <span className="text-muted-foreground">Make/Model:</span>
+                <span className="font-medium text-foreground text-right">{car?.make || 'N/A'} {car?.model || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600">License:</span>
-                <span className="font-medium text-slate-900 text-right">{car?.license_plate || 'N/A'}</span>
-              </div>
+                <span className="text-muted-foreground">License:</span>
+                <span className="font-medium text-foreground text-right">{car?.license_plate || 'N/A'}</span>
+                              </div>
               <div className="flex justify-between">
-                <span className="text-slate-600">Daily Rate:</span>
-                <span className="font-medium text-slate-900 text-right">KES {car?.daily_rate?.toLocaleString() || '0'}</span>
+                <span className="text-muted-foreground">Daily Rate:</span>
+                <span className="font-medium text-foreground text-right">KES {car?.daily_rate?.toLocaleString() || '0'}</span>
               </div>
             </div>
           </div>
 
           {/* Rental Period */}
-          <div className="bg-slate-50 rounded-lg p-3 sm:p-4 md:col-span-2 lg:col-span-1">
-            <h3 className="font-semibold text-slate-900 mb-2 sm:mb-3 text-xs sm:text-sm uppercase tracking-wide">Rental Period</h3>
+          <div className="bg-muted/50 rounded-lg p-3 sm:p-4 md:col-span-2 lg:col-span-1 border border-border">
+            <h3 className="font-semibold text-foreground mb-2 sm:mb-3 text-xs sm:text-sm uppercase tracking-wide">Rental Period</h3>
             <div className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
               <div className="flex justify-between">
-                <span className="text-slate-600">Start Date:</span>
-                <span className="font-medium text-slate-900 text-right">{formatDate(bookingData?.startDate)}</span>
+                <span className="text-muted-foreground">Start Date:</span>
+                <span className="font-medium text-foreground text-right">{formatDate(bookingData?.startDate)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600">End Date:</span>
-                <span className="font-medium text-slate-900 text-right">{formatDate(bookingData?.endDate)}</span>
+                <span className="text-muted-foreground">End Date:</span>
+                <span className="font-medium text-foreground text-right">{formatDate(bookingData?.endDate)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600">Duration:</span>
-                <span className="font-medium text-slate-900 text-right">
+                <span className="text-muted-foreground">Duration:</span>
+                <span className="font-medium text-foreground text-right">
                   {bookingData?.days || 'N/A'} days
                 </span>
               </div>
@@ -186,7 +186,7 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
         </div>
 
         {/* Total Cost - Mobile Responsive */}
-        <div className="mt-4 sm:mt-6 bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-4 sm:p-6 text-white">
+        <div className="mt-4 sm:mt-6 bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-4 sm:p-6 text-primary-foreground">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
             <div>
               <div className="text-blue-100 text-xs sm:text-sm uppercase tracking-wide">Total Rental Cost</div>

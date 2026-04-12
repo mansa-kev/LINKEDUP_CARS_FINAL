@@ -17,18 +17,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const initAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      
-      if (user) {
+      // Use getSession() instead of getUser() - faster, local check
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+
+      if (session?.user) {
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('*')
-          .eq('id', user.id)
+          .eq('id', session.user.id)
           .single();
         setProfile(profile);
       }
-      
+
       setLoading(false);
     };
 

@@ -1,52 +1,59 @@
 import React, { useEffect, useState } from 'react';
 import { adminService } from '../../services/adminService';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
-  PieChart, 
-  Pie, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
   Cell,
   BarChart,
-  Bar
+  Bar,
+  AreaChart,
+  Area
 } from 'recharts';
-import { 
-  TrendingUp, 
-  Users, 
-  Car, 
-  Calendar, 
-  DollarSign, 
-  ArrowUpRight, 
+import {
+  TrendingUp,
+  Users,
+  Car,
+  Calendar,
+  DollarSign,
+  ArrowUpRight,
   ArrowDownRight,
   Activity,
   Clock,
   CheckCircle2,
   Building2,
-  Loader2
+  Loader2,
+  Tag,
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 
 // --- Components ---
 
-const StatCard = ({ 
-  title, 
-  value, 
-  trend, 
-  trendValue, 
-  icon: Icon, 
-  color 
-}: { 
-  title: string; 
-  value: string; 
-  trend?: 'up' | 'down'; 
-  trendValue?: string; 
+const StatCard = ({
+  title,
+  value,
+  trend,
+  trendValue,
+  icon: Icon,
+  color,
+  sparklineData
+}: {
+  title: string;
+  value: string;
+  trend?: 'up' | 'down';
+  trendValue?: string;
   icon: React.ElementType;
   color: string;
+  sparklineData?: number[];
 }) => (
-  <div className="bg-card p-6 rounded-2xl border border-border shadow-sm">
+  <div className="bg-card p-6 rounded-2xl border border-border shadow-sm hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
     <div className="flex justify-between items-start mb-4">
       <div className={`p-3 rounded-xl ${color} bg-opacity-10 text-${color.split('-')[1]}-600`}>
         <Icon size={24} />
@@ -59,7 +66,28 @@ const StatCard = ({
       )}
     </div>
     <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-wider mb-1">{title}</h3>
-    <p className="text-2xl font-bold text-foreground">{value}</p>
+    <p className="text-2xl font-bold text-foreground mb-2">{value}</p>
+    {sparklineData && sparklineData.length > 0 && (
+      <div className="h-10 w-full">
+        <ResponsiveContainer width="100%" height={40}>
+          <AreaChart data={sparklineData.map((val, i) => ({ value: val }))}>
+            <defs>
+              <linearGradient id={`spark-${color}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={color.replace('bg-', '')} stopOpacity={0.3} />
+                <stop offset="100%" stopColor={color.replace('bg-', '')} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke={color.replace('bg-', '')}
+              strokeWidth={2}
+              fill={`url(#spark-${color})}`}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    )}
   </div>
 );
 
@@ -67,8 +95,18 @@ const StatCard = ({
 
 export function AdminDashboard() {
   const [stats, setStats] = useState<any>(null);
+  const [reservationStats, setReservationStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '3m' | '6m' | '1y'>('7d');
+  const [lastUpdated, setLastUpdated] = useState<string>('');
+
+  // Greeting based on time of day
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -76,6 +114,16 @@ export function AdminDashboard() {
       try {
         const data = await adminService.getDashboardStats(timeRange);
         setStats(data);
+
+        // Fetch reservation stats
+        try {
+          const resStats = await adminService.getReservationStats();
+          setReservationStats(resStats);
+        } catch (resError) {
+          console.error('Failed to fetch reservation stats:', resError);
+        }
+
+        setLastUpdated(new Date().toLocaleTimeString());
       } catch (error) {
         console.error('Failed to fetch dashboard stats:', error);
       } finally {
@@ -100,6 +148,31 @@ export function AdminDashboard() {
 
   const totalBookings = bookingStatusData.reduce((sum: number, item: any) => sum + item.value, 0);
 
+  // Calculate booking by day of week
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const bookingsByDay = dayNames.map((day, index) => {
+    // Get all bookings for the current time range (using revenue trend data as proxy)
+    const dayBookings = revenueData.filter((item: any) => {
+      const date = new Date(item.name);
+      const dayOfWeek = date.getDay(); // 0 = Sun, 1 = Mon, etc.
+      const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Convert to Mon=0, Sun=6
+      return adjustedDay === index;
+    }).reduce((sum: number, item: any) => sum + (item.gross > 0 ? 1 : 0), 0);
+    return { day, count: dayBookings };
+  });
+  const maxDayBookings = Math.max(...bookingsByDay.map(d => d.count));
+
+  // Calculate sparkline data for revenue cards
+  const revenueSparkline = revenueData.map((item: any) => item.gross);
+  const commissionSparkline = revenueData.map((item: any) => item.net);
+
+  // Calculate extra KPI stats
+  const averageBookingValue = totalBookings > 0 ? stats?.totalRevenue / totalBookings : 0;
+  const utilizationRate = stats?.totalCars > 0 ? Math.round((stats?.activeBookings / stats?.totalCars) * 100) : 0;
+  const cancelledBookings = 0; // Not in current booking status distribution
+  const cancellationRate = '0'; // Not calculated from current data
+  const pendingVerifications = 0; // Not in current booking status distribution
+
   const getTrendProps = (percent: number) => {
     if (percent === 0) return {};
     return {
@@ -110,21 +183,36 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-serif font-black italic text-foreground">
+            {getGreeting()}, Admin 👋
+          </h1>
+          <p className="text-xs text-muted-foreground mt-1">Data refreshed at {lastUpdated}</p>
+        </div>
+      </div>
+
+      {/* Gradient Divider */}
+      <div className="h-px bg-gradient-to-r from-transparent via-warning/30 to-transparent my-6" />
+
       {/* Top Stats: Platform Revenue Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Total Gross Revenue" 
-          value={`$${stats?.totalRevenue?.toLocaleString() || '0'}`} 
+        <StatCard
+          title="Total Gross Revenue"
+          value={`KSh ${stats?.totalRevenue?.toLocaleString() || '0'}`}
           {...getTrendProps(stats?.revenueTrendPercent || 0)}
-          icon={DollarSign} 
+          icon={DollarSign}
           color="bg-blue-500"
+          sparklineData={revenueSparkline}
         />
-        <StatCard 
-          title="Net Commission" 
-          value={`$${stats?.netCommission?.toLocaleString() || '0'}`} 
+        <StatCard
+          title="Net Commission"
+          value={`KSh ${stats?.netCommission?.toLocaleString() || '0'}`}
           {...getTrendProps(stats?.commissionTrendPercent || 0)}
-          icon={TrendingUp} 
+          icon={TrendingUp}
           color="bg-primary"
+          sparklineData={commissionSparkline}
         />
         <StatCard 
           title="Client Churn Rate" 
@@ -141,6 +229,95 @@ export function AdminDashboard() {
         />
       </div>
 
+      {/* Extra KPI Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Average Booking Value"
+          value={`KSh ${averageBookingValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+          icon={TrendingUp}
+          color="bg-purple-500"
+        />
+        <div className="bg-card p-6 rounded-2xl border border-border shadow-sm hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-3 bg-success/10 text-success rounded-xl">
+              <Car size={24} />
+            </div>
+          </div>
+          <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-wider mb-1">Fleet Utilization Rate</h3>
+          <p className="text-2xl font-bold text-foreground mb-2">{utilizationRate}%</p>
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-success transition-all duration-1000"
+              style={{ width: `${utilizationRate}%` }}
+            />
+          </div>
+        </div>
+        <StatCard
+          title="Cancellation Rate"
+          value={`${cancellationRate}%`}
+          icon={XCircle}
+          color={parseFloat(cancellationRate) > 20 ? 'bg-error' : parseFloat(cancellationRate) >= 10 ? 'bg-warning' : 'bg-success'}
+        />
+        <button
+          onClick={() => window.location.href = '/admin/payment-approvals'}
+          className="bg-card p-6 rounded-2xl border border-border shadow-sm hover:-translate-y-1 hover:shadow-lg transition-all duration-200 text-left"
+        >
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-3 bg-warning/10 text-warning rounded-xl">
+              <AlertCircle size={24} />
+            </div>
+          </div>
+          <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-wider mb-1">Pending Verifications</h3>
+          <p className="text-2xl font-bold text-foreground">{pendingVerifications}</p>
+        </button>
+      </div>
+
+      {/* Gradient Divider */}
+      <div className="h-px bg-gradient-to-r from-transparent via-warning/30 to-transparent my-6" />
+
+      {/* Reservation Stats Section */}
+      <div>
+        <h2 className="text-xl font-bold mb-4">Reservation Activity</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-warning/5 p-5 rounded-xl border-l-4 border-warning hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-warning/20 text-warning rounded-lg">
+                <Tag size={18} />
+              </div>
+              <span className="text-sm font-medium text-muted-foreground">Reservation Fees Collected</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">
+              KSh {reservationStats?.totalReservationFees?.toLocaleString() || '0'}
+            </p>
+          </div>
+          <div className="bg-blue-500/5 p-5 rounded-xl border-l-4 border-blue-500 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-blue-500/20 text-blue-500 rounded-lg">
+                <Clock size={18} />
+              </div>
+              <span className="text-sm font-medium text-muted-foreground">Active Reservations</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">
+              {reservationStats?.activeReservations || '0'}
+            </p>
+          </div>
+          <div className="bg-success/5 p-5 rounded-xl border-l-4 border-success hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-success/20 text-success rounded-lg">
+                <CheckCircle2 size={18} />
+              </div>
+              <span className="text-sm font-medium text-muted-foreground">Converted to Bookings</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">
+              {reservationStats?.confirmedReservations || '0'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Gradient Divider */}
+      <div className="h-px bg-gradient-to-r from-transparent via-warning/30 to-transparent my-6" />
+
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Revenue Trend */}
@@ -148,17 +325,21 @@ export function AdminDashboard() {
           <div className="flex justify-between items-center mb-8">
             <h3 className="font-bold text-lg">Revenue Trend</h3>
             <div className="flex items-center gap-4">
-              <select
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value as any)}
-                className="bg-background border border-border rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
-              >
-                <option value="7d">Last 7 Days</option>
-                <option value="30d">Last 30 Days</option>
-                <option value="3m">Last 3 Months</option>
-                <option value="6m">Last 6 Months</option>
-                <option value="1y">Last 1 Year</option>
-              </select>
+              <div className="flex bg-muted rounded-lg p-1">
+                {['7d', '30d', '3m', '6m', '1y'].map((range) => (
+                  <button
+                    key={range}
+                    onClick={() => setTimeRange(range as any)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                      timeRange === range
+                        ? 'bg-card text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {range === '7d' ? '7D' : range === '30d' ? '30D' : range === '3m' ? '3M' : range === '6m' ? '6M' : '1Y'}
+                  </button>
+                ))}
+              </div>
               <div className="flex gap-4">
                 <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                   <div className="w-3 h-3 rounded-full bg-primary" /> Gross Revenue
@@ -170,8 +351,9 @@ export function AdminDashboard() {
             </div>
           </div>
           <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <LineChart data={revenueData}>
+            {revenueData && revenueData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
+                <LineChart data={revenueData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                 <XAxis 
                   dataKey="name" 
@@ -210,6 +392,11 @@ export function AdminDashboard() {
                 />
               </LineChart>
             </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                No revenue data available
+              </div>
+            )}
           </div>
         </div>
 
@@ -217,7 +404,7 @@ export function AdminDashboard() {
         <div className="bg-card p-8 rounded-2xl border border-border shadow-sm">
           <h3 className="font-bold text-lg mb-8">Booking Status</h3>
           <div className="h-[240px] w-full relative">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
               <PieChart>
                 <Pie
                   data={bookingStatusData}
@@ -259,7 +446,7 @@ export function AdminDashboard() {
         <div className="bg-card p-8 rounded-2xl border border-border shadow-sm">
           <h3 className="font-bold text-lg mb-8">Top 5 Most Booked Cars</h3>
           <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
               <BarChart data={stats?.topCars || []} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="var(--border)" />
                 <XAxis type="number" hide />
@@ -286,6 +473,73 @@ export function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Gradient Divider */}
+      <div className="h-px bg-gradient-to-r from-transparent via-warning/30 to-transparent my-6" />
+
+      {/* Booking Activity by Day of Week */}
+      <div className="bg-card p-8 rounded-2xl border border-border shadow-sm">
+        <div>
+          <h3 className="font-bold text-lg">Booking Activity by Day of Week</h3>
+          <p className="text-sm text-muted-foreground">Which days drive the most bookings</p>
+        </div>
+        <div className="h-[300px] w-full mt-6">
+          {bookingsByDay && bookingsByDay.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300} minWidth={300} minHeight={200}>
+              <BarChart data={bookingsByDay}>
+              <defs>
+                <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ff6b00" stopOpacity={1} />
+                  <stop offset="100%" stopColor="#ff4d0060" stopOpacity={1} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis
+                dataKey="day"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'var(--card)',
+                  borderColor: 'var(--border)',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
+                }}
+                formatter={(value: number, name: string) => [`${value} bookings`, name]}
+              />
+              <Bar
+                dataKey="count"
+                radius={[6, 6, 0, 0]}
+                animationBegin={0}
+                animationDuration={800}
+              >
+                {bookingsByDay.map((entry, index) => (
+                  <Bar
+                    key={entry.day}
+                    dataKey="count"
+                    fill={entry.count === maxDayBookings ? '#ff6b00' : '#ff6b0060'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+              No booking data available
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Gradient Divider */}
+      <div className="h-px bg-gradient-to-r from-transparent via-warning/30 to-transparent my-6" />
 
       {/* Bottom Row: Fleet & System Health */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

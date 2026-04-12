@@ -17,7 +17,7 @@ export function SimpleContractDisplay({ contract, bookingData, car }: SimpleCont
   }
 
   return (
-    <div className="bg-white border-2 border-gray-300 rounded-lg p-8">
+    <div className="bg-card border-2 border-border rounded-lg p-8">
       <h1 className="text-2xl font-bold text-center mb-6">
         {contract.contract_title || 'Rental Agreement'}
       </h1>

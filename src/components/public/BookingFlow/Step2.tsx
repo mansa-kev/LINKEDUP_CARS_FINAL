@@ -152,13 +152,13 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
           onClose={() => setShowCamera(null)}
         />
       )}
-      <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div className="space-y-2">
-          <h3 className="text-2xl md:text-3xl font-serif font-black italic text-white">Your Details</h3>
-          <p className="text-muted-foreground text-sm">Provide your information and verification documents.</p>
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="space-y-1">
+          <h3 className="text-xl sm:text-2xl md:text-3xl font-serif font-black italic text-foreground">Your Details</h3>
+          <p className="text-muted-foreground text-xs sm:text-sm">Provide your information and verification documents.</p>
         </div>
 
-        <div className="space-y-4 md:space-y-6">
+        <div className="space-y-3 sm:space-y-4 md:space-y-6">
           {/* Personal Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="group relative">
@@ -166,7 +166,7 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
               <input
                 type="text" placeholder="Full Name" required
                 value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})}
-                className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-[18px] text-sm text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-white/10"
+                className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
               />
             </div>
             <div className="group relative">
@@ -174,7 +174,7 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
               <input
                 type="email" placeholder="Email Address" required
                 value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})}
-                className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-[18px] text-sm text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-white/10"
+                className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
               />
             </div>
           </div>
@@ -185,7 +185,7 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
               <input
                 type="tel" placeholder="Phone Number" required
                 value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-[18px] text-sm text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-white/10"
+                className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
               />
             </div>
             <div className="group relative">
@@ -193,7 +193,7 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
               <input
                 type="text" placeholder="Driver's License No." required
                 value={formData.license} onChange={(e) => setFormData({...formData, license: e.target.value})}
-                className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-[18px] text-sm text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-white/10"
+                className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
               />
             </div>
           </div>
@@ -225,19 +225,19 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
           </div>
         </div>
 
-        <div className="flex gap-3 md:gap-4">
+        <div className="flex gap-2 sm:gap-3">
           <button
             type="button" onClick={onPrev}
-            className="w-1/4 py-4 md:py-5 bg-white/5 rounded-[20px] md:rounded-[24px] text-white font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center"
+            className="w-1/5 sm:w-1/4 py-3.5 sm:py-4 bg-card/50 rounded-[14px] sm:rounded-[20px] text-foreground font-black uppercase tracking-widest hover:bg-card/70 transition-all flex items-center justify-center border border-border"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={18} />
           </button>
           <button
             type="submit"
-            className="w-3/4 py-4 md:py-5 bg-primary rounded-[20px] md:rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-xs md:text-sm flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group"
+            className="flex-1 py-3.5 sm:py-4 bg-primary rounded-[14px] sm:rounded-[20px] text-black font-black uppercase tracking-[0.15em] text-[11px] sm:text-sm flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group"
           >
             Review Booking
-            <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+            <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
       </form>

@@ -3,6 +3,8 @@ import {
   mockContracts, mockTransactions, mockMessages, 
   mockCoupons 
 } from '../lib/mockData';
+import { supabase } from '../lib/supabase';
+import { logger } from '../utils/logger';
 
 export const clientService = new Proxy({} as any, {
   get: (target, prop) => {
@@ -13,7 +15,18 @@ export const clientService = new Proxy({} as any, {
       loyaltyPoints: 1250,
       loyaltyTier: 'Silver'
     });
-    if (prop === 'getAllBookings') return async () => mockBookings;
+    if (prop === 'getAllBookings') return async (userId: string) => {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*, cars(*)')
+        .eq('client_id', userId)
+        .order('created_at', { ascending: false });
+      if (error) {
+        logger.error('getAllBookings error:', error);
+        return mockBookings;
+      }
+      return data || [];
+    };
     if (prop === 'getClientDocuments') return async () => mockClientDocuments;
     if (prop === 'getSignedContracts') return async () => mockContracts;
     if (prop === 'getTransactions') return async () => mockTransactions;
@@ -27,7 +40,7 @@ export const clientService = new Proxy({} as any, {
     
     // Default mock for any other method
     return async () => {
-      console.log(`Mocked clientService.${String(prop)} called`);
+      logger.log(`Mocked clientService.${String(prop)} called`);
       return [];
     };
   }

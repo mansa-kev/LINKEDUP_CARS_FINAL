@@ -83,43 +83,43 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="space-y-2">
-        <h3 className="text-3xl font-serif font-black italic text-white">Review & Sign</h3>
-        <p className="text-muted-foreground text-sm">Review your rental agreement and provide your digital signature.</p>
+    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="space-y-1">
+        <h3 className="text-xl sm:text-2xl md:text-3xl font-serif font-black italic text-foreground">Review & Sign</h3>
+        <p className="text-muted-foreground text-xs sm:text-sm">Review your rental agreement and provide your digital signature.</p>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Summary Card */}
-        <div className="p-6 bg-white/5 border border-white/10 rounded-[32px] grid grid-cols-2 gap-6">
-          <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-primary/60">Vehicle</p>
-            <p className="text-sm font-bold text-white">{car.make} {car.model}</p>
+        <div className="p-3 sm:p-4 md:p-6 bg-card/50 border border-border rounded-[16px] sm:rounded-[24px] md:rounded-[32px] grid grid-cols-2 gap-3 sm:gap-4 md:gap-6">
+          <div className="space-y-0.5">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Vehicle</p>
+            <p className="text-xs sm:text-sm font-bold text-foreground">{car.make} {car.model}</p>
           </div>
-          <div className="space-y-1 text-right">
-            <p className="text-[10px] font-black uppercase tracking-widest text-primary/60">Duration</p>
-            <p className="text-sm font-bold text-white">{bookingData.days} Days</p>
+          <div className="space-y-0.5 text-right">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Duration</p>
+            <p className="text-xs sm:text-sm font-bold text-foreground">{bookingData.days} Days</p>
           </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-primary/60">Dates</p>
-            <p className="text-xs font-bold text-white/80">{bookingData.startDate} to {bookingData.endDate}</p>
+          <div className="space-y-0.5">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Dates</p>
+            <p className="text-[10px] sm:text-xs font-bold text-muted-foreground">{bookingData.startDate} to {bookingData.endDate}</p>
           </div>
-          <div className="space-y-1 text-right">
-            <p className="text-[10px] font-black uppercase tracking-widest text-primary/60">Total Amount</p>
+          <div className="space-y-0.5 text-right">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Total Amount</p>
             {bookingData.discount > 0 ? (
               <div>
-                <p className="text-xs text-white/40 line-through">KES {bookingData.originalAmount?.toLocaleString()}</p>
-                <p className="text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground/60 line-through">KES {bookingData.originalAmount?.toLocaleString()}</p>
+                <p className="text-sm sm:text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
               </div>
             ) : (
-              <p className="text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
+              <p className="text-sm sm:text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
             )}
           </div>
         </div>
 
         {/* E-Contract Display */}
         {loadingContract ? (
-          <div className="p-8 bg-white/5 rounded-[24px] border border-white/10 text-center flex items-center justify-center gap-3 text-muted-foreground">
+          <div className="p-4 sm:p-8 bg-white/5 rounded-[16px] sm:rounded-[24px] border border-white/10 text-center flex items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="animate-spin text-primary" size={20} />
             <span className="text-sm font-bold">Loading contract...</span>
           </div>
@@ -166,7 +166,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
               <Eraser size={12} /> Clear
             </button>
           </div>
-          <div className="relative h-[200px] bg-white/5 border border-white/10 rounded-[24px] overflow-hidden group hover:border-primary/30 transition-colors">
+          <div className="relative h-[150px] sm:h-[200px] bg-white/5 border border-white/10 rounded-[16px] sm:rounded-[24px] overflow-hidden group hover:border-primary/30 transition-colors">
             <SignatureCanvas
               ref={sigPad}
               penColor='#D4AF37'
@@ -208,17 +208,17 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
         </div>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex gap-2 sm:gap-4">
         <button
           type="button" onClick={onPrev}
-          className="w-1/4 py-5 bg-white/5 rounded-[24px] text-white font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center"
+          className="w-1/5 sm:w-1/4 py-3.5 sm:py-5 bg-card/50 rounded-[14px] sm:rounded-[24px] text-foreground font-black uppercase tracking-widest hover:bg-card/70 transition-all flex items-center justify-center border border-border"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={18} />
         </button>
         <button
           type="submit"
           disabled={signingContract || !agreed}
-          className="w-3/4 py-5 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-4 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group disabled:opacity-50"
+          className="flex-1 py-3.5 sm:py-5 bg-primary rounded-[14px] sm:rounded-[24px] text-black font-black uppercase tracking-[0.15em] text-[11px] sm:text-sm flex items-center justify-center gap-2 sm:gap-4 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group disabled:opacity-50"
         >
           {signingContract ? (
             <>

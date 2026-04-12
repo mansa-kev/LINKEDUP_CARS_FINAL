@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { logger } from '../utils/logger';
 
 export type Subdomain = 'www' | 'app' | 'admin' | 'fleet';
 
@@ -20,16 +21,16 @@ export function SubdomainProvider({ children }: { children: ReactNode }) {
     
     // Check actual subdomain (for production)
     if (hostname.startsWith('admin.')) {
-      console.log('[SubdomainContext] Detected via hostname: admin');
+      logger.log('[SubdomainContext] Detected via hostname: admin');
       setSubdomain('admin');
     } else if (hostname.startsWith('app.')) {
-      console.log('[SubdomainContext] Detected via hostname: app');
+      logger.log('[SubdomainContext] Detected via hostname: app');
       setSubdomain('app');
     } else if (hostname.startsWith('fleet.')) {
-      console.log('[SubdomainContext] Detected via hostname: fleet');
+      logger.log('[SubdomainContext] Detected via hostname: fleet');
       setSubdomain('fleet');
     } else {
-      console.log('[SubdomainContext] Detected via hostname: default (www)');
+      logger.log('[SubdomainContext] Detected via hostname: default (www)');
       setSubdomain('www');
     }
   };
@@ -43,7 +44,7 @@ export function SubdomainProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setPreviewSubdomain = (newSubdomain: Subdomain) => {
-    console.log('[SubdomainContext] Manually switching to:', newSubdomain);
+    logger.log('[SubdomainContext] Manually switching to:', newSubdomain);
     // SECURITY: Removed URL parameter manipulation to prevent unauthorized access
     // This function now only updates the internal state for development
     setSubdomain(newSubdomain);

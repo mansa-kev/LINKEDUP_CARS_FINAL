@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronLeft, 
@@ -13,19 +14,29 @@ import {
   Star,
   ArrowRight,
   Heart,
-  X
+  X,
+  Clock,
+  CheckCircle
 } from 'lucide-react';
 import { fleetService } from '../../services/fleetService';
+import { reservationService } from '../../services/reservationService';
 import { Car } from '../../types';
 import { BookingFlow } from './BookingFlow/BookingFlow';
+import { ReservationFlow } from './BookingFlow/ReservationFlow';
+import { Logo } from '../shared/Logo';
+import { LogoLoader } from '../shared/LogoLoader';
 
 export function CarDetails() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [car, setCar] = useState<Car | null>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState(0);
   const [showBooking, setShowBooking] = useState(false);
+  const [showReservation, setShowReservation] = useState(false);
+  const [availabilityStatus, setAvailabilityStatus] = useState<'available' | 'booked' | 'reserved'>('available');
 
   useEffect(() => {
     async function fetchCar() {
@@ -38,8 +49,29 @@ export function CarDetails() {
         console.log('Car data received:', carData); // Debug log
         setCar(carData);
         setReviews(reviewsData || []);
+        
+        // Check availability based on car status
+        if (carData.status === 'rented') {
+          setAvailabilityStatus('booked');
+        } else {
+          // Check for active reservations
+          const today = new Date().toISOString().split('T')[0];
+          const futureDate = new Date();
+          futureDate.setDate(futureDate.getDate() + 30);
+          const futureDateStr = futureDate.toISOString().split('T')[0];
+          
+          const availability = await reservationService.checkAvailability(
+            carData.id,
+            today,
+            futureDateStr
+          );
+          
+          if (!availability.available) {
+            setAvailabilityStatus('reserved');
+          }
+        }
       } catch (error) {
-        console.error('Error fetching car details:', error);
+        // silently fail
       } finally {
         setLoading(false);
       }
@@ -47,39 +79,53 @@ export function CarDetails() {
     fetchCar();
   }, [id]);
 
-  if (loading || !car) return <div className="min-h-screen flex items-center justify-center bg-background">Loading...</div>;
+  // Check for booking parameter to open booking flow automatically
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get('booking') === 'true' && car && availabilityStatus === 'available') {
+      setShowBooking(true);
+    }
+  }, [location.search, car, availabilityStatus]);
 
-  // Debug image data
-  console.log('Car photos:', car.photos);
-  console.log('Car primary_image_url:', car.primary_image_url);
-  console.log('Car images array:', car.images);
+  if (loading || !car) return <LogoLoader fullScreen message="Loading vehicle details..." />;
 
-  // Handle multiple image field possibilities
-  const images = [];
-  
-  // Try photos array first
-  if (car.photos && Array.isArray(car.photos) && car.photos.length > 0) {
-    images.push(...car.photos);
-  }
-  
-  // Try images array as fallback
-  if (car.images && Array.isArray(car.images) && car.images.length > 0) {
-    images.push(...car.images);
-  }
-  
-  // Add primary image as fallback
-  if (car.primary_image_url) {
-    images.push(car.primary_image_url);
-  }
-  
-  // Final fallback to placeholder
+  const carTitle = `${car.make} ${car.model} ${car.year} | Hire in Nairobi — LinkedUp Cars`;
+  const carDesc = `Hire the ${car.make} ${car.model} (${car.year}) in Nairobi from KES ${car.daily_rate?.toLocaleString()}/day. ${car.seats} seats, ${car.transmission}. Instant booking — chauffeur or self-drive available.`;
+  const carImage = car.primary_image_url || (Array.isArray(car.photos) && car.photos[0]) || 'https://linkedupcarsrentals.com/logo.png';
+
+  // Build valid image list — filter out blob: URLs (browser-local, always expire)
+  const isValidUrl = (url: string) =>
+    url && !url.startsWith('blob:') && (url.startsWith('http') || url.startsWith('/'));
+
+  const rawImages: string[] = [
+    ...(Array.isArray(car.photos) ? car.photos : []),
+    ...(Array.isArray(car.images) ? car.images : []),
+    ...(car.primary_image_url ? [car.primary_image_url] : []),
+  ].filter(isValidUrl);
+
+  // Deduplicate
+  const images = [...new Set(rawImages)];
+
+  // Final fallback to placeholder if nothing valid
   if (images.length === 0) {
     images.push(`https://picsum.photos/seed/${car.id}/1200/800`);
   }
 
-  console.log('Final images array:', images);
-
   return (
+    <>
+      <Helmet>
+        <title>{carTitle}</title>
+        <meta name="description" content={carDesc} />
+        <link rel="canonical" href={`https://linkedupcarsrentals.com/cars/${car.id}`} />
+        <meta property="og:title" content={carTitle} />
+        <meta property="og:description" content={carDesc} />
+        <meta property="og:image" content={carImage as string} />
+        <meta property="og:url" content={`https://linkedupcarsrentals.com/cars/${car.id}`} />
+        <meta property="og:type" content="product" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={carTitle} />
+        <meta name="twitter:image" content={carImage as string} />
+      </Helmet>
     <div className="relative bg-background min-h-screen overflow-hidden">
       {/* Immersive Background with Gradient Overlay */}
       <div className="fixed inset-0 z-0">
@@ -94,16 +140,33 @@ export function CarDetails() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 pt-32 pb-20">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
+      <div className="relative z-10 pt-20 md:pt-32 pb-12 md:pb-20">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6">
+          {/* Back Buttons */}
+          <div className="flex justify-between items-center mb-6">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2 text-sm text-gray-400 hover:text-white group transition-colors"
+            >
+              <span className="text-lg group-hover:-translate-x-1 transition-transform inline-block">â</span>
+              <span className="font-semibold">Back to Home</span>
+            </button>
+            <button
+              onClick={() => navigate('/browse-cars')}
+              className="flex items-center gap-2 text-sm text-gray-400 hover:text-white group transition-colors"
+            >
+              <span className="font-semibold">Browse Cars</span>
+              <span className="text-lg group-hover:translate-x-1 transition-transform inline-block">â</span>
+            </button>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-20">
             {/* Hero Image Gallery */}
             <motion.div 
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               className="space-y-6"
             >
-              <div className="relative aspect-[16/10] rounded-[60px] overflow-hidden border border-white/10 bg-card/50 backdrop-blur-xl group">
+              <div className="relative aspect-[16/10] rounded-[20px] md:rounded-[60px] overflow-hidden border border-white/10 bg-card/50 backdrop-blur-xl group">
                 <img 
                   src={images[activeImage]} 
                   alt={`${car.make} ${car.model}`}
@@ -151,59 +214,94 @@ export function CarDetails() {
               className="flex flex-col justify-between"
             >
               <div>
-                <h1 className="text-6xl font-serif font-black italic text-white mb-4 tracking-tight">
+                <h1 className="text-3xl sm:text-4xl md:text-6xl font-serif font-black italic text-white mb-2 sm:mb-4 tracking-tight">
                   {car.make} <span className="text-primary">{car.model}</span>
                 </h1>
-                <p className="text-lg text-muted-foreground mb-8 leading-relaxed">{car.description}</p>
-                <p className="text-4xl font-black mb-8 text-white">
-                  <span className="text-primary">KES {car.daily_rate}</span>
-                  <span className="text-sm text-muted-foreground font-bold">/day</span>
+                <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-4 sm:mb-8 leading-relaxed">{car.description}</p>
+                <p className="text-2xl sm:text-3xl md:text-4xl font-black mb-4 sm:mb-8 text-white">
+                  <span className="text-primary">KES {car.daily_rate?.toLocaleString()}</span>
+                  <span className="text-xs sm:text-sm text-muted-foreground font-bold">/day</span>
                 </p>
                 
-                <div className="grid grid-cols-3 gap-4 mb-12">
+                <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 sm:mb-12">
                   <motion.div 
                     whileHover={{ scale: 1.05 }}
-                    className="p-5 bg-card/50 backdrop-blur-xl rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex items-center gap-3"
+                    className="p-2.5 sm:p-4 md:p-5 bg-card/50 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3"
                   >
-                    <Users className="text-primary" size={20} />
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Seats</p>
-                      <span className="text-sm font-bold text-white">{car.seats}</span>
+                    <Users className="text-primary" size={16} />
+                    <div className="text-center sm:text-left">
+                      <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-white/40">Seats</p>
+                      <span className="text-xs sm:text-sm font-bold text-white">{car.seats}</span>
                     </div>
                   </motion.div>
                   <motion.div 
                     whileHover={{ scale: 1.05 }}
-                    className="p-5 bg-card/50 backdrop-blur-xl rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex items-center gap-3"
+                    className="p-2.5 sm:p-4 md:p-5 bg-card/50 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3"
                   >
-                    <Fuel className="text-primary" size={20} />
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Fuel</p>
-                      <span className="text-sm font-bold text-white">{car.fuel_type}</span>
+                    <Fuel className="text-primary" size={16} />
+                    <div className="text-center sm:text-left">
+                      <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-white/40">Fuel</p>
+                      <span className="text-xs sm:text-sm font-bold text-white">{car.fuel_type}</span>
                     </div>
                   </motion.div>
                   <motion.div 
                     whileHover={{ scale: 1.05 }}
-                    className="p-5 bg-card/50 backdrop-blur-xl rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex items-center gap-3"
+                    className="p-2.5 sm:p-4 md:p-5 bg-card/50 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3"
                   >
-                    <Settings className="text-primary" size={20} />
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Trans</p>
-                      <span className="text-sm font-bold text-white">{car.transmission}</span>
+                    <Settings className="text-primary" size={16} />
+                    <div className="text-center sm:text-left">
+                      <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-white/40">Trans</p>
+                      <span className="text-xs sm:text-sm font-bold text-white">{car.transmission}</span>
                     </div>
                   </motion.div>
                 </div>
               </div>
 
+              {/* Availability Status */}
+              <div className="mb-4">
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold ${
+                  availabilityStatus === 'available' 
+                    ? 'bg-success/10 text-success' 
+                    : availabilityStatus === 'booked'
+                    ? 'bg-error/10 text-error'
+                    : 'bg-warning/10 text-warning'
+                }`}>
+                  {availabilityStatus === 'available' && <CheckCircle size={16} />}
+                  {availabilityStatus === 'booked' && <X size={16} />}
+                  {availabilityStatus === 'reserved' && <Clock size={16} />}
+                  {availabilityStatus === 'available' ? 'Available' : availabilityStatus === 'booked' ? 'Booked' : 'Reserved'}
+                </div>
+              </div>
+
               {/* CTA Buttons */}
-              <div className="flex gap-4">
-                <motion.button 
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowBooking(!showBooking)}
-                  className="flex-1 py-6 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-sm shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all"
-                >
-                  {showBooking ? 'Close' : 'Book Now'} <ArrowRight className="inline ml-2" size={20} />
-                </motion.button>
+              <div className="flex gap-3">
+                {availabilityStatus === 'available' ? (
+                  <>
+                    <motion.button 
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowBooking(!showBooking)}
+                      className="flex-1 py-3.5 sm:py-5 bg-primary rounded-[14px] sm:rounded-[24px] text-black font-black uppercase tracking-[0.15em] text-xs sm:text-sm shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all"
+                    >
+                      {showBooking ? 'Close' : 'Book Now'} <ArrowRight className="inline ml-2" size={18} />
+                    </motion.button>
+                    <motion.button 
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowReservation(!showReservation)}
+                      className="flex-1 py-3.5 sm:py-5 bg-white/5 border border-white/10 rounded-[14px] sm:rounded-[24px] text-white font-black uppercase tracking-[0.15em] text-xs sm:text-sm hover:bg-white/10 transition-all"
+                    >
+                      {showReservation ? 'Close' : 'Reserve'} <Clock className="inline ml-2" size={18} />
+                    </motion.button>
+                  </>
+                ) : (
+                  <motion.button 
+                    disabled
+                    className="flex-1 py-3.5 sm:py-5 bg-muted/20 border border-muted/30 rounded-[14px] sm:rounded-[24px] text-muted-foreground font-black uppercase tracking-[0.15em] text-xs sm:text-sm cursor-not-allowed"
+                  >
+                    {availabilityStatus === 'booked' ? 'Currently Booked' : 'Reserved'} 
+                  </motion.button>
+                )}
               </div>
             </motion.div>
           </div>
@@ -215,17 +313,40 @@ export function CarDetails() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
-                className="mt-12 relative"
+                className="mt-6 md:mt-12 relative"
               >
-                <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-orange-500/10 to-primary/20 rounded-[48px] blur-2xl" />
-                <div className="relative p-12 bg-card/50 backdrop-blur-xl rounded-[48px] border border-primary/20">
+                <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-orange-500/10 to-primary/20 rounded-[16px] sm:rounded-[32px] md:rounded-[48px] blur-2xl" />
+                <div className="relative p-2 sm:p-5 md:p-10 bg-card/50 backdrop-blur-xl rounded-[16px] sm:rounded-[32px] md:rounded-[48px] border border-primary/20">
                   <button 
                     onClick={() => setShowBooking(false)}
-                    className="absolute top-6 right-6 p-2 hover:bg-white/10 rounded-full transition-all"
+                    className="absolute top-3 right-3 md:top-6 md:right-6 p-2 hover:bg-white/10 rounded-full transition-all z-10"
                   >
                     <X size={24} className="text-white" />
                   </button>
                   <BookingFlow car={car} />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Reservation Flow Modal */}
+          <AnimatePresence>
+            {showReservation && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="mt-6 md:mt-12 relative"
+              >
+                <div className="absolute -inset-1 bg-gradient-to-r from-warning/20 via-orange-500/10 to-warning/20 rounded-[16px] sm:rounded-[32px] md:rounded-[48px] blur-2xl" />
+                <div className="relative p-2 sm:p-5 md:p-10 bg-card/50 backdrop-blur-xl rounded-[16px] sm:rounded-[32px] md:rounded-[48px] border border-warning/20">
+                  <button 
+                    onClick={() => setShowReservation(false)}
+                    className="absolute top-3 right-3 md:top-6 md:right-6 p-2 hover:bg-white/10 rounded-full transition-all z-10"
+                  >
+                    <X size={24} className="text-white" />
+                  </button>
+                  <ReservationFlow car={car} onClose={() => setShowReservation(false)} />
                 </div>
               </motion.div>
             )}
@@ -295,5 +416,6 @@ export function CarDetails() {
         </div>
       </div>
     </div>
+    </>
   );
 }

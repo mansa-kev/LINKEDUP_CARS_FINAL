@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSubdomain, Subdomain } from '../../contexts/SubdomainContext';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -10,6 +11,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { user, profile, loading } = useAuth();
+  const { setPreviewSubdomain } = useSubdomain();
   const location = useLocation();
 
   // Show loading spinner while checking authentication
@@ -27,13 +29,21 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   }
 
   // Check role-based access if requiredRole is specified
+  // Strict role enforcement - no bypass for any role
   if (requiredRole && profile?.role !== requiredRole) {
     // Redirect to appropriate portal based on user role
     const userRole = profile?.role || 'client';
-    const redirectPath = userRole === 'admin' ? '/admin' : 
-                        userRole === 'fleet_owner' ? '/fleet' : 
+    const targetSubdomain: Subdomain = userRole === 'admin' ? 'admin' :
+                        userRole === 'fleet_owner' ? 'fleet' :
+                        'app';
+    const redirectPath = userRole === 'admin' ? '/admin' :
+                        userRole === 'fleet_owner' ? '/fleet' :
                         '/client';
-    
+
+    // Switch subdomain context first to prevent infinite redirect loop
+    // (without this, the current portal's catch-all route sends us right back)
+    setPreviewSubdomain(targetSubdomain);
+
     return <Navigate to={redirectPath} replace />;
   }
 

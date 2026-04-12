@@ -5,6 +5,7 @@ import { Mail, Lock, Loader2, AlertCircle, ArrowRight, Car, Clock, UserPlus, Eye
 import { motion, AnimatePresence } from 'motion/react';
 import { useSubdomain } from '../../contexts/SubdomainContext';
 import { toast } from 'sonner';
+import { sendTemplatedEmail } from '../../services/emailProvider';
 
 // ---------------------------------------------------------------------------
 // Rate limiting
@@ -172,11 +173,43 @@ export function Login() {
 
         const { data: profile } = await supabase
           .from('user_profiles')
-          .select('role, status')
+          .select('role, status, full_name')
           .eq('id', data.user.id)
           .single();
 
         const userRole = profile?.role || 'client';
+        const userName = profile?.full_name || 'Valued Customer';
+
+        // Portal role enforcement — reject logins from users with the wrong role
+        if (portal === 'fleet' && userRole !== 'fleet_owner') {
+          await supabase.auth.signOut();
+          setError('This portal is for fleet owners only. Please use the correct login portal for your account type.');
+          return;
+        }
+        if (portal === 'admin' && userRole !== 'admin') {
+          await supabase.auth.signOut();
+          setError('This portal is for administrators only. Please use the correct login portal.');
+          return;
+        }
+
+        // Check if this is first login after email confirmation
+        const welcomeEmailKey = `welcome_sent_${data.user.id}`;
+        const welcomeEmailSent = localStorage.getItem(welcomeEmailKey);
+
+        if (!welcomeEmailSent && data.user.email_confirmed_at && userRole === 'client') {
+          const appUrl = isDev ? window.location.origin : getPortalUrl('app');
+          const loginUrl = `${appUrl}/login`;
+
+          sendTemplatedEmail(
+            data.user.email!,
+            'welcome_after_confirmation',
+            { name: userName, login_url: loginUrl }
+          ).then(() => {
+            localStorage.setItem(welcomeEmailKey, 'true');
+          }).catch((err) => {
+            console.error('Failed to send welcome email:', err);
+          });
+        }
 
         // Check if fleet owner needs to change default password
         if (userRole === 'fleet_owner' && password === 'Fleet123!') {

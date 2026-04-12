@@ -1,4 +1,5 @@
-import { supabase, handleSupabaseErrorWrapper as handleSupabaseError } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
+import { logger } from '../utils/logger';
 
 export const adminService = {
   // --- Dashboard ---
@@ -234,7 +235,7 @@ export const adminService = {
         .upload(filePath, file);
 
       if (uploadError) {
-        console.error('Error uploading image:', uploadError);
+        logger.error('Error uploading image:', uploadError);
         // Fallback to a placeholder if bucket doesn't exist
         return `https://picsum.photos/seed/${fileName}/800/600`;
       }
@@ -245,7 +246,7 @@ export const adminService = {
 
       return data.publicUrl;
     } catch (err) {
-      console.error('Failed to upload image:', err);
+      logger.error('Failed to upload image:', err);
       return `https://picsum.photos/seed/${Math.random()}/800/600`;
     }
   },
@@ -538,38 +539,80 @@ export const adminService = {
   // --- Financials ---
   getFinancials: async () => {
     try {
+      logger.log('Fetching financials with confirmed bookings filter...');
+      
+      // Fetch only confirmed bookings with paid status
+      const { data: confirmedBookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select(`
+          *,
+          cars(
+            make,
+            model,
+            daily_rate,
+            fleet_owner_id
+          ),
+          client:user_profiles(
+            full_name,
+            email
+          )
+        `)
+        .eq('payment_status', 'paid')
+        .eq('status', 'confirmed')
+        .order('created_at', { ascending: false });
+      
+      if (bookingsError) {
+        logger.error('Bookings query error:', bookingsError);
+        throw bookingsError;
+      }
+      
+      logger.log('Confirmed bookings fetched:', confirmedBookings?.length || 0);
+
+      // Fetch transactions (for historical data that might be manually recorded)
       const { data: transactions, error: tError } = await supabase
         .from('transactions')
-        .select('*, bookings(total_amount)')
+        .select('*')
         .order('created_at', { ascending: false });
       if (tError) throw tError;
 
+      // Fetch expenses
       const { data: expenses, error: eError } = await supabase
         .from('expenses')
         .select('*')
         .order('date', { ascending: false });
       if (eError) throw eError;
 
-      const totalRevenue = transactions
-        ?.filter(t => t.type === 'payment_in' && t.status === 'completed')
-        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+      // Calculate revenue from confirmed bookings only
+      const totalRevenue = confirmedBookings?.reduce((sum, booking) => sum + Number(booking.total_amount), 0) || 0;
 
-      const totalPayouts = transactions
-        ?.filter(t => t.type === 'payout_out' && t.status === 'completed')
-        .reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0) || 0;
+      // Calculate payouts from completed bookings with paid status
+      const completedPaidBookings = confirmedBookings?.filter(b => b.status === 'completed') || [];
+      const totalPayouts = completedPaidBookings.reduce((sum, booking) => {
+        // Assuming 15% commission goes to fleet owner (85% to platform)
+        const commissionRate = 0.15;
+        return sum + (Number(booking.total_amount) * commissionRate);
+      }, 0);
 
       const totalExpenses = expenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
 
-      // Group by month for chart
+      // Group by month for chart - only include confirmed paid bookings
       const monthlyData: Record<string, { revenue: number, payouts: number }> = {};
-      transactions?.forEach(t => {
-        const month = new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      confirmedBookings?.forEach(booking => {
+        const month = new Date(booking.created_at).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
         if (!monthlyData[month]) monthlyData[month] = { revenue: 0, payouts: 0 };
-        if (t.type === 'payment_in' && t.status === 'completed') monthlyData[month].revenue += Number(t.amount);
-        if (t.type === 'payout_out' && t.status === 'completed') monthlyData[month].payouts += Math.abs(Number(t.amount));
+        
+        monthlyData[month].revenue += Number(booking.total_amount);
+        
+        // Add payout if booking is completed
+        if (booking.status === 'completed') {
+          const commissionRate = 0.15;
+          monthlyData[month].payouts += Number(booking.total_amount) * commissionRate;
+        }
       });
 
       const chartData = Object.entries(monthlyData).map(([name, data]) => ({ name, ...data })).reverse();
+
+      logger.log('Financials calculated:', { totalRevenue, totalPayouts, totalExpenses });
 
       return { 
         transactions: transactions || [], 
@@ -580,6 +623,7 @@ export const adminService = {
         chartData
       };
     } catch (error) {
+      logger.error('getFinancials error:', error);
       return handleSupabaseError(error, 'getFinancials');
     }
   },

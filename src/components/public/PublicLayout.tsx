@@ -14,6 +14,7 @@ import {
   Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Logo } from '../shared/Logo';
 
 interface NavItem {
   label: string;
@@ -58,9 +59,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* Desktop Header */}
-      <header className="hidden md:flex fixed top-0 left-0 right-0 h-20 glass z-50 items-center justify-between px-8">
-        <Link to="/" className="flex items-center gap-2">
-          <span className="text-2xl font-serif font-black tracking-tighter text-primary italic">LINKEDUP</span>
+      <header className="hidden md:flex fixed top-0 left-0 right-0 min-h-20 glass z-50 items-center justify-between px-8">
+        <Link to="/" className="flex items-center">
+          <Logo size="lg" showText={false} />
         </Link>
 
         <nav className="flex items-center gap-8">
@@ -102,17 +103,16 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Mobile Top Bar */}
-      <header className="md:hidden fixed top-0 left-0 right-0 h-16 glass z-50 flex items-center justify-between px-6">
+      <header className="md:hidden fixed top-0 left-0 right-0 min-h-16 glass z-50 flex items-center justify-between px-6">
         <button
           onClick={() => setIsSidebarOpen(true)}
           className="p-2 text-muted-foreground hover:text-foreground transition-colors"
         >
           <Menu size={24} />
         </button>
-        <Link to="/" className="font-serif font-black tracking-tighter text-primary italic text-xl">
-          LINKEDUP
+        <Link to="/" className="flex items-center">
+          <Logo size="lg" showText={false} />
         </Link>
-        <div className="w-10" />
       </header>
 
       {/* Mobile Sidebar */}
@@ -134,7 +134,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               className="fixed top-0 left-0 bottom-0 w-[80%] max-w-sm bg-card z-[70] p-8 flex flex-col"
             >
               <div className="flex items-center justify-between mb-12">
-                <span className="font-serif font-black tracking-tighter text-primary italic text-2xl">LINKEDUP</span>
+                <Logo size="xl" showText={false} />
                 <button onClick={() => setIsSidebarOpen(false)} className="p-2 text-muted-foreground">
                   <X size={24} />
                 </button>
@@ -168,7 +168,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
       </AnimatePresence>
 
       {/* Main Content */}
-      <main className="flex-1 pt-16 md:pt-20 pb-20 md:pb-0">
+      <main className="flex-1 pt-20 md:pt-20 pb-20 md:pb-0">
         {children}
       </main>
 
@@ -213,16 +213,16 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      {/* Desktop Footer */}
-      <footer className="hidden md:block relative bg-card border-t border-border py-20 px-8 overflow-hidden">
+      {/* Footer */}
+      <footer className="block md:block relative bg-card border-t border-border py-12 md:py-20 px-6 md:px-8 overflow-hidden">
         {/* Glow Effect */}
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-primary/15 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-0 left-1/4 w-[300px] h-[200px] bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
         <div className="absolute bottom-0 right-1/4 w-[300px] h-[200px] bg-amber-500/10 rounded-full blur-[80px] pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto grid grid-cols-4 gap-12 relative z-10">
+        <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 relative z-10">
           <div className="col-span-2">
-            <span className="text-3xl font-serif font-black tracking-tighter text-primary italic mb-6 block">LINKEDUP</span>
+            <Logo size="xl" showText={false} className="mb-6 scale-110" />
             <p className="text-muted-foreground max-w-sm leading-relaxed">
               Experience the pinnacle of luxury car rentals. Our curated fleet and personalized service ensure every journey is unforgettable.
             </p>

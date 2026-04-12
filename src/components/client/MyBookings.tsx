@@ -1,14 +1,34 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { clientService } from '../../services/clientService';
 import { supabase } from '../../lib/supabase';
-import { Search, Filter, Calendar, Car, ChevronRight, Clock, CheckCircle, XCircle, RefreshCw, FileText, CreditCard, Phone } from 'lucide-react';
+import { bookingService } from '../../services/bookingService';
+import { Search, Calendar, Car, Clock, CheckCircle, XCircle, RefreshCw, FileText, CreditCard, Phone, AlertTriangle, Upload, X, Loader2, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
+
+type DocType = 'facePhoto' | 'licenseFront' | 'licenseBack' | 'idFront' | 'idBack';
+
+const DOC_LABELS: Record<DocType, string> = {
+  facePhoto:    'Face / Passport Photo',
+  licenseFront: 'License Front',
+  licenseBack:  'License Back',
+  idFront:      'ID Front',
+  idBack:       'ID Back',
+};
 
 export function MyBookings() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Resubmission modal state
+  const [resubmitBooking, setResubmitBooking] = useState<any | null>(null);
+  const [resubmitDocs, setResubmitDocs] = useState<Record<DocType, string>>({
+    facePhoto: '', licenseFront: '', licenseBack: '', idFront: '', idBack: ''
+  });
+  const [uploadingDoc, setUploadingDoc] = useState<DocType | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchBookings();
@@ -25,6 +45,59 @@ export function MyBookings() {
       console.error("Error fetching bookings:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUploadDoc = useCallback(async (file: File, type: DocType, bookingId: string) => {
+    setUploadingDoc(type);
+    try {
+      const url = await bookingService.uploadDocument(file, type, bookingId);
+      setResubmitDocs(prev => ({ ...prev, [type]: url }));
+      toast.success(`${DOC_LABELS[type]} uploaded`);
+    } catch (err) {
+      toast.error(`Failed to upload ${DOC_LABELS[type]}`);
+    } finally {
+      setUploadingDoc(null);
+    }
+  }, []);
+
+  const handleResubmitDocuments = async () => {
+    if (!resubmitBooking) return;
+    const hasAny = Object.values(resubmitDocs).some(v => v);
+    if (!hasAny) {
+      toast.error('Please upload at least one document before submitting.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const existing = resubmitBooking.metadata?.documents || {};
+      const updated = {
+        facePhotoUrl:    resubmitDocs.facePhoto    || existing.facePhotoUrl    || null,
+        licenseFrontUrl: resubmitDocs.licenseFront || existing.licenseFrontUrl || null,
+        licenseBackUrl:  resubmitDocs.licenseBack  || existing.licenseBackUrl  || null,
+        idFrontUrl:      resubmitDocs.idFront      || existing.idFrontUrl      || null,
+        idBackUrl:       resubmitDocs.idBack       || existing.idBackUrl       || null,
+      };
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          document_status: 'resubmitted',
+          metadata: { ...resubmitBooking.metadata, documents: updated },
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', resubmitBooking.id);
+
+      if (error) throw error;
+
+      toast.success('Documents resubmitted! The admin will review them shortly.');
+      setResubmitBooking(null);
+      setResubmitDocs({ facePhoto: '', licenseFront: '', licenseBack: '', idFront: '', idBack: '' });
+      fetchBookings();
+    } catch (err) {
+      toast.error('Failed to submit documents. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -85,6 +158,34 @@ export function MyBookings() {
         {filteredBookings.length > 0 ? (
           filteredBookings.map((booking) => (
             <div key={booking.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+              {/* Document resubmission alert banner */}
+              {booking.document_status === 'resubmission_required' && (
+                <div className="px-6 py-3 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+                    <p className="text-sm font-bold text-amber-500">
+                      Action Required: Your documents were rejected. Please resubmit.
+                      {booking.admin_notes && <span className="font-normal text-amber-400/80 ml-1">Reason: {booking.admin_notes}</span>}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setResubmitBooking(booking);
+                      setResubmitDocs({ facePhoto: '', licenseFront: '', licenseBack: '', idFront: '', idBack: '' });
+                    }}
+                    className="shrink-0 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-colors flex items-center gap-1.5"
+                  >
+                    <Upload size={12} /> Resubmit Documents
+                  </button>
+                </div>
+              )}
+              {booking.document_status === 'resubmitted' && (
+                <div className="px-6 py-2 bg-blue-500/10 border-b border-blue-500/30 flex items-center gap-2">
+                  <CheckCircle2 size={14} className="text-blue-400" />
+                  <p className="text-xs font-bold text-blue-400">Documents resubmitted — awaiting admin review</p>
+                </div>
+              )}
+
               <div className="p-6">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                   {/* Car Info */}
@@ -123,6 +224,18 @@ export function MyBookings() {
                       <FileText size={16} /> Details
                     </button>
                     
+                    {booking.document_status === 'resubmission_required' && (
+                      <button
+                        onClick={() => {
+                          setResubmitBooking(booking);
+                          setResubmitDocs({ facePhoto: '', licenseFront: '', licenseBack: '', idFront: '', idBack: '' });
+                        }}
+                        className="flex-1 sm:flex-none px-4 py-2 bg-amber-500 text-white hover:bg-amber-600 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                      >
+                        <Upload size={16} /> Resubmit Docs
+                      </button>
+                    )}
+
                     {booking.status === 'confirmed' && (
                       <button className="flex-1 sm:flex-none px-4 py-2 bg-error/10 text-error hover:bg-error/20 rounded-xl text-sm font-bold flex items-center justify-center gap-2">
                         <XCircle size={16} /> Cancel
@@ -168,6 +281,88 @@ export function MyBookings() {
           </div>
         )}
       </div>
+
+      {/* Document Resubmission Modal */}
+      {resubmitBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <div>
+                <h3 className="font-bold text-lg">Resubmit Documents</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Your payment is verified. Upload correct documents to proceed.</p>
+              </div>
+              <button onClick={() => setResubmitBooking(null)} className="p-2 hover:bg-muted rounded-full transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {resubmitBooking.admin_notes && (
+              <div className="mx-5 mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                <p className="text-xs text-amber-500 font-bold">Rejection reason: <span className="font-normal">{resubmitBooking.admin_notes}</span></p>
+              </div>
+            )}
+
+            <div className="p-5 overflow-y-auto flex-1 space-y-3">
+              {(Object.keys(DOC_LABELS) as DocType[]).map((type) => {
+                const uploaded = resubmitDocs[type];
+                const isUploading = uploadingDoc === type;
+                return (
+                  <div key={type} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl border border-border">
+                    <div className="flex items-center gap-3">
+                      {uploaded ? (
+                        <CheckCircle2 size={16} className="text-success shrink-0" />
+                      ) : (
+                        <FileText size={16} className="text-muted-foreground shrink-0" />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium">{DOC_LABELS[type]}</p>
+                        {uploaded && <p className="text-xs text-success">Uploaded ✓</p>}
+                      </div>
+                    </div>
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className="hidden"
+                        disabled={isUploading}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadDoc(file, type, resubmitBooking.id);
+                        }}
+                      />
+                      <span className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                        isUploading
+                          ? 'bg-muted text-muted-foreground'
+                          : uploaded
+                          ? 'bg-muted text-muted-foreground hover:bg-muted/80'
+                          : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      }`}>
+                        {isUploading ? <><Loader2 size={12} className="animate-spin" /> Uploading...</> : uploaded ? 'Replace' : <><Upload size={12} /> Upload</>}
+                      </span>
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-5 border-t border-border flex gap-3">
+              <button
+                onClick={() => setResubmitBooking(null)}
+                className="flex-1 px-4 py-2 bg-muted rounded-xl text-sm font-bold hover:bg-muted/80 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResubmitDocuments}
+                disabled={submitting || !Object.values(resubmitDocs).some(v => v)}
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {submitting ? <><Loader2 size={14} className="animate-spin" /> Submitting...</> : 'Submit Documents'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

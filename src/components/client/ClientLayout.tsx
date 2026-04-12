@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -13,18 +13,22 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  User
+  User,
+  Search,
 } from 'lucide-react';
-import { Search } from 'lucide-react';
-import { Dashboard } from './Dashboard';
-import { DigitalGlovebox } from './DigitalGlovebox';
-import { MyBookings } from './MyBookings';
-import { MyProfile } from './MyProfile';
-import { MyInbox } from './MyInbox';
-import { Settings } from './Settings';
-import { LoyaltyRewards } from './LoyaltyRewards';
-import { BrowseAndBook } from './BrowseAndBook';
+import { Logo } from '../shared/Logo';
+import { LogoLoader } from '../shared/LogoLoader';
 import { PortalHeader } from '../PortalHeader';
+
+// Lazy load client components
+const Dashboard = React.lazy(() => import('./Dashboard').then(m => ({ default: m.Dashboard })));
+const DigitalGlovebox = React.lazy(() => import('./DigitalGlovebox').then(m => ({ default: m.DigitalGlovebox })));
+const MyInbox = React.lazy(() => import('./MyInbox').then(m => ({ default: m.MyInbox })));
+const MyBookings = React.lazy(() => import('./MyBookings').then(m => ({ default: m.MyBookings })));
+const MyProfile = React.lazy(() => import('./MyProfile').then(m => ({ default: m.MyProfile })));
+const Settings = React.lazy(() => import('./Settings').then(m => ({ default: m.Settings })));
+const LoyaltyRewards = React.lazy(() => import('./LoyaltyRewards').then(m => ({ default: m.LoyaltyRewards })));
+const BrowseAndBook = React.lazy(() => import('./BrowseAndBook').then(m => ({ default: m.BrowseAndBook })));
 
 const navGroups = [
   {
@@ -150,8 +154,8 @@ export function ClientLayout() {
     <div className="min-h-screen bg-background flex text-foreground transition-colors duration-300">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 bg-card border-r border-border flex-col flex-shrink-0">
-        <div className="p-6 flex items-center">
-          <span className="font-bold text-xl text-primary">LinkedUp</span>
+        <div className="min-h-16 md:min-h-20 p-6 flex items-center">
+          <Logo size="lg" showText={false} />
         </div>
         {sidebarContent}
       </aside>
@@ -178,7 +182,7 @@ export function ClientLayout() {
               className="fixed left-0 top-0 h-full w-72 bg-card border-r border-border z-50 flex flex-col shadow-2xl"
             >
               <div className="p-6 flex items-center justify-between">
-                <span className="font-bold text-xl text-primary">LinkedUp</span>
+                <Logo size="lg" showText={false} />
                 <button
                   onClick={() => setSidebarOpen(false)}
                   className="p-2 hover:bg-muted rounded-lg text-muted-foreground"
@@ -212,16 +216,18 @@ export function ClientLayout() {
         />
 
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-          <Routes>
-            <Route index element={<Dashboard />} />
-            <Route path="browse" element={<BrowseAndBook />} />
-            <Route path="bookings" element={<MyBookings />} />
-            <Route path="profile" element={<MyProfile />} />
-            <Route path="glovebox" element={<DigitalGlovebox />} />
-            <Route path="rewards" element={<LoyaltyRewards />} />
-            <Route path="inbox" element={<MyInbox />} />
-            <Route path="settings" element={<Settings />} />
-          </Routes>
+          <Suspense fallback={<LogoLoader />}>
+            <Routes>
+              <Route index element={<Dashboard />} />
+              <Route path="browse" element={<BrowseAndBook />} />
+              <Route path="bookings" element={<MyBookings />} />
+              <Route path="profile" element={<MyProfile />} />
+              <Route path="glovebox" element={<DigitalGlovebox />} />
+              <Route path="rewards" element={<LoyaltyRewards />} />
+              <Route path="inbox" element={<MyInbox />} />
+              <Route path="settings" element={<Settings />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </div>

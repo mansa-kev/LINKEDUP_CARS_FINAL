@@ -66,7 +66,7 @@ export function Terms() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-5xl md:text-8xl font-serif font-black tracking-tighter italic text-white leading-tight mb-12"
+            className="text-5xl md:text-8xl font-serif font-black tracking-tighter italic text-foreground leading-tight mb-12"
           >
             Terms & <span className="text-primary">Conditions</span>
           </motion.h1>
@@ -92,7 +92,7 @@ export function Terms() {
               viewport={{ once: true }}
               transition={{ delay: index * 0.05 }}
             >
-              <h2 className="text-2xl font-serif font-black tracking-tight italic text-white mb-4">
+              <h2 className="text-2xl font-serif font-black tracking-tight italic text-foreground mb-4">
                 {index + 1}. {section.title}
               </h2>
               <p className="text-muted-foreground font-medium leading-relaxed">
@@ -106,9 +106,9 @@ export function Terms() {
       {/* Footer note */}
       <section className="px-6">
         <div className="max-w-3xl mx-auto">
-          <div className="p-10 rounded-[40px] bg-card border border-white/5 text-center">
+          <div className="p-10 rounded-[40px] bg-card border border-border text-center">
             <p className="text-muted-foreground font-medium leading-relaxed">
-              These terms were last updated on <span className="text-white font-black">1 January 2026</span>. LinkedUp Car Rentals reserves the right to update these terms at any time. Continued use of our services constitutes acceptance of any changes.
+              These terms were last updated on <span className="text-foreground font-black">1 January 2026</span>. LinkedUp Car Rentals reserves the right to update these terms at any time. Continued use of our services constitutes acceptance of any changes.
             </p>
           </div>
         </div>

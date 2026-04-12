@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mail, Phone, MapPin, Send, Clock, ChevronDown, Loader2, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -99,6 +100,13 @@ export function Contact() {
 
   return (
     <div className="pt-32 pb-20">
+      <Helmet>
+        <title>Contact Us | LinkedUp Cars Rentals Nairobi</title>
+        <meta name="description" content="Contact LinkedUp Cars Rentals in Nairobi. Call +254714764162. Main office: Lanphil Arcade, Ridgeways, Kiambu Road. Branch: GoldenHeights, Mirema, Roysambu." />
+        <link rel="canonical" href="https://linkedupcarsrentals.com/contact" />
+        <meta property="og:title" content="Contact LinkedUp Cars | Nairobi Car Hire" />
+        <meta property="og:url" content="https://linkedupcarsrentals.com/contact" />
+      </Helmet>
       <section className="px-6 mb-20">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">

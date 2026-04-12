@@ -1,4 +1,5 @@
 import { supabase, handleSupabaseErrorWrapper as handleSupabaseError } from '../lib/supabase';
+import { logger } from '../utils/logger';
 
 export const fleetService = {
   // --- Public Fleet ---
@@ -49,7 +50,7 @@ export const fleetService = {
         if (pError) throw pError;
         payouts = pData || [];
       } catch (e) {
-        console.warn("Could not fetch payouts. Table might not exist yet.", e);
+        logger.warn("Could not fetch payouts. Table might not exist yet.", e);
       }
 
       const totalCars = cars.length;
@@ -399,20 +400,20 @@ export const fleetService = {
 
   getGrowthInsights: async (fleetOwnerId: string) => {
     try {
-      console.log("Fetching insights for fleetOwnerId:", fleetOwnerId);
+      logger.log("Fetching insights for fleetOwnerId:", fleetOwnerId);
       // Fetch necessary data for insights
       const { data: cars, error: cError } = await supabase.from('cars').select('*');
       const { data: bookings, error: bError } = await supabase.from('bookings').select('*, cars(category)');
       const { data: pricingRules, error: pError } = await supabase.from('pricing_rules').select('*');
       
-      console.log("Fetched data:", { cars, bookings, pricingRules });
+      logger.log("Fetched data:", { cars, bookings, pricingRules });
       if (cError || bError || pError) {
-        console.error("Error fetching data:", { cError, bError, pError });
+        logger.error("Error fetching data:", { cError, bError, pError });
         throw cError || bError || pError;
       }
 
       const myCars = cars?.filter(c => c.fleet_owner_id === fleetOwnerId) || [];
-      console.log("My cars:", myCars);
+      logger.log("My cars:", myCars);
       
       // 1. Dynamic Pricing Suggestions (Heuristic)
       const pricingSuggestions = myCars.map(car => {
@@ -420,7 +421,7 @@ export const fleetService = {
         const suggestedRate = Math.round(avgRate * 1.05); // Simple 5% adjustment heuristic
         return { carId: car.id, carName: `${car.make} ${car.model}`, currentRate: car.daily_rate, suggestedRate };
       }).filter(s => s.suggestedRate !== s.currentRate);
-      console.log("Pricing suggestions:", pricingSuggestions);
+      logger.log("Pricing suggestions:", pricingSuggestions);
 
       // 2. Market Insights
       const marketInsights = {
@@ -439,10 +440,10 @@ export const fleetService = {
       ];
 
       const result = { pricingSuggestions, marketInsights, expansionRecommendations };
-      console.log("Returning result:", result);
+      logger.log("Returning result:", result);
       return result;
     } catch (error) {
-      console.error("Error in getGrowthInsights:", error);
+      logger.error("Error in getGrowthInsights:", error);
       return handleSupabaseError(error, 'getGrowthInsights');
     }
   },

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
-import { useTheme } from '../contexts/ThemeContext';
+import { useAdminTheme } from '../contexts/AdminThemeContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard,
@@ -27,32 +27,41 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Truck
+  Truck,
+  Clock,
+  CreditCard,
+  Loader2
 } from 'lucide-react';
 
-import { AdminDashboard } from './admin/AdminDashboard';
 import { PortalHeader } from './PortalHeader';
-import { AdminBookings } from './admin/AdminBookings';
-import { AdminCars } from './admin/AdminCars';
-import { AdminUsers } from './admin/AdminUsers';
-import { AdminDrivers } from './admin/AdminDrivers';
-import { AdminFleetOwners } from './admin/AdminFleetOwners';
-import { AdminVerification } from './admin/AdminVerification';
-import { AdminFinancials } from './admin/AdminFinancials';
-import { AdminCarEarnings } from './admin/AdminCarEarnings';
-import { AdminPricing } from './admin/AdminPricing';
-import { AdminReports } from './admin/AdminReports';
-import { AdminInbox } from './admin/AdminInbox';
-import { AdminReviews } from './admin/AdminReviews';
-import { AdminGrowthTools } from './admin/AdminGrowthTools';
-import { AdminIncidentCommand } from './admin/AdminIncidentCommand';
-import { AdminHeroContent } from './admin/AdminHeroContent';
-import { AdminContractManager } from './admin/AdminContractManager';
-import { AdminSystemHealth } from './admin/AdminSystemHealth';
-import { AdminSettings } from './admin/AdminSettings';
-import { AdminLogout } from './admin/AdminLogout';
-import { AdminOutsourcedCars } from './admin/AdminOutsourcedCars';
-import { AdminPromotions } from './admin/AdminPromotions';
+import { Logo } from './shared/Logo';
+import { LogoLoader } from './shared/LogoLoader';
+
+// Lazy load admin components
+const AdminDashboard = React.lazy(() => import('./admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const AdminBookings = React.lazy(() => import('./admin/AdminBookings').then(m => ({ default: m.AdminBookings })));
+const AdminCars = React.lazy(() => import('./admin/AdminCars').then(m => ({ default: m.AdminCars })));
+const AdminUsers = React.lazy(() => import('./admin/AdminUsers').then(m => ({ default: m.AdminUsers })));
+const AdminDrivers = React.lazy(() => import('./admin/AdminDrivers').then(m => ({ default: m.AdminDrivers })));
+const AdminFleetOwners = React.lazy(() => import('./admin/AdminFleetOwners').then(m => ({ default: m.AdminFleetOwners })));
+const AdminVerification = React.lazy(() => import('./admin/AdminVerification').then(m => ({ default: m.AdminVerification })));
+const AdminFinancials = React.lazy(() => import('./admin/AdminFinancials').then(m => ({ default: m.AdminFinancials })));
+const AdminCarEarnings = React.lazy(() => import('./admin/AdminCarEarnings').then(m => ({ default: m.AdminCarEarnings })));
+const AdminPricing = React.lazy(() => import('./admin/AdminPricing').then(m => ({ default: m.AdminPricing })));
+const AdminReports = React.lazy(() => import('./admin/AdminReports').then(m => ({ default: m.AdminReports })));
+const AdminInbox = React.lazy(() => import('./admin/AdminInbox').then(m => ({ default: m.AdminInbox })));
+const AdminReviews = React.lazy(() => import('./admin/AdminReviews').then(m => ({ default: m.AdminReviews })));
+const AdminGrowthTools = React.lazy(() => import('./admin/AdminGrowthTools').then(m => ({ default: m.AdminGrowthTools })));
+const AdminIncidentCommand = React.lazy(() => import('./admin/AdminIncidentCommand').then(m => ({ default: m.AdminIncidentCommand })));
+const AdminHeroContent = React.lazy(() => import('./admin/AdminHeroContent').then(m => ({ default: m.AdminHeroContent })));
+const AdminContractManager = React.lazy(() => import('./admin/AdminContractManager').then(m => ({ default: m.AdminContractManager })));
+const AdminSystemHealth = React.lazy(() => import('./admin/AdminSystemHealth').then(m => ({ default: m.AdminSystemHealth })));
+const AdminSettings = React.lazy(() => import('./admin/AdminSettings').then(m => ({ default: m.AdminSettings })));
+const AdminLogout = React.lazy(() => import('./admin/AdminLogout').then(m => ({ default: m.AdminLogout })));
+const AdminOutsourcedCars = React.lazy(() => import('./admin/AdminOutsourcedCars').then(m => ({ default: m.AdminOutsourcedCars })));
+const AdminPromotions = React.lazy(() => import('./admin/AdminPromotions').then(m => ({ default: m.AdminPromotions })));
+const AdminReservations = React.lazy(() => import('./admin/AdminReservations').then(m => ({ default: m.AdminReservations })));
+const AdminPendingPayments = React.lazy(() => import('./admin/AdminPendingPayments').then(m => ({ default: m.AdminPendingPayments })));
 
 type ModuleCategory = {
   title: string;
@@ -74,6 +83,8 @@ const MODULE_CATEGORIES: ModuleCategory[] = [
     title: 'Core Operations',
     items: [
       { id: 'bookings', label: 'Bookings Management', icon: Calendar },
+      { id: 'pending-payments', label: 'Pending Payments', icon: CreditCard },
+      { id: 'reservations', label: 'Reservations', icon: Clock },
       { id: 'cars', label: 'Cars Management', icon: Car },
       { id: 'outsourced', label: 'Outsourced Cars', icon: Truck },
       { id: 'users', label: 'Users Management', icon: Users },
@@ -116,7 +127,7 @@ const MODULE_CATEGORIES: ModuleCategory[] = [
 
 export function AdminPortal() {
   const location = useLocation();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme } = useAdminTheme();
   const isDarkMode = theme === 'dark';
   const setIsDarkMode = (isDark: boolean) => setTheme(isDark ? 'dark' : 'light');
 
@@ -226,9 +237,9 @@ export function AdminPortal() {
       <aside className={`hidden md:flex bg-card border-r border-border flex-col flex-shrink-0 sticky top-0 h-screen transition-all duration-300 ${
         isCollapsed ? 'w-20' : 'w-64'
       }`}>
-        <div className="h-16 flex items-center px-6 border-b border-border">
-          {!isCollapsed && <span className="text-lg font-bold tracking-tighter text-primary">LINKEDUP ADMIN</span>}
-          {isCollapsed && <span className="text-lg font-bold text-primary mx-auto">L</span>}
+        <div className="min-h-16 md:min-h-20 flex items-center px-6 border-b border-border">
+          {!isCollapsed && <Logo size="lg" showText={false} />}
+          {isCollapsed && <Logo size="md" showText={false} />}
         </div>
         {sidebarContent}
         <button
@@ -259,7 +270,7 @@ export function AdminPortal() {
               className="fixed left-0 top-0 h-full w-72 bg-card border-r border-border z-50 flex flex-col shadow-2xl"
             >
               <div className="p-6 flex items-center justify-between">
-                <span className="font-bold text-lg text-primary">LINKEDUP ADMIN</span>
+                <Logo size="xl" showText={false} />
                 <button
                   onClick={() => setSidebarOpen(false)}
                   className="p-2 hover:bg-muted rounded-lg text-muted-foreground"
@@ -294,30 +305,34 @@ export function AdminPortal() {
 
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <div className="max-w-[1600px] mx-auto">
-            <Routes>
-              <Route index element={<AdminDashboard />} />
-              <Route path="bookings" element={<AdminBookings />} />
-              <Route path="cars" element={<AdminCars />} />
-              <Route path="outsourced" element={<AdminOutsourcedCars />} />
-              <Route path="users" element={<AdminUsers />} />
-              <Route path="drivers" element={<AdminDrivers />} />
-              <Route path="fleet-owners" element={<AdminFleetOwners />} />
-              <Route path="verification" element={<AdminVerification />} />
-              <Route path="financials" element={<AdminFinancials />} />
-              <Route path="car-earnings" element={<AdminCarEarnings />} />
-              <Route path="pricing" element={<AdminPromotions />} />
-              <Route path="reports" element={<AdminReports />} />
-              <Route path="inbox" element={<AdminInbox />} />
-              <Route path="reviews" element={<AdminReviews />} />
-              <Route path="growth" element={<AdminGrowthTools />} />
-              <Route path="incident" element={<AdminIncidentCommand />} />
-              <Route path="hero" element={<AdminHeroContent />} />
-              <Route path="contracts" element={<AdminContractManager />} />
-              <Route path="system-health" element={<AdminSystemHealth />} />
-              <Route path="settings" element={<AdminSettings />} />
-              <Route path="logout" element={<AdminLogout />} />
-              <Route path=":activeModule" element={<AdminModuleFallback />} />
-            </Routes>
+            <Suspense fallback={<LogoLoader />}>
+              <Routes>
+                <Route index element={<AdminDashboard />} />
+                <Route path="bookings" element={<AdminBookings />} />
+                <Route path="pending-payments" element={<AdminPendingPayments />} />
+                <Route path="reservations" element={<AdminReservations />} />
+                <Route path="cars" element={<AdminCars />} />
+                <Route path="outsourced" element={<AdminOutsourcedCars />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="drivers" element={<AdminDrivers />} />
+                <Route path="fleet-owners" element={<AdminFleetOwners />} />
+                <Route path="verification" element={<AdminVerification />} />
+                <Route path="financials" element={<AdminFinancials />} />
+                <Route path="car-earnings" element={<AdminCarEarnings />} />
+                <Route path="pricing" element={<AdminPromotions />} />
+                <Route path="reports" element={<AdminReports />} />
+                <Route path="inbox" element={<AdminInbox />} />
+                <Route path="reviews" element={<AdminReviews />} />
+                <Route path="growth" element={<AdminGrowthTools />} />
+                <Route path="incident" element={<AdminIncidentCommand />} />
+                <Route path="hero" element={<AdminHeroContent />} />
+                <Route path="contracts" element={<AdminContractManager />} />
+                <Route path="system-health" element={<AdminSystemHealth />} />
+                <Route path="settings" element={<AdminSettings />} />
+                <Route path="logout" element={<AdminLogout />} />
+                <Route path=":activeModule" element={<AdminModuleFallback />} />
+              </Routes>
+            </Suspense>
           </div>
         </main>
       </div>

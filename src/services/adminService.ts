@@ -1,4 +1,5 @@
 import { supabase, handleSupabaseErrorWrapper } from '../lib/supabase';
+import { logger } from '../utils/logger';
 const handleSupabaseError = handleSupabaseErrorWrapper;
 
 export const adminService = {
@@ -34,8 +35,10 @@ export const adminService = {
 
       const { data: bookings, error: bError } = await supabase
         .from('bookings')
-        .select('total_amount, platform_commission, status, created_at, car_id, client_id, cars(make, model, year)')
-        .gte('created_at', previousStartDate.toISOString());
+        .select('total_amount, platform_commission, status, payment_status, created_at, car_id, client_id, cars(make, model, year)')
+        .gte('created_at', previousStartDate.toISOString())
+        .in('status', ['confirmed', 'completed'])
+        .eq('payment_status', 'paid');
       if (bError) throw bError;
 
       const { data: cars, error: cError } = await supabase
@@ -49,8 +52,8 @@ export const adminService = {
       if (uError) throw uError;
 
       // Filter bookings by current and previous periods
-      const currentBookings = bookings.filter(b => new Date(b.created_at) >= startDate);
-      const previousBookings = bookings.filter(b => new Date(b.created_at) >= previousStartDate && new Date(b.created_at) < startDate);
+      const currentBookings = bookings?.filter(b => new Date(b.created_at) >= startDate) || [];
+      const previousBookings = bookings?.filter(b => new Date(b.created_at) >= previousStartDate && new Date(b.created_at) < startDate) || [];
 
       // Current Period Stats
       const totalRevenue = currentBookings.reduce((sum, b) => sum + (b.total_amount || 0), 0);
@@ -72,10 +75,10 @@ export const adminService = {
       const commissionTrendPercent = calculateTrend(netCommission, prevNetCommission);
       const activeBookingsTrendPercent = calculateTrend(activeBookings, prevActiveBookings);
 
-      const totalCars = cars.length;
-      const maintenanceCars = cars.filter(c => c.status === 'maintenance').length;
-      const newClients = users.filter(u => u.role === 'client' && new Date(u.created_at) >= startDate).length;
-      const newFleetOwners = users.filter(u => u.role === 'fleet_owner' && new Date(u.created_at) >= startDate).length;
+      const totalCars = cars?.length || 0;
+      const maintenanceCars = cars?.filter(c => c.status === 'maintenance').length || 0;
+      const newClients = users?.filter(u => u.role === 'client' && new Date(u.created_at) >= startDate).length || 0;
+      const newFleetOwners = users?.filter(u => u.role === 'fleet_owner' && new Date(u.created_at) >= startDate).length || 0;
 
       // Calculate revenue trend for chart based on timeRange
       let revenueTrend = [];
@@ -163,13 +166,58 @@ export const adminService = {
         churnRate,
         bookingStatusDistribution: [
           { name: 'Active', value: activeBookings, color: '#10B981' },
-          { name: 'Pending', value: currentBookings.filter(b => b.status === 'pending').length, color: '#F59E0B' },
           { name: 'Completed', value: currentBookings.filter(b => b.status === 'completed').length, color: '#3B82F6' },
-          { name: 'Cancelled', value: currentBookings.filter(b => b.status === 'cancelled').length, color: '#EF4444' },
         ]
       };
     } catch (error) {
-      return handleSupabaseErrorWrapper(error, 'getDashboardStats');
+      logger.error('[getDashboardStats] Raw error:', error);
+      // Return safe default stats object so dashboard renders empty rather than crashing
+      return {
+        totalRevenue: 0,
+        revenueTrendPercent: 0,
+        netCommission: 0,
+        commissionTrendPercent: 0,
+        activeBookings: 0,
+        activeBookingsTrendPercent: 0,
+        totalCars: 0,
+        maintenanceCars: 0,
+        newClients: 0,
+        newFleetOwners: 0,
+        revenueTrend: [],
+        topCars: [],
+        churnRate: 0,
+        bookingStatusDistribution: [
+          { name: 'Active', value: 0, color: '#10B981' },
+          { name: 'Completed', value: 0, color: '#3B82F6' },
+        ]
+      };
+    }
+  },
+
+  // --- Reservations ---
+  getReservationStats: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('car_reservations')
+        .select('reservation_fee, total_amount, status, payment_status, created_at')
+        .eq('payment_status', 'paid');
+
+      if (error) throw error;
+
+      const totalReservationFees = data?.reduce((sum, r) => sum + (r.reservation_fee || 0), 0) || 0;
+      const totalReservationValue = data?.reduce((sum, r) => sum + (r.total_amount || 0), 0) || 0;
+      const activeReservations = data?.filter(r => r.status === 'reserved').length || 0;
+      const confirmedReservations = data?.filter(r => r.status === 'confirmed').length || 0;
+
+      return {
+        totalReservationFees,      // fees collected (non-refundable)
+        totalReservationValue,     // full value of all reservations
+        activeReservations,
+        confirmedReservations,
+        count: data?.length || 0
+      };
+    } catch (error) {
+      return handleSupabaseErrorWrapper(error, 'getReservationStats');
     }
   },
 
@@ -235,7 +283,7 @@ export const adminService = {
         .upload(filePath, file);
 
       if (uploadError) {
-        console.error('Error uploading image:', uploadError);
+        logger.error('Error uploading image:', uploadError);
         // Fallback to a placeholder if bucket doesn't exist
         return `https://picsum.photos/seed/${fileName}/800/600`;
       }
@@ -246,7 +294,7 @@ export const adminService = {
 
       return data.publicUrl;
     } catch (err) {
-      console.error('Failed to upload image:', err);
+      logger.error('Failed to upload image:', err);
       return `https://picsum.photos/seed/${Math.random()}/800/600`;
     }
   },
@@ -396,35 +444,61 @@ export const adminService = {
         *,
         fleet_owner_settings (*),
         cars (id),
-        bookings!bookings_fleet_owner_id_fkey (total_amount, status)
+        bookings!bookings_fleet_owner_id_fkey (total_amount, status, payment_status, start_date, end_date)
       `)
       .eq('role', 'fleet_owner');
       
     if (error) return handleSupabaseErrorWrapper(error, 'getFleetOwnersWithStats');
     
-    const { data: transactions } = await supabase
-      .from('transactions')
-      .select('*')
-      .in('type', ['payout_out']);
+    const { data: payouts } = await supabase
+      .from('payouts')
+      .select('*');
+
+    const { data: reviews } = await supabase
+      .from('reviews')
+      .select('user_id, rating');
       
     return (owners || []).map(owner => {
-      const ownerTx = transactions?.filter(t => t.user_id === owner.id) || [];
-      const totalEarnings = owner.bookings?.filter((b: any) => b.status === 'completed' || b.status === 'confirmed')
-        .reduce((sum: number, b: any) => sum + Number(b.total_amount), 0) || 0;
-        
-      const pendingPayouts = ownerTx.filter(t => t.status === 'pending')
-        .reduce((sum: number, t: any) => sum + Math.abs(Number(t.amount)), 0);
-        
-      const payoutHistory = ownerTx.filter(t => t.status === 'completed');
+      const confirmedBookings = owner.bookings?.filter((b: any) => 
+        (b.status === 'completed' || b.status === 'confirmed') && b.payment_status === 'paid'
+      ) || [];
+
+      const totalEarnings = confirmedBookings
+        .reduce((sum: number, b: any) => sum + Number(b.total_amount), 0);
+
+      const ownerPayouts = payouts?.filter(p => p.fleet_owner_id === owner.id) || [];
+      const pendingPayouts = ownerPayouts.filter(p => p.status === 'pending')
+        .reduce((sum: number, p: any) => sum + Math.abs(Number(p.amount)), 0);
+      const payoutHistory = ownerPayouts.filter(p => p.status === 'completed');
+
+      // Avg rating from reviews left on bookings for this owner's cars
+      const ownerReviews = reviews?.filter(r => {
+        const booking = owner.bookings?.find((b: any) => b.client_id === r.user_id);
+        return !!booking;
+      }) || [];
+      const avgRating = ownerReviews.length > 0
+        ? (ownerReviews.reduce((s: number, r: any) => s + Number(r.rating), 0) / ownerReviews.length).toFixed(1)
+        : null;
+
+      // Utilization: booked days / (total cars × 30 days window)
+      const totalCars = owner.cars?.length || 0;
+      let bookedDays = 0;
+      confirmedBookings.forEach((b: any) => {
+        if (b.start_date && b.end_date) {
+          const days = Math.max(1, Math.round((new Date(b.end_date).getTime() - new Date(b.start_date).getTime()) / 86400000));
+          bookedDays += days;
+        }
+      });
+      const avgUtilization = totalCars > 0 ? Math.min(100, Math.round((bookedDays / (totalCars * 30)) * 100)) : 0;
       
       return {
         ...owner,
-        total_cars: owner.cars?.length || 0,
+        total_cars: totalCars,
         total_earnings: totalEarnings,
         pending_payouts: pendingPayouts,
         payout_history: payoutHistory,
-        avg_utilization: Math.floor(Math.random() * 40) + 40,
-        avg_rating: (Math.random() * 1 + 4).toFixed(1)
+        avg_utilization: avgUtilization,
+        avg_rating: avgRating
       };
     });
   },
@@ -444,6 +518,7 @@ export const adminService = {
   createFleetOwnerAccount: async (data: any) => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
     
     // Use a secondary client to avoid logging out the current admin
     const { createClient } = await import('@supabase/supabase-js');
@@ -459,7 +534,7 @@ export const adminService = {
 
     const { data: authData, error: authError } = await adminAuthClient.auth.signUp({
       email: data.email,
-      password: 'Fleet123!',
+      password: data.password || 'Fleet123!',
       options: {
         emailRedirectTo: `${fleetUrl}/login`,
         data: {
@@ -474,34 +549,57 @@ export const adminService = {
     const userId = authData.user?.id;
     if (!userId) throw new Error('Failed to create user account');
 
-    // Wait a moment for the trigger to create the user_profile
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Auto-confirm the fleet owner's email so they can log in immediately
+    // (admin-created accounts should not require email confirmation)
+    if (serviceRoleKey) {
+      try {
+        await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${serviceRoleKey}`,
+            'apikey': serviceRoleKey,
+          },
+          body: JSON.stringify({ email_confirm: true }),
+        });
+      } catch (confirmErr) {
+        logger.warn('Could not auto-confirm fleet owner email — user must confirm manually:', confirmErr);
+      }
+    } else {
+      logger.warn('VITE_SUPABASE_SERVICE_ROLE_KEY not set — fleet owner must confirm email before logging in');
+    }
 
-    // Update user profile
+    // Wait for the handle_new_user trigger to auto-create the user_profiles row
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    // UPDATE the profile row (trigger created it; admin UPDATE policy already exists)
+    // Fall back to INSERT if trigger didn't fire (covered by "Admins can insert profiles" policy)
     const { error: profileError } = await supabase
       .from('user_profiles')
-      .update({
+      .upsert({
+        id: userId,
         full_name: data.contact_name,
+        email: data.email,
         phone_number: data.phone_number,
-        role: 'fleet_owner'
-      })
-      .eq('id', userId);
+        role: 'fleet_owner',
+        status: 'active'
+      }, { onConflict: 'id' });
 
     if (profileError) return handleSupabaseErrorWrapper(profileError, 'createFleetOwnerAccount_Profile');
 
-    // Create fleet owner settings
+    // Insert fleet_owner_settings (ignore if already exists)
     const { error: settingsError } = await supabase
       .from('fleet_owner_settings')
-      .insert({
+      .upsert({
         id: userId,
         company_name: data.company_name,
         commission_rate: data.commission_rate,
-        status: data.status || 'pending_verification'
-      });
+        status: 'active'
+      }, { onConflict: 'id' });
 
     if (settingsError) return handleSupabaseErrorWrapper(settingsError, 'createFleetOwnerAccount_Settings');
 
-    // Send welcome email via Resend edge function
+    // Send welcome email
     try {
       const { sendTemplatedEmail } = await import('./emailProvider');
       await sendTemplatedEmail(data.email, 'fleet_owner_welcome', {
@@ -509,17 +607,17 @@ export const adminService = {
         email: data.email,
       });
     } catch (emailErr) {
-      console.error('Failed to send fleet owner welcome email:', emailErr);
+      logger.error('Failed to send fleet owner welcome email:', emailErr);
     }
 
-    // Also send in-app message
+    // In-app welcome message
     const { data: adminUser } = await supabase.auth.getUser();
     if (adminUser.user) {
       await supabase.from('messages').insert({
         sender_id: adminUser.user.id,
         receiver_id: userId,
         subject: 'Welcome to LinkedUp Cars - Fleet Owner Account',
-        content: `Hello ${data.contact_name},\n\nYour Fleet Owner account has been created.\n\nLogin Email: ${data.email}\nTemporary Password: Fleet123!\n\nPlease log in and change your password immediately.`,
+        content: `Hello ${data.contact_name},\n\nYour Fleet Owner account has been created.\n\nLogin Email: ${data.email}\nTemporary Password: ${data.password || 'Fleet123!'}\n\nPlease log in and change your password immediately.`,
         status: 'unread'
       });
     }
@@ -554,11 +652,32 @@ export const adminService = {
   },
 
   deleteFleetOwner: async (id: string) => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+
+    // Delete fleet_owner_settings first (FK constraint)
+    await supabase.from('fleet_owner_settings').delete().eq('id', id);
+
+    // Revert profile role to client (preserves booking history)
     const { error } = await supabase
       .from('user_profiles')
       .update({ role: 'client' })
       .eq('id', id);
     if (error) throw error;
+
+    // Hard-delete from Supabase Auth if service role key is available
+    if (serviceRoleKey) {
+      const res = await fetch(`${supabaseUrl}/auth/v1/admin/users/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${serviceRoleKey}`,
+          'apikey': serviceRoleKey,
+        },
+      });
+      if (!res.ok) {
+        logger.warn('Could not delete auth user (non-fatal):', await res.text());
+      }
+    }
   },
 
   updateFleetOwnerSettings: async (id: string, settings: any) => {
@@ -581,38 +700,80 @@ export const adminService = {
   // --- Financials ---
   getFinancials: async () => {
     try {
+      logger.log('Fetching financials with confirmed bookings filter...');
+      
+      // Fetch only paid bookings with active statuses
+      const { data: confirmedBookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select(`
+          *,
+          cars(
+            make,
+            model,
+            daily_rate,
+            fleet_owner_id
+          ),
+          client:user_profiles(
+            full_name,
+            email
+          )
+        `)
+        .eq('payment_status', 'paid')
+        .in('status', ['confirmed', 'completed'])
+        .order('created_at', { ascending: false });
+      
+      if (bookingsError) {
+        logger.error('Bookings query error:', bookingsError);
+        throw bookingsError;
+      }
+      
+      logger.log('Confirmed bookings fetched:', confirmedBookings?.length || 0);
+
+      // Fetch transactions (for historical data that might be manually recorded)
       const { data: transactions, error: tError } = await supabase
         .from('transactions')
-        .select('*, bookings(total_amount)')
+        .select('*')
         .order('created_at', { ascending: false });
       if (tError) throw tError;
 
+      // Fetch expenses
       const { data: expenses, error: eError } = await supabase
         .from('expenses')
         .select('*')
         .order('date', { ascending: false });
       if (eError) throw eError;
 
-      const totalRevenue = transactions
-        ?.filter(t => t.type === 'payment_in' && t.status === 'completed')
-        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+      // Calculate revenue from confirmed bookings only
+      const totalRevenue = confirmedBookings?.reduce((sum, booking) => sum + Number(booking.total_amount), 0) || 0;
 
-      const totalPayouts = transactions
-        ?.filter(t => t.type === 'payout_out' && t.status === 'completed')
-        .reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0) || 0;
+      // Calculate payouts from completed bookings with paid status
+      const completedPaidBookings = confirmedBookings?.filter(b => b.status === 'completed') || [];
+      const totalPayouts = completedPaidBookings.reduce((sum, booking) => {
+        // Assuming 15% commission goes to fleet owner (85% to platform)
+        const commissionRate = 0.15;
+        return sum + (Number(booking.total_amount) * commissionRate);
+      }, 0);
 
       const totalExpenses = expenses?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
 
-      // Group by month for chart
+      // Group by month for chart - only include confirmed paid bookings
       const monthlyData: Record<string, { revenue: number, payouts: number }> = {};
-      transactions?.forEach(t => {
-        const month = new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      confirmedBookings?.forEach(booking => {
+        const month = new Date(booking.created_at).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
         if (!monthlyData[month]) monthlyData[month] = { revenue: 0, payouts: 0 };
-        if (t.type === 'payment_in' && t.status === 'completed') monthlyData[month].revenue += Number(t.amount);
-        if (t.type === 'payout_out' && t.status === 'completed') monthlyData[month].payouts += Math.abs(Number(t.amount));
+        
+        monthlyData[month].revenue += Number(booking.total_amount);
+        
+        // Add payout if booking is completed
+        if (booking.status === 'completed') {
+          const commissionRate = 0.15;
+          monthlyData[month].payouts += Number(booking.total_amount) * commissionRate;
+        }
       });
 
       const chartData = Object.entries(monthlyData).map(([name, data]) => ({ name, ...data })).reverse();
+
+      logger.log('Financials calculated:', { totalRevenue, totalPayouts, totalExpenses });
 
       return { 
         transactions: transactions || [], 
@@ -623,19 +784,38 @@ export const adminService = {
         chartData
       };
     } catch (error) {
+      logger.error('getFinancials error:', error);
       return handleSupabaseErrorWrapper(error, 'getFinancials');
     }
   },
 
   // --- Payouts ---
   getPayouts: async () => {
-    const { data, error } = await supabase
+    // First get all payout transactions
+    const { data: transactions, error: txError } = await supabase
       .from('transactions')
-      .select('*, fleet_owner:user_profiles!transactions_user_id_fkey(*)')
+      .select('*')
       .eq('type', 'payout_out')
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseErrorWrapper(error, 'getPayouts');
-    return data;
+    
+    if (txError) return handleSupabaseErrorWrapper(txError, 'getPayouts');
+    
+    // Then get user profiles for each transaction
+    const userIds = [...new Set(transactions?.map(t => t.user_id) || [])];
+    if (userIds.length === 0) return [];
+    
+    const { data: profiles, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id, full_name, email')
+      .in('id', userIds);
+    
+    if (profileError) return handleSupabaseErrorWrapper(profileError, 'getPayouts');
+    
+    // Combine the data
+    return transactions?.map(tx => ({
+      ...tx,
+      user_profile: profiles?.find(p => p.id === tx.user_id)
+    })) || [];
   },
 
   approvePayouts: async (ids: string[]) => {
@@ -940,7 +1120,9 @@ export const adminService = {
 
       const { data: bookings, error: bError } = await supabase
         .from('bookings')
-        .select('*');
+        .select('*')
+        .in('status', ['confirmed', 'completed'])
+        .eq('payment_status', 'paid');
       if (bError) throw bError;
 
       const { data: maintenance, error: mError } = await supabase
@@ -983,7 +1165,10 @@ export const adminService = {
   getCarEarningsStats: async () => {
     try {
       const { data: cars } = await supabase.from('cars').select('id, make, model, daily_rate');
-      const { data: bookings } = await supabase.from('bookings').select('car_id, total_amount, start_date, end_date');
+      const { data: bookings } = await supabase.from('bookings')
+        .select('car_id, total_amount, start_date, end_date')
+        .in('status', ['confirmed', 'completed'])
+        .eq('payment_status', 'paid');
 
       if (!cars || !bookings) return { highestEarner: 'N/A', highestEarnings: 0, avgUtilization: 0, avgDailyEarning: 0 };
 
@@ -1134,12 +1319,14 @@ export const adminService = {
     return data;
   },
 
-  verifyPayment: async (id: string, status: 'verified' | 'rejected', verifiedBy: string, bookingId?: string, amount?: number, clientId?: string, transactionCode?: string) => {
+  verifyPayment: async (id: string, status: 'verified' | 'rejected', verifiedById: string, bookingId?: string, amount?: number, clientId?: string, transactionCode?: string) => {
+    logger.log('Verifying payment:', { id, status, bookingId, amount, clientId, transactionCode });
+    
     const { data, error } = await supabase
       .from('pending_payments')
       .update({ 
         status, 
-        verified_by: verifiedBy, 
+        verified_by: verifiedById, 
         verified_at: new Date().toISOString() 
       })
       .eq('id', id)
@@ -1147,14 +1334,30 @@ export const adminService = {
     if (error) return handleSupabaseErrorWrapper(error, 'verifyPayment');
 
     if (status === 'verified' && bookingId && amount && clientId) {
-      // Update booking status to confirmed
-      await supabase
+      // First check if booking is cancelled
+      const { data: booking } = await supabase
         .from('bookings')
-        .update({ status: 'confirmed' })
+        .select('status')
+        .eq('id', bookingId)
+        .single();
+
+      if (booking?.status === 'cancelled') {
+        throw new Error('Cannot verify payment for cancelled booking');
+      }
+
+      // Update booking status to confirmed + payment to paid
+      const { error: updateError } = await supabase
+        .from('bookings')
+        .update({ status: 'confirmed', payment_status: 'paid' })
         .eq('id', bookingId);
 
+      if (updateError) {
+        logger.error('Error updating booking status:', updateError);
+        throw new Error('Failed to update booking status');
+      }
+
       // Create a transaction record
-      await supabase
+      const { error: transactionError } = await supabase
         .from('transactions')
         .insert({
           booking_id: bookingId,
@@ -1164,12 +1367,36 @@ export const adminService = {
           status: 'completed',
           transaction_code: transactionCode || id
         });
+
+      if (transactionError) {
+        logger.error('Error creating transaction:', transactionError);
+        // Don't throw here - payment verification succeeded even if transaction creation failed
+      }
+
+      // Send in-app notification to the client
+      await supabase.from('notifications').insert({
+        user_id: clientId,
+        title: 'Payment Approved',
+        content: `Your M-Pesa payment of KSh ${Number(amount).toLocaleString()} has been verified. Your booking is now confirmed!`,
+        type: 'success',
+        is_read: false,
+        link: `/bookings/${bookingId}`,
+      }).then(() => {}, (err: any) => logger.error('Notification insert error:', err));
+
+      logger.log('Payment verification completed successfully');
     } else if (status === 'rejected' && bookingId) {
-      // Revert booking status to pending_payment
-      await supabase
+      // Revert booking status to pending + mark payment as failed
+      const { error: updateError } = await supabase
         .from('bookings')
-        .update({ status: 'pending_payment' })
+        .update({ status: 'pending', payment_status: 'failed' })
         .eq('id', bookingId);
+
+      if (updateError) {
+        logger.error('Error updating booking status to failed:', updateError);
+        throw new Error('Failed to update booking status');
+      }
+
+      logger.log('Payment rejection completed successfully');
     }
 
     return data;
@@ -1288,5 +1515,69 @@ export const adminService = {
         { time: '23:59', cpu: 15, memory: 48, network: 32 },
       ]
     };
-  }
+  },
+
+  deleteBooking: async (bookingId: string) => {
+    try {
+      logger.log('Deleting booking:', bookingId);
+      
+      // Use service role client to bypass RLS
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+      
+      if (!supabaseUrl || !supabaseServiceKey) {
+        throw new Error('Supabase credentials not configured');
+      }
+      
+      const { createClient } = await import('@supabase/supabase-js');
+      const serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      });
+      
+      // First delete related records
+      // 1. Delete pending payments
+      const { error: pendingError } = await serviceClient
+        .from('pending_payments')
+        .delete()
+        .eq('booking_id', bookingId);
+      
+      if (pendingError) {
+        logger.error('Error deleting pending payments:', pendingError);
+        throw pendingError;
+      }
+      logger.log('Pending payments deleted');
+
+      // 2. Delete transactions
+      const { error: txError } = await serviceClient
+        .from('transactions')
+        .delete()
+        .eq('booking_id', bookingId);
+      
+      if (txError) {
+        logger.error('Error deleting transactions:', txError);
+        throw txError;
+      }
+      logger.log('Transactions deleted');
+
+      // 3. Delete the booking
+      const { error: bookingError } = await serviceClient
+        .from('bookings')
+        .delete()
+        .eq('id', bookingId);
+
+      if (bookingError) {
+        logger.error('Error deleting booking:', bookingError);
+        throw bookingError;
+      }
+      logger.log('Booking deleted');
+
+      return { success: true };
+    } catch (error) {
+      logger.error('Delete booking failed:', error);
+      return handleSupabaseErrorWrapper(error, 'deleteBooking');
+    }
+  },
 };

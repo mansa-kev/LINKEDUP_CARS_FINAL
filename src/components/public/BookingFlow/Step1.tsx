@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Car } from '../../../types';
 import { Calendar, MapPin, ArrowRight, Clock, ShieldCheck, Users, Star, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -19,6 +20,7 @@ interface AvailableDriver {
 }
 
 export function Step1({ car, onNext }: Step1Props) {
+  const navigate = useNavigate();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [pickupLocation, setPickupLocation] = useState('');
@@ -123,13 +125,20 @@ export function Step1({ car, onNext }: Step1Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="space-y-2">
-        <h3 className="text-2xl md:text-3xl font-serif font-black italic text-white">Select Your Journey</h3>
-        <p className="text-muted-foreground text-sm">Choose your pickup & drop-off locations and rental duration.</p>
+    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <button
+        onClick={() => navigate('/')}
+        className="flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-6 group transition-colors"
+      >
+        <span className="text-lg group-hover:-translate-x-1 transition-transform inline-block">â</span>
+        <span className="font-semibold">Back to Home</span>
+      </button>
+      <div className="space-y-1">
+        <h3 className="text-xl sm:text-2xl md:text-3xl font-serif font-black italic text-white">Select Your Journey</h3>
+        <p className="text-muted-foreground text-xs sm:text-sm">Choose your pickup & drop-off locations and rental duration.</p>
       </div>
 
-      <div className="space-y-4 md:space-y-6">
+      <div className="space-y-3 sm:space-y-4 md:space-y-6">
         {/* Pickup Location */}
         <div className="group">
           <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-2 block">Pickup Location</label>
@@ -345,10 +354,10 @@ export function Step1({ car, onNext }: Step1Props) {
       <button
         type="submit"
         disabled={!startDate || !endDate || days <= 0 || !pickupLocation || (needsChauffeur && drivers.length > 0 && !selectedDriver)}
-        className="w-full py-5 md:py-6 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-4 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 disabled:opacity-50 disabled:hover:scale-100 group"
+        className="w-full py-3.5 sm:py-5 md:py-6 bg-primary rounded-[14px] sm:rounded-[24px] text-black font-black uppercase tracking-[0.15em] text-[11px] sm:text-sm flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 disabled:opacity-50 disabled:hover:scale-100 group"
       >
         Continue to Details
-        <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+        <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
       </button>
     </form>
   );

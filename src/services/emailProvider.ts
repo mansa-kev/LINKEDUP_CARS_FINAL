@@ -21,6 +21,7 @@ export interface EmailResult {
 // ---------------------------------------------------------------------------
 
 function wrapInHtml(title: string, bodyContent: string): string {
+  const logoUrl = 'https://edroffvtzrowpsooszqh.supabase.co/storage/v1/object/public/public_assets/logo.png';
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -33,7 +34,10 @@ function wrapInHtml(title: string, bodyContent: string): string {
       <h2 style="margin:0 0 16px;color:#0f172a;font-size:20px;font-weight:700;">${title}</h2>
       ${bodyContent}
     </div>
-    <div style="background:#f8fafc;padding:24px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+    <div style="background:#f8fafc;padding:32px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+      <div style="margin:0 0 16px;">
+        <img src="${logoUrl}" alt="LinkedUp Cars Logo" style="width:120px;height:auto;max-width:100%;" />
+      </div>
       <p style="margin:0;color:#94a3b8;font-size:12px;">LinkedUp Cars Rentals &bull; Nairobi, Kenya</p>
       <p style="margin:4px 0 0;color:#94a3b8;font-size:11px;">This email was sent from noreply@office.linkedupcarsrentals.com</p>
     </div>
@@ -110,6 +114,20 @@ export const EMAIL_TEMPLATES: Record<string, { subject: string; html: (data: Rec
       <a href="https://www.linkedupcarsrentals.com/cars" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:14px;">Browse Fleet</a>
     `),
     text: (d) => `Hi ${d.name}, welcome to LinkedUp Cars!\n\nBrowse our fleet and book your first ride today.\n\n- LinkedUp Cars Team`,
+  },
+
+  welcome_after_confirmation: {
+    subject: 'Email Confirmed - Welcome to LinkedUp Cars!',
+    html: (d) => wrapInHtml('Welcome to LinkedUp Cars!', `
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin:0 0 24px;">
+        <p style="margin:0;color:#166534;font-weight:600;font-size:14px;">✓ Your email has been confirmed</p>
+      </div>
+      <p style="color:#334155;line-height:1.6;margin:0 0 16px;">Hi <strong>${d.name}</strong>, your account is now active!</p>
+      <p style="color:#334155;line-height:1.6;margin:0 0 24px;">You can now log in to your account and start booking cars. Browse our premium fleet and experience the best car rental service in Nairobi.</p>
+      <a href="${d.login_url}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:14px;">Login Now</a>
+      <p style="color:#647488;line-height:1.6;margin:24px 0 0;font-size:13px;">Need help? Contact us at support@linkedupcarsrentals.com</p>
+    `),
+    text: (d) => `Hi ${d.name},\n\nYour email has been confirmed and your account is now active!\n\nYou can now log in to start booking cars.\n\nLogin at: ${d.login_url}\n\nNeed help? Contact us at support@linkedupcarsrentals.com\n\n- LinkedUp Cars Team`,
   },
 
   fleet_owner_welcome: {

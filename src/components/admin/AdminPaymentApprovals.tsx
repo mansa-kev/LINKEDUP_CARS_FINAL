@@ -9,7 +9,8 @@ import {
   MessageSquare,
   Loader2,
   AlertCircle,
-  X
+  X,
+  ChevronDown
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
@@ -21,6 +22,10 @@ export function AdminPaymentApprovals() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedPayment, setSelectedPayment] = useState<any | null>(null);
   const [processing, setProcessing] = useState(false);
+  
+  // Mobile expandable row state
+  const [isMobile, setIsMobile] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
   const fetchPayments = async () => {
     setLoading(true);
@@ -37,6 +42,14 @@ export function AdminPaymentApprovals() {
 
   useEffect(() => {
     fetchPayments();
+  }, []);
+
+  // Mobile detection with resize listener
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   const handleApprove = async (payment: any) => {
@@ -153,70 +166,163 @@ export function AdminPaymentApprovals() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-border bg-muted/10">
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Booking ID</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Client Name</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">M-Pesa Code</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Amount</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Date</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filteredPayments.map((payment) => (
-                <tr key={payment.id} className="hover:bg-muted/30 transition-colors group">
-                  <td className="px-6 py-4">
-                    <span className="text-xs font-mono text-muted-foreground truncate block w-24" title={payment.booking_id}>
-                      {payment.booking_id?.split('-')[0]}...
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-bold">{payment.client?.full_name || 'Unknown'}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded-md">
-                      {payment.transaction_code}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-bold">KES {Number(payment.amount).toLocaleString()}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-muted-foreground">{new Date(payment.submitted_at).toLocaleDateString()}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                      payment.status === 'verified' ? 'bg-success/10 text-success border-success/20' :
-                      payment.status === 'rejected' ? 'bg-error/10 text-error border-error/20' :
-                      'bg-warning/10 text-warning border-warning/20'
-                    }`}>
-                      {payment.status === 'submitted' ? 'Pending' : payment.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => setSelectedPayment(payment)}
-                      className="px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-lg text-xs font-bold transition-colors"
-                    >
-                      Review
-                    </button>
-                  </td>
+        {/* Table - Desktop View */}
+        {!isMobile && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border bg-muted/10">
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Booking ID</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Client Name</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">M-Pesa Code</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Amount</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Date</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
                 </tr>
-              ))}
-              {filteredPayments.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
-                    No payment submissions found matching your criteria.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredPayments.map((payment) => (
+                  <tr key={payment.id} className="hover:bg-muted/30 transition-colors group">
+                    <td className="px-6 py-4">
+                      <span className="text-xs font-mono text-muted-foreground truncate block w-24" title={payment.booking_id}>
+                        {payment.booking_id?.split('-')[0]}...
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-bold">{payment.client?.full_name || 'Unknown'}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded-md">
+                        {payment.transaction_code}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-bold">KES {Number(payment.amount).toLocaleString()}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-muted-foreground">{new Date(payment.submitted_at).toLocaleDateString()}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                        payment.status === 'verified' ? 'bg-success/10 text-success border-success/20' :
+                        payment.status === 'rejected' ? 'bg-error/10 text-error border-error/20' :
+                        'bg-warning/10 text-warning border-warning/20'
+                      }`}>
+                        {payment.status === 'submitted' ? 'Pending' : payment.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button 
+                        onClick={() => setSelectedPayment(payment)}
+                        className="px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-lg text-xs font-bold transition-colors"
+                      >
+                        Review
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredPayments.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
+                      No payment submissions found matching your criteria.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Mobile Expandable Rows */}
+        {isMobile && (
+          <div className="space-y-2">
+            {filteredPayments.map((payment) => (
+              <div key={payment.id}>
+                {/* Summary Row */}
+                <div 
+                  className="flex justify-between items-center px-4 py-3 bg-card border border-border rounded-xl cursor-pointer select-none hover:bg-muted/30 transition-colors"
+                  onClick={() => setExpandedRowId(expandedRowId === payment.id ? null : payment.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                      <CheckCircle2 size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold">{payment.transaction_code}</p>
+                      <p className="text-xs text-muted-foreground">{payment.client?.full_name || 'Unknown'}</p>
+                    </div>
+                  </div>
+                  <ChevronDown 
+                    size={16} 
+                    className={`transition-transform duration-200 ${expandedRowId === payment.id ? 'rotate-180' : ''}`}
+                  />
+                </div>
+
+                {/* Expanded Card */}
+                {expandedRowId === payment.id && (
+                  <div className="bg-card border border-border rounded-xl p-4 mb-3 max-h-[65vh] overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                      <div>
+                        <span className="text-xs text-muted uppercase tracking-wide">Payment ID</span>
+                        <p className="text-sm text-white font-medium break-all">{payment.id}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted uppercase tracking-wide">Booking ID</span>
+                        <p className="text-sm text-white font-medium break-all">{payment.booking_id}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted uppercase tracking-wide">Client Name</span>
+                        <p className="text-sm text-white font-medium">{payment.client?.full_name || 'Unknown'}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted uppercase tracking-wide">M-Pesa Code</span>
+                        <p className="text-sm text-white font-medium font-mono">{payment.transaction_code}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted uppercase tracking-wide">Amount</span>
+                        <p className="text-sm text-white font-medium">KES {Number(payment.amount).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted uppercase tracking-wide">Submitted Date</span>
+                        <p className="text-sm text-white font-medium">{new Date(payment.submitted_at).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted uppercase tracking-wide">Status</span>
+                        <div className="mt-1">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                            payment.status === 'verified' ? 'bg-success/10 text-success border-success/20' :
+                            payment.status === 'rejected' ? 'bg-error/10 text-error border-error/20' :
+                            'bg-warning/10 text-warning border-warning/20'
+                          }`}>
+                            {payment.status === 'submitted' ? 'Pending' : payment.status}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
+                      <button 
+                        onClick={() => setSelectedPayment(payment)}
+                        className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-2"
+                      >
+                        <Eye size={12} />
+                        Review Payment
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+            
+            {filteredPayments.length === 0 && (
+              <div className="p-12 text-center bg-card border border-border rounded-xl">
+                <p className="text-muted-foreground">No payment submissions found matching your criteria.</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Payment Detail Modal */}

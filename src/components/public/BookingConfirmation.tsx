@@ -1,19 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Car, CheckCircle2, Download, Calendar, MapPin, CreditCard, FileText, ShieldCheck, Clock, AlertCircle, UserPlus, ArrowRight, Loader2 } from 'lucide-react';
+import { Car, CheckCircle2, Download, Calendar, MapPin, CreditCard, FileText, ShieldCheck, Clock, AlertCircle, UserPlus, ArrowRight, Loader2, Phone, Hourglass } from 'lucide-react';
+import { LogoLoader } from '../shared/LogoLoader';
 import { bookingService } from '../../services/bookingService';
+import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
 export function BookingConfirmation() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  const isGuest = !user;
+  const isPendingPayment = booking?.status === 'pending_payment_verification' || 
+                          booking?.payment_status === 'pending' || 
+                          booking?.status === 'pending';
+  const isConfirmed = booking?.status === 'confirmed' && booking?.payment_status === 'paid';
+  const isFailed = booking?.payment_status === 'failed' || booking?.status === 'cancelled';
 
   useEffect(() => {
     async function fetchBooking() {
@@ -31,6 +41,55 @@ export function BookingConfirmation() {
       }
     }
     fetchBooking();
+  }, [bookingId]);
+
+  // Supabase realtime: listen for booking status changes (payment confirmed)
+  useEffect(() => {
+    if (!bookingId) return;
+
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    const setupChannel = () => {
+      const channel = supabase
+        .channel(`confirmation-${bookingId}`)
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'bookings',
+          filter: `id=eq.${bookingId}`,
+        }, (payload: any) => {
+          console.log('Booking update received:', payload.new);
+          const updated = payload.new;
+          setBooking((prev: any) => ({ ...prev, ...updated }));
+          
+          if (updated.payment_status === 'paid' && updated.status === 'confirmed') {
+            toast.success('Payment confirmed! Your booking is all set.');
+          } else if (updated.payment_status === 'failed') {
+            toast.error('Payment verification failed. Please contact support.');
+          } else if (updated.status === 'cancelled') {
+            toast.error('Booking has been cancelled.');
+          }
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('Realtime subscription established');
+            retryCount = 0; // Reset retry count on successful connection
+          } else if (status === 'CHANNEL_ERROR' && retryCount < maxRetries) {
+            console.log('Realtime connection error, retrying...');
+            retryCount++;
+            setTimeout(setupChannel, 2000 * retryCount); // Exponential backoff
+          }
+        });
+
+      return channel;
+    };
+
+    const channel = setupChannel();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [bookingId]);
 
   const [creatingAccount, setCreatingAccount] = useState(false);
@@ -92,13 +151,7 @@ export function BookingConfirmation() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="animate-spin text-primary" size={48} />
-      </div>
-    );
-  }
+  if (loading) return <LogoLoader fullScreen message="Loading booking details..." />;
 
   return (
     <div className="pt-32 pb-20 bg-background min-h-screen">
@@ -107,20 +160,30 @@ export function BookingConfirmation() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="relative p-12 rounded-[48px] bg-card border border-white/5 text-center overflow-hidden"
+          className="relative p-12 rounded-[48px] bg-card border border-border text-center overflow-hidden"
         >
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
-          <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-8">
-            <CheckCircle2 className="text-primary" size={48} />
+          <div className={`w-24 h-24 ${isConfirmed ? 'bg-primary/10' : 'bg-amber-500/10'} rounded-full flex items-center justify-center mx-auto mb-8`}>
+            {isConfirmed ? (
+              <CheckCircle2 className="text-primary" size={48} />
+            ) : (
+              <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 2, repeat: Infinity }}>
+                <Hourglass className="text-amber-500" size={48} />
+              </motion.div>
+            )}
           </div>
-          <h1 className="text-5xl font-serif font-black italic text-white mb-4 tracking-tight">Booking Confirmed!</h1>
-          <p className="text-primary font-black uppercase tracking-[0.3em] text-sm mb-8">Your Adventure Awaits</p>
+          <h1 className="text-5xl font-serif font-black italic text-foreground mb-4 tracking-tight">
+            {isConfirmed ? 'Booking Confirmed!' : 'Booking Submitted!'}
+          </h1>
+          <p className={`${isConfirmed ? 'text-primary' : 'text-amber-500'} font-black uppercase tracking-[0.3em] text-sm mb-8`}>
+            {isConfirmed ? 'Your Adventure Awaits' : 'Awaiting Payment Verification'}
+          </p>
           
           <div className="flex flex-wrap justify-center gap-4 mb-8">
-            <div className="px-6 py-3 bg-white/5 rounded-full border border-white/10 text-xs font-bold text-white/60">
-              Booking ID: <span className="text-white">{bookingId}</span>
+            <div className="px-6 py-3 bg-card/50 rounded-full border border-border text-xs font-bold text-muted-foreground">
+              Booking ID: <span className="text-foreground">{bookingId}</span>
             </div>
-            <div className="px-6 py-3 bg-white/5 rounded-full border border-white/10 text-xs font-bold text-white/60">
+            <div className="px-6 py-3 bg-card/50 rounded-full border border-border text-xs font-bold text-muted-foreground">
               Status: <span className="text-primary uppercase">{booking?.status?.replace('_', ' ')}</span>
             </div>
           </div>
@@ -147,7 +210,61 @@ export function BookingConfirmation() {
             </motion.div>
           )}
 
-          <button className="px-10 py-5 bg-white text-black font-black uppercase tracking-widest text-xs rounded-full flex items-center gap-3 mx-auto hover:bg-primary transition-all hover:scale-105 active:scale-95 shadow-xl shadow-white/5">
+          {isPendingPayment && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-6 bg-amber-500/5 rounded-[24px] border border-amber-500/20 space-y-3 mb-8 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <Phone className="text-amber-500" size={20} />
+                <p className="text-sm font-bold text-amber-500">Payment Pending Verification</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Your M-Pesa payment is being verified. This page will automatically update once your payment is confirmed. If you paid via STK Push, this usually takes under a minute.
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <Loader2 size={14} className="text-amber-500 animate-spin" />
+                <span className="text-[10px] text-amber-500/80 font-bold uppercase tracking-widest">Listening for confirmation...</span>
+              </div>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-3 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs font-bold text-amber-500 hover:bg-amber-500/20 transition-colors"
+              >
+                Refresh Status
+              </button>
+            </motion.div>
+          )}
+
+          {isFailed && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-6 bg-red-500/5 rounded-[24px] border border-red-500/20 space-y-3 mb-8 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <AlertCircle className="text-red-500" size={20} />
+                <p className="text-sm font-bold text-red-500">Payment Failed</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Your payment could not be verified. Please contact support or try again with a different payment method.
+              </p>
+              <button
+                onClick={() => navigate('/cars')}
+                className="mt-3 px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-xs font-bold text-red-500 hover:bg-red-500/20 transition-colors"
+              >
+                Try Again
+              </button>
+            </motion.div>
+          )}
+
+          <button
+            onClick={() => {
+              toast.info('Contract download will be available once your booking is fully confirmed.');
+            }}
+            disabled={!isConfirmed}
+            className="px-10 py-5 bg-card text-foreground font-black uppercase tracking-widest text-xs rounded-full flex items-center gap-3 mx-auto hover:bg-primary hover:text-primary-foreground transition-all hover:scale-105 active:scale-95 shadow-xl shadow-border/20 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed border border-border"
+          >
             <Download size={18} /> Download Rental Contract
           </button>
         </motion.div>
@@ -158,106 +275,129 @@ export function BookingConfirmation() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
-            className="p-10 rounded-[40px] bg-card border border-white/5 space-y-8"
+            className="p-10 rounded-[40px] bg-card border border-border space-y-8"
           >
-            <h2 className="text-2xl font-serif font-black italic text-white">Trip Summary</h2>
+            <h2 className="text-2xl font-serif font-black italic text-foreground">Trip Summary</h2>
             
             <div className="space-y-6">
               <div className="flex gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-primary shrink-0">
+                <div className="w-12 h-12 rounded-2xl bg-card/50 flex items-center justify-center text-primary shrink-0">
                   <Car size={20} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Vehicle</p>
-                  <p className="text-sm font-bold text-white">{booking?.cars?.make} {booking?.cars?.model} ({booking?.cars?.year})</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Vehicle</p>
+                  <p className="text-sm font-bold text-foreground">{booking?.cars?.make} {booking?.cars?.model} ({booking?.cars?.year})</p>
                 </div>
               </div>
 
               <div className="flex gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-primary shrink-0">
+                <div className="w-12 h-12 rounded-2xl bg-card/50 flex items-center justify-center text-primary shrink-0">
                   <Calendar size={20} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Rental Period</p>
-                  <p className="text-sm font-bold text-white">{booking?.start_date} — {booking?.end_date}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Rental Period</p>
+                  <p className="text-sm font-bold text-foreground">{booking?.start_date} — {booking?.end_date}</p>
                 </div>
               </div>
 
               <div className="flex gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-primary shrink-0">
+                <div className="w-12 h-12 rounded-2xl bg-card/50 flex items-center justify-center text-primary shrink-0">
                   <MapPin size={20} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Pickup Location</p>
-                  <p className="text-sm font-bold text-white">{booking?.pickup_location}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Pickup Location</p>
+                  <p className="text-sm font-bold text-foreground">{booking?.pickup_location}</p>
                 </div>
               </div>
 
-              <div className="pt-6 border-t border-white/5 flex justify-between items-center">
+              <div className="pt-6 border-t border-border flex justify-between items-center">
                 <div className="flex items-center gap-2 text-primary">
                   <ShieldCheck size={16} />
                   <span className="text-[10px] font-black uppercase tracking-widest">Fully Insured</span>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Total Paid</p>
-                  <p className="text-2xl font-black text-white">KES {booking?.total_amount?.toLocaleString()}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Paid</p>
+                  <p className="text-2xl font-black text-foreground">KES {booking?.total_amount?.toLocaleString()}</p>
                 </div>
               </div>
             </div>
           </motion.div>
 
-          {/* Account Creation */}
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            className="p-10 rounded-[40px] bg-primary/5 border border-primary/10 space-y-8"
-          >
-            <div className="space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                <UserPlus size={24} />
+          {/* Account Creation — only for guest (non-logged-in) users */}
+          {isGuest ? (
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+              className="p-10 rounded-[40px] bg-primary/5 border border-primary/10 space-y-8"
+            >
+              <div className="space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                  <UserPlus size={24} />
+                </div>
+                <h2 className="text-2xl font-serif font-black italic text-foreground">Unlock VIP Access</h2>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Create an account to track your rentals, manage documents, and unlock exclusive loyalty rewards.
+                </p>
               </div>
-              <h2 className="text-2xl font-serif font-black italic text-white">Unlock VIP Access</h2>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                Convert your guest booking into a permanent account to track your rentals, manage documents, and unlock exclusive loyalty rewards.
-              </p>
-            </div>
-            
-            <form onSubmit={handleCreateAccount} className="space-y-4">
-              <input 
-                type="email" placeholder="Email" required
-                value={email} onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-[20px] text-sm text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-              />
-              <div className="grid grid-cols-2 gap-4">
+              
+              <form onSubmit={handleCreateAccount} className="space-y-4">
                 <input 
-                  type="password" placeholder="Password" required
-                  value={password} onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-[20px] text-sm text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                  type="email" placeholder="Email" required
+                  value={email} onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-6 py-4 bg-card/50 border border-border rounded-[20px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                 />
-                <input 
-                  type="password" placeholder="Confirm" required
-                  value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-[20px] text-sm text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={creatingAccount}
-                className="w-full py-5 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-xs flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group disabled:opacity-50"
-              >
-                {creatingAccount ? (
-                  <><Loader2 className="animate-spin" size={18} /> Creating Account...</>
-                ) : (
-                  <>Create My Account <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" /></>
-                )}
-              </button>
-            </form>
+                <div className="grid grid-cols-2 gap-4">
+                  <input 
+                    type="password" placeholder="Password" required
+                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-6 py-4 bg-card/50 border border-border rounded-[20px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                  />
+                  <input 
+                    type="password" placeholder="Confirm" required
+                    value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-6 py-4 bg-card/50 border border-border rounded-[20px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={creatingAccount}
+                  className="w-full py-5 bg-primary rounded-[24px] text-black font-black uppercase tracking-[0.2em] text-xs flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group disabled:opacity-50"
+                >
+                  {creatingAccount ? (
+                    <><Loader2 className="animate-spin" size={18} /> Creating Account...</>
+                  ) : (
+                    <>Create My Account <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" /></>
+                  )}
+                </button>
+              </form>
 
-            <p className="text-[10px] text-center text-white/40 font-bold uppercase tracking-widest">
-              Already have an account? <Link to="/login" className="text-primary hover:underline">Sign In</Link>
-            </p>
-          </motion.div>
+              <p className="text-[10px] text-center text-muted-foreground font-bold uppercase tracking-widest">
+                Already have an account? <Link to="/login" className="text-primary hover:underline">Sign In</Link>
+              </p>
+            </motion.div>
+          ) : (
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+              className="p-10 rounded-[40px] bg-primary/5 border border-primary/10 space-y-6 flex flex-col items-center justify-center text-center"
+            >
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                <CheckCircle2 size={32} />
+              </div>
+              <h2 className="text-2xl font-serif font-black italic text-foreground">You're All Set!</h2>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Your booking is linked to your account. View and manage it from your dashboard.
+              </p>
+              <Link
+                to="/client"
+                className="px-8 py-4 bg-primary rounded-[20px] text-black font-black uppercase tracking-[0.15em] text-xs flex items-center gap-3 hover:scale-105 transition-all shadow-lg shadow-primary/20"
+              >
+                Go to My Dashboard <ArrowRight size={16} />
+              </Link>
+            </motion.div>
+          )}
         </div>
       </div>
     </div>

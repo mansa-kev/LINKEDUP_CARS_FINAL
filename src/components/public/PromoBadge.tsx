@@ -39,7 +39,7 @@ export function PromoBadge() {
             onClick={() => setDismissed(true)}
             className="absolute top-2 right-2 p-1 bg-black/20 rounded-full hover:bg-black/40 transition-colors z-10"
           >
-            <X size={14} className="text-white" />
+            <X size={14} className="text-foreground" />
           </button>
 
           {/* Hanging ribbon effect */}
@@ -51,7 +51,7 @@ export function PromoBadge() {
             {/* Discount Badge */}
             <div className="flex items-center gap-3 mb-3">
               <div className="w-12 h-12 rounded-xl bg-black/20 flex items-center justify-center">
-                <Tag className="text-white" size={24} />
+                <Tag className="text-foreground" size={24} />
               </div>
               <div>
                 <p className="text-black font-black text-2xl leading-none">

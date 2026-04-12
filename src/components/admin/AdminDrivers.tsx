@@ -11,7 +11,8 @@ import {
   FileText,
   CheckCircle2,
   XCircle,
-  Clock
+  Clock,
+  ChevronDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -80,6 +81,10 @@ export function AdminDrivers() {
   const [statusFilter, setStatusFilter] = useState<DriverStatus | 'all'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
+  
+  // Mobile expandable row state
+  const [isMobile, setIsMobile] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
   const fetchDrivers = async () => {
     setLoading(true);
@@ -95,6 +100,14 @@ export function AdminDrivers() {
 
   useEffect(() => {
     fetchDrivers();
+  }, []);
+
+  // Mobile detection with resize listener
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   const handleUpdateStatus = async (id: string, status: DriverStatus) => {
@@ -174,107 +187,244 @@ export function AdminDrivers() {
         </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Driver</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Verification</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Rating / Trips</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Joined Date</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filteredDrivers.map((driver) => (
-                <tr key={driver.id} className="hover:bg-muted/30 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-all">
-                        <UserCheck size={20} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-foreground leading-none">{driver.name}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{driver.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="space-y-2">
-                      <VerificationIcon status={driver.licenseStatus} />
-                      <VerificationIcon status={driver.idStatus} />
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge status={driver.status} />
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm font-bold text-foreground">{driver.rating}</span>
-                        <span className="text-xs text-warning">★</span>
-                      </div>
-                      <span className="text-xs text-muted-foreground font-medium">{driver.totalTrips} Trips</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-muted-foreground font-medium">{driver.joinedDate}</span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => setSelectedDriver(driver)}
-                        className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" title="View Profile">
-                        <Eye size={18} />
-                      </button>
-                      <button className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" title="View Documents">
-                        <FileText size={18} />
-                      </button>
-                      {driver.status === 'active' ? (
-                        <button 
-                          onClick={() => handleUpdateStatus(driver.id, 'suspended')}
-                          className="p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors" 
-                          title="Suspend Driver"
-                        >
-                          <UserX size={18} />
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={() => handleUpdateStatus(driver.id, 'active')}
-                          className="p-2 hover:bg-success/10 rounded-lg text-muted-foreground hover:text-success transition-colors" 
-                          title="Activate Driver"
-                        >
-                          <UserCheck size={18} />
-                        </button>
-                      )}
-                      <button className="p-2 hover:bg-muted rounded-lg text-muted-foreground transition-colors">
-                        <MoreHorizontal size={18} />
-                      </button>
-                    </div>
-                  </td>
+      {/* Table - Desktop View */}
+      {!isMobile && (
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Driver</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Verification</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Rating / Trips</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Joined Date</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {filteredDrivers.length === 0 && (
-          <div className="p-12 text-center">
-            <p className="text-muted-foreground">No drivers found matching your criteria.</p>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredDrivers.map((driver) => (
+                  <tr key={driver.id} className="hover:bg-muted/30 transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-all">
+                          <UserCheck size={20} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-foreground leading-none">{driver.name}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{driver.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-2">
+                        <VerificationIcon status={driver.licenseStatus} />
+                        <VerificationIcon status={driver.idStatus} />
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={driver.status} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm font-bold text-foreground">{driver.rating}</span>
+                          <span className="text-xs text-warning">â</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground font-medium">{driver.totalTrips} Trips</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-muted-foreground font-medium">{driver.joinedDate}</span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => setSelectedDriver(driver)}
+                          className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" title="View Profile">
+                          <Eye size={18} />
+                        </button>
+                        <button className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" title="View Documents">
+                          <FileText size={18} />
+                        </button>
+                        {driver.status === 'active' ? (
+                          <button 
+                            onClick={() => handleUpdateStatus(driver.id, 'suspended')}
+                            className="p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors" 
+                            title="Suspend Driver"
+                          >
+                            <UserX size={18} />
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => handleUpdateStatus(driver.id, 'active')}
+                            className="p-2 hover:bg-success/10 rounded-lg text-muted-foreground hover:text-success transition-colors" 
+                            title="Activate Driver"
+                          >
+                            <UserCheck size={18} />
+                          </button>
+                        )}
+                        <button className="p-2 hover:bg-muted rounded-lg text-muted-foreground transition-colors">
+                          <MoreHorizontal size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
+          
+          {filteredDrivers.length === 0 && (
+            <div className="p-12 text-center">
+              <p className="text-muted-foreground">No drivers found matching your criteria.</p>
+            </div>
+          )}
 
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-muted/10">
-          <span className="text-xs text-muted-foreground font-medium">Showing {filteredDrivers.length} of {drivers.length} entries</span>
-          <div className="flex gap-2">
-            <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Previous</button>
-            <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Next</button>
+          <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-muted/10">
+            <span className="text-xs text-muted-foreground font-medium">Showing {filteredDrivers.length} of {drivers.length} entries</span>
+            <div className="flex gap-2">
+              <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Previous</button>
+              <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Next</button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Mobile Expandable Rows */}
+      {isMobile && (
+        <div className="space-y-2">
+          {filteredDrivers.map((driver) => (
+            <div key={driver.id}>
+              {/* Summary Row */}
+              <div 
+                className="flex justify-between items-center px-4 py-3 bg-card border border-border rounded-xl cursor-pointer select-none hover:bg-muted/30 transition-colors"
+                onClick={() => setExpandedRowId(expandedRowId === driver.id ? null : driver.id)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                    <UserCheck size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold">{driver.name}</p>
+                    <p className="text-xs text-muted-foreground">{driver.email}</p>
+                  </div>
+                </div>
+                <ChevronDown 
+                  size={16} 
+                  className={`transition-transform duration-200 ${expandedRowId === driver.id ? 'rotate-180' : ''}`}
+                />
+              </div>
+
+              {/* Expanded Card */}
+              {expandedRowId === driver.id && (
+                <div className="bg-card border border-border rounded-xl p-4 mb-3 max-h-[65vh] overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Driver ID</span>
+                      <p className="text-sm text-white font-medium break-all">{driver.id}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Name</span>
+                      <p className="text-sm text-white font-medium">{driver.name}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Email</span>
+                      <p className="text-sm text-white font-medium break-all">{driver.email}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Phone</span>
+                      <p className="text-sm text-white font-medium">{driver.phone}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">License Status</span>
+                      <div className="mt-1">
+                        <VerificationIcon status={driver.licenseStatus} />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">ID Status</span>
+                      <div className="mt-1">
+                        <VerificationIcon status={driver.idStatus} />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Status</span>
+                      <div className="mt-1">
+                        <StatusBadge status={driver.status} />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Rating</span>
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-sm text-white font-medium">{driver.rating}</span>
+                        <span className="text-xs text-warning">â</span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Total Trips</span>
+                      <p className="text-sm text-white font-medium">{driver.totalTrips}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Joined Date</span>
+                      <p className="text-sm text-white font-medium">{driver.joinedDate}</p>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
+                    <button 
+                      onClick={() => setSelectedDriver(driver)}
+                      className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-2"
+                    >
+                      <Eye size={12} />
+                      View Profile
+                    </button>
+                    <button className="px-3 py-1.5 bg-muted text-muted-foreground rounded-lg text-xs font-bold hover:bg-muted/80 transition-colors flex items-center gap-2">
+                      <FileText size={12} />
+                      Documents
+                    </button>
+                    {driver.status === 'active' ? (
+                      <button 
+                        onClick={() => handleUpdateStatus(driver.id, 'suspended')}
+                        className="px-3 py-1.5 bg-error text-white rounded-lg text-xs font-bold hover:bg-error/90 transition-colors flex items-center gap-2"
+                      >
+                        <UserX size={12} />
+                        Suspend
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => handleUpdateStatus(driver.id, 'active')}
+                        className="px-3 py-1.5 bg-success text-white rounded-lg text-xs font-bold hover:bg-success/90 transition-colors flex items-center gap-2"
+                      >
+                        <UserCheck size={12} />
+                        Activate
+                      </button>
+                    )}
+                    <button className="px-3 py-1.5 bg-muted text-muted-foreground rounded-lg text-xs font-bold hover:bg-muted/80 transition-colors">
+                      <MoreHorizontal size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          
+          {filteredDrivers.length === 0 && (
+            <div className="p-12 text-center bg-card border border-border rounded-xl">
+              <p className="text-muted-foreground">No drivers found matching your criteria.</p>
+            </div>
+          )}
+
+          <div className="px-4 py-3 bg-card border border-border rounded-xl flex items-center justify-between">
+            <span className="text-xs text-muted-foreground font-medium">Showing {filteredDrivers.length} of {drivers.length} entries</span>
+            <div className="flex gap-2">
+              <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Previous</button>
+              <button className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50" disabled>Next</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Add Driver Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

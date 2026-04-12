@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -17,20 +17,24 @@ import {
   Menu,
   X,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Loader2
 } from 'lucide-react';
-import { FleetDashboard } from './FleetDashboard';
-import { MyCars } from './MyCars';
-import { MyInbox } from './MyInbox';
-import { ExpenseTracker } from './ExpenseTracker';
-import { BookingRequests } from './BookingRequests';
-import { DigitalVault } from './DigitalVault';
-import { GrowthAndInsights } from './GrowthAndInsights';
-import MaintenanceLogs from './MaintenanceLogs';
-import DamageReports from './DamageReports';
-import { FinancialCenter } from './FinancialCenter';
-import { FleetSettings } from './FleetSettings';
+import { Logo } from '../shared/Logo';
 import { PortalHeader } from '../PortalHeader';
+
+// Lazy load fleet components
+const FleetDashboard = React.lazy(() => import('./FleetDashboard').then(m => ({ default: m.FleetDashboard })));
+const MyCars = React.lazy(() => import('./MyCars').then(m => ({ default: m.MyCars })));
+const MyInbox = React.lazy(() => import('./MyInbox').then(m => ({ default: m.MyInbox })));
+const ExpenseTracker = React.lazy(() => import('./ExpenseTracker').then(m => ({ default: m.ExpenseTracker })));
+const BookingRequests = React.lazy(() => import('./BookingRequests').then(m => ({ default: m.BookingRequests })));
+const DigitalVault = React.lazy(() => import('./DigitalVault').then(m => ({ default: m.DigitalVault })));
+const GrowthAndInsights = React.lazy(() => import('./GrowthAndInsights').then(m => ({ default: m.GrowthAndInsights })));
+const MaintenanceLogs = React.lazy(() => import('./MaintenanceLogs').then(m => ({ default: m.default })));
+const DamageReports = React.lazy(() => import('./DamageReports').then(m => ({ default: m.default })));
+const FinancialCenter = React.lazy(() => import('./FinancialCenter').then(m => ({ default: m.FinancialCenter })));
+const FleetSettings = React.lazy(() => import('./FleetSettings').then(m => ({ default: m.FleetSettings })));
 
 const navGroups = [
   {
@@ -170,8 +174,8 @@ export function FleetLayout() {
     <div className="min-h-screen bg-background flex text-foreground transition-colors duration-300">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 bg-card border-r border-border flex-col flex-shrink-0">
-        <div className="p-6 flex items-center">
-          <span className="font-bold text-xl text-primary">LinkedUp</span>
+        <div className="min-h-16 md:min-h-20 p-6 flex items-center">
+          <Logo size="lg" showText={false} />
         </div>
         {sidebarContent}
       </aside>
@@ -198,7 +202,7 @@ export function FleetLayout() {
               className="fixed left-0 top-0 h-full w-72 bg-card border-r border-border z-50 flex flex-col shadow-2xl"
             >
               <div className="p-6 flex items-center justify-between">
-                <span className="font-bold text-xl text-primary">LinkedUp</span>
+                <Logo size="lg" showText={false} />
                 <button
                   onClick={() => setSidebarOpen(false)}
                   className="p-2 hover:bg-muted rounded-lg text-muted-foreground"
@@ -232,19 +236,21 @@ export function FleetLayout() {
         />
 
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-          <Routes>
-            <Route index element={<FleetDashboard />} />
-            <Route path="cars" element={<MyCars />} />
-            <Route path="maintenance" element={<MaintenanceLogs />} />
-            <Route path="damage" element={<DamageReports />} />
-            <Route path="financials" element={<FinancialCenter />} />
-            <Route path="expenses" element={<ExpenseTracker />} />
-            <Route path="inbox" element={<MyInbox />} />
-            <Route path="booking-requests" element={<BookingRequests />} />
-            <Route path="vault" element={<DigitalVault />} />
-            <Route path="growth" element={<GrowthAndInsights />} />
-            <Route path="settings" element={<FleetSettings />} />
-          </Routes>
+          <Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-primary" size={32} /></div>}>
+            <Routes>
+              <Route index element={<FleetDashboard />} />
+              <Route path="cars" element={<MyCars />} />
+              <Route path="maintenance" element={<MaintenanceLogs />} />
+              <Route path="damage" element={<DamageReports />} />
+              <Route path="financials" element={<FinancialCenter />} />
+              <Route path="expenses" element={<ExpenseTracker />} />
+              <Route path="inbox" element={<MyInbox />} />
+              <Route path="booking-requests" element={<BookingRequests />} />
+              <Route path="vault" element={<DigitalVault />} />
+              <Route path="growth" element={<GrowthAndInsights />} />
+              <Route path="settings" element={<FleetSettings />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </div>

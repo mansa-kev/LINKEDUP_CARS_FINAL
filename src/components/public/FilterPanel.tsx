@@ -99,8 +99,8 @@ export function FilterPanel({ onFilterChange }: { onFilterChange: (filters: Filt
               onClick={() => updateFilter('category', filters.category === cat.toLowerCase() ? '' : cat.toLowerCase())}
               className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all ${
                 filters.category === cat.toLowerCase()
-                  ? 'bg-primary text-white'
-                  : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card/50 text-muted-foreground hover:bg-card/70 hover:text-foreground'
               }`}
             >
               {cat}
@@ -118,15 +118,15 @@ export function FilterPanel({ onFilterChange }: { onFilterChange: (filters: Filt
               value={filters.priceMin || ''}
               onChange={(e) => updateFilter('priceMin', Number(e.target.value) || 0)}
               placeholder="Min"
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white outline-none focus:border-primary/50"
+              className="w-full px-3 py-2 bg-card/50 border border-border rounded-xl text-xs font-bold text-foreground outline-none focus:border-primary/50"
             />
-            <span className="text-white/30 text-xs">-</span>
+            <span className="text-muted-foreground text-xs">-</span>
             <input
               type="number"
               value={filters.priceMax >= 50000 ? '' : filters.priceMax}
               onChange={(e) => updateFilter('priceMax', Number(e.target.value) || 50000)}
               placeholder="Max"
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white outline-none focus:border-primary/50"
+              className="w-full px-3 py-2 bg-card/50 border border-border rounded-xl text-xs font-bold text-foreground outline-none focus:border-primary/50"
             />
           </div>
           <input
@@ -154,8 +154,8 @@ export function FilterPanel({ onFilterChange }: { onFilterChange: (filters: Filt
               onClick={() => updateFilter('transmission', filters.transmission === t.toLowerCase() ? '' : t.toLowerCase())}
               className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all ${
                 filters.transmission === t.toLowerCase()
-                  ? 'bg-primary text-white'
-                  : 'bg-white/5 text-white/60 hover:bg-white/10'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card/50 text-muted-foreground hover:bg-card/70'
               }`}
             >
               {t}
@@ -173,8 +173,8 @@ export function FilterPanel({ onFilterChange }: { onFilterChange: (filters: Filt
               onClick={() => updateFilter('fuelType', filters.fuelType === f.toLowerCase() ? '' : f.toLowerCase())}
               className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all ${
                 filters.fuelType === f.toLowerCase()
-                  ? 'bg-primary text-white'
-                  : 'bg-white/5 text-white/60 hover:bg-white/10'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card/50 text-muted-foreground hover:bg-card/70'
               }`}
             >
               {f}
@@ -192,8 +192,8 @@ export function FilterPanel({ onFilterChange }: { onFilterChange: (filters: Filt
               onClick={() => updateFilter('minSeats', filters.minSeats === s ? 0 : s)}
               className={`flex-1 py-2 rounded-xl text-[10px] font-bold transition-all ${
                 filters.minSeats === s && s > 0
-                  ? 'bg-primary text-white'
-                  : 'bg-white/5 text-white/60 hover:bg-white/10'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card/50 text-muted-foreground hover:bg-card/70'
               }`}
             >
               {s === 0 ? 'Any' : `${s}+`}
@@ -207,7 +207,7 @@ export function FilterPanel({ onFilterChange }: { onFilterChange: (filters: Filt
         <select
           value={filters.sortBy}
           onChange={(e) => updateFilter('sortBy', e.target.value)}
-          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white outline-none focus:border-primary/50 appearance-none"
+          className="w-full px-3 py-2.5 bg-card/50 border border-border rounded-xl text-xs font-bold text-foreground outline-none focus:border-primary/50 appearance-none"
         >
           {SORT_OPTIONS.map(o => (
             <option key={o.value} value={o.value}>{o.label}</option>

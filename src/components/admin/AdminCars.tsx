@@ -23,7 +23,8 @@ import {
   Calendar,
   Wrench,
   ChevronRight,
-  ArrowUpDown
+  ArrowUpDown,
+  ChevronDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -120,6 +121,10 @@ export function AdminCars() {
   const [isMaintenancePromptOpen, setIsMaintenancePromptOpen] = useState(false);
   const [carToMaintain, setCarToMaintain] = useState<string | null>(null);
   
+  // Mobile expandable row state
+  const [isMobile, setIsMobile] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+
   // Form State
   const [formStep, setFormStep] = useState(1);
   const [primaryImageFile, setPrimaryImageFile] = useState<File | null>(null);
@@ -158,6 +163,14 @@ export function AdminCars() {
   useEffect(() => {
     fetchData();
   }, [page]);
+
+  // Mobile detection with resize listener
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const validateStep = (step: number): boolean => {
     switch (step) {
@@ -351,31 +364,31 @@ export function AdminCars() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header & Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
             <input 
               type="text" 
               placeholder="Search cars..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-card border border-border rounded-xl text-sm w-full md:w-64 focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+              className="pl-9 pr-3 py-1.5 md:pl-10 md:pr-4 md:py-2 bg-card border border-border rounded-lg md:rounded-xl text-xs md:text-sm w-full md:w-64 focus:ring-2 focus:ring-primary/20 transition-all outline-none"
             />
           </div>
           <button 
             onClick={() => setShowFilters(!showFilters)}
-            className={`p-2 rounded-xl border transition-colors ${showFilters ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted-foreground hover:bg-muted'}`}
+            className={`p-1.5 md:p-2 rounded-lg md:rounded-xl border transition-colors ${showFilters ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted-foreground hover:bg-muted'}`}
           >
-            <Filter size={20} />
+            <Filter size={16} />
           </button>
         </div>
 
         <button 
           onClick={openAddModal}
-          className="flex items-center gap-2 px-6 py-2 bg-primary text-white rounded-xl font-bold text-sm hover:scale-105 transition-transform shadow-lg shadow-primary/20"
+          className="flex items-center gap-2 px-4 py-1.5 md:px-6 md:py-2 bg-primary text-white rounded-lg md:rounded-xl font-bold text-xs md:text-sm hover:scale-105 transition-transform shadow-lg shadow-primary/20"
         >
-          <Plus size={18} /> Add New Car
+          <Plus size={16} /> Add New Car
         </button>
       </div>
 
@@ -439,139 +452,311 @@ export function AdminCars() {
         </div>
       )}
 
-      {/* Table View */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Car ID</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Make & Model</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">License Plate</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Fleet Owner</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Daily Rate</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Location</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filteredCars.map((car) => (
-                <tr key={car.id} className="hover:bg-muted/30 transition-colors group">
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-bold text-foreground truncate block w-20" title={car.id}>
-                      {car.id.split('-')[0]}...
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-muted overflow-hidden flex-shrink-0">
-                        <img 
-                          src={car.primary_image_url || car.photos?.[0] || `https://picsum.photos/seed/${car.id}/100/100`} 
-                          alt={car.make}
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-foreground">{car.make} {car.model}</p>
-                        <p className="text-xs text-muted-foreground">{car.year} • {car.color}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-mono bg-muted px-2 py-1 rounded-md">{car.license_plate}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <Building2 size={14} className="text-muted-foreground" />
-                      <span className="text-sm text-foreground">{car.fleet_owner?.full_name || 'Platform Owned'}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-bold text-foreground">KES {car.daily_rate}/day</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1 items-start">
-                      <StatusBadge status={car.status} />
-                      {car.maintenance_status !== 'ok' && (
-                        <MaintenanceBadge status={car.maintenance_status} />
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <MapPin size={14} />
-                      <span className="text-sm">{car.location_lat ? 'Tracked' : 'N/A'}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => openDetailModal(car)}
-                        className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" 
-                        title="View Details"
-                      >
-                        <Eye size={18} />
-                      </button>
-                      <button 
-                        onClick={() => openEditModal(car)}
-                        className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" 
-                        title="Edit"
-                      >
-                        <Edit3 size={18} />
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteCar(car.id)}
-                        className="p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors" 
-                        title="Delete"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </td>
+      {/* Table View - Desktop */}
+      {!isMobile && (
+        <div className="bg-card rounded-xl md:rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs md:text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground">Car ID</th>
+                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground">Make & Model</th>
+                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground">License</th>
+                  <th className="hidden md:table-cell px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Fleet Owner</th>
+                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground">Daily Rate</th>
+                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
+                  <th className="hidden md:table-cell px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Location</th>
+                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {filteredCars.length === 0 && (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-              <Car size={32} className="text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-bold mb-1">No cars found</h3>
-            <p className="text-muted-foreground">Try adjusting your search or filters.</p>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredCars.map((car) => (
+                  <tr key={car.id} className="hover:bg-muted/30 transition-colors group">
+                    <td className="px-3 md:px-6 py-2 md:py-4">
+                      <span className="text-xs md:text-sm font-bold text-foreground truncate block w-16 md:w-20" title={car.id}>
+                        {car.id.split('-')[0]}...
+                      </span>
+                    </td>
+                    <td className="px-3 md:px-6 py-2 md:py-4">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-muted overflow-hidden flex-shrink-0">
+                          <img 
+                            src={car.primary_image_url || car.photos?.[0] || `https://picsum.photos/seed/${car.id}/100/100`} 
+                            alt={car.make}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-xs md:text-sm font-bold text-foreground truncate max-w-[120px] md:max-w-none">{car.make} {car.model}</p>
+                          <p className="text-[8px] md:text-xs text-muted-foreground">{car.year} {car.color}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 md:px-6 py-2 md:py-4">
+                      <span className="text-xs md:text-sm font-mono bg-muted px-1.5 md:px-2 py-0.5 md:py-1 rounded-md">{car.license_plate}</span>
+                    </td>
+                    <td className="hidden md:table-cell px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <Building2 size={14} className="text-muted-foreground" />
+                        <span className="text-sm text-foreground">{car.fleet_owner?.full_name || 'Platform Owned'}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 md:px-6 py-2 md:py-4">
+                      <span className="text-xs md:text-sm font-bold text-foreground">KES {car.daily_rate}/day</span>
+                    </td>
+                    <td className="px-3 md:px-6 py-2 md:py-4">
+                      <div className="flex flex-col gap-1 items-start">
+                        <StatusBadge status={car.status} />
+                        {car.maintenance_status !== 'ok' && (
+                          <MaintenanceBadge status={car.maintenance_status} />
+                        )}
+                      </div>
+                    </td>
+                    <td className="hidden md:table-cell px-6 py-4">
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <MapPin size={14} />
+                        <span className="text-sm">{car.location_lat ? 'Tracked' : 'N/A'}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 md:px-6 py-2 md:py-4 text-right">
+                      <div className="flex items-center justify-end gap-1 md:gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => openDetailModal(car)}
+                          className="p-1.5 md:p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" 
+                          title="View Details"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button 
+                          onClick={() => openEditModal(car)}
+                          className="p-1.5 md:p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" 
+                          title="Edit"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteCar(car.id)}
+                          className="p-1.5 md:p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors" 
+                          title="Delete"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
+          
+          {filteredCars.length === 0 && (
+            <div className="p-12 text-center">
+              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                <Car size={32} className="text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-bold mb-1">No cars found</h3>
+              <p className="text-muted-foreground">Try adjusting your search or filters.</p>
+            </div>
+          )}
 
-        {/* Pagination */}
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-muted/10">
-          <span className="text-xs text-muted-foreground font-medium">
-            Showing {cars.length} of {totalCount} entries
-          </span>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50 hover:bg-muted transition-colors"
-            >
-              Previous
-            </button>
-            <div className="flex items-center gap-1">
-              <span className="text-xs font-bold px-2">Page {page}</span>
+          {/* Pagination */}
+          <div className="px-3 md:px-6 py-2 md:py-4 border-t border-border flex flex-col md:flex-row items-center justify-between gap-2 bg-muted/10">
+            <span className="text-[10px] md:text-xs text-muted-foreground font-medium">
+              Showing {cars.length} of {totalCount} entries
+            </span>
+            <div className="flex gap-1 md:gap-2">
+              <button 
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-2 md:px-3 py-1 border border-border rounded-md text-[10px] md:text-xs font-bold disabled:opacity-50 hover:bg-muted transition-colors"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] md:text-xs font-bold px-1 md:px-2">Page {page}</span>
+              </div>
+              <button 
+                onClick={() => setPage(p => p + 1)}
+                disabled={cars.length < pageSize}
+                className="px-2 md:px-3 py-1 border border-border rounded-md text-[10px] md:text-xs font-bold disabled:opacity-50 hover:bg-muted transition-colors"
+              >
+                Next
+              </button>
             </div>
-            <button 
-              onClick={() => setPage(p => p + 1)}
-              disabled={cars.length < pageSize}
-              className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50 hover:bg-muted transition-colors"
-            >
-              Next
-            </button>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Mobile Expandable Rows */}
+      {isMobile && (
+        <div className="space-y-2">
+          {filteredCars.map((car) => (
+            <div key={car.id}>
+              {/* Summary Row */}
+              <div 
+                className="flex justify-between items-center px-4 py-3 bg-card border border-border rounded-xl cursor-pointer select-none hover:bg-muted/30 transition-colors"
+                onClick={() => setExpandedRowId(expandedRowId === car.id ? null : car.id)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-muted overflow-hidden flex-shrink-0">
+                    <img 
+                      src={car.primary_image_url || car.photos?.[0] || `https://picsum.photos/seed/${car.id}/100/100`} 
+                      alt={car.make}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold truncate max-w-[150px]">{car.make} {car.model}</p>
+                    <p className="text-xs text-muted-foreground">{car.license_plate}</p>
+                  </div>
+                </div>
+                <ChevronDown 
+                  size={16} 
+                  className={`transition-transform duration-200 ${expandedRowId === car.id ? 'rotate-180' : ''}`}
+                />
+              </div>
+
+              {/* Expanded Card */}
+              {expandedRowId === car.id && (
+                <div className="bg-card border border-border rounded-xl p-4 mb-3 max-h-[65vh] overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Car ID</span>
+                      <p className="text-sm text-white font-medium break-all">{car.id}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Make & Model</span>
+                      <p className="text-sm text-white font-medium">{car.make} {car.model}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Year</span>
+                      <p className="text-sm text-white font-medium">{car.year}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Color</span>
+                      <p className="text-sm text-white font-medium">{car.color}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">License Plate</span>
+                      <p className="text-sm text-white font-medium">{car.license_plate}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Daily Rate</span>
+                      <p className="text-sm text-white font-medium">KES {car.daily_rate}/day</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Fleet Owner</span>
+                      <p className="text-sm text-white font-medium">{car.fleet_owner?.full_name || 'Platform Owned'}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Status</span>
+                      <div className="mt-1">
+                        <StatusBadge status={car.status} />
+                        {car.maintenance_status !== 'ok' && (
+                          <div className="mt-1">
+                            <MaintenanceBadge status={car.maintenance_status} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Location</span>
+                      <p className="text-sm text-white font-medium">{car.location_lat ? 'Tracked' : 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Category</span>
+                      <p className="text-sm text-white font-medium">{car.category}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Transmission</span>
+                      <p className="text-sm text-white font-medium">{car.transmission}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Fuel Type</span>
+                      <p className="text-sm text-white font-medium">{car.fuel_type}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Seats</span>
+                      <p className="text-sm text-white font-medium">{car.seats}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Security Deposit</span>
+                      <p className="text-sm text-white font-medium">KES {car.security_deposit}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted uppercase tracking-wide">Overtime Rate</span>
+                      <p className="text-sm text-white font-medium">KES {car.overtime_rate}/hr</p>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
+                    <button 
+                      onClick={() => openDetailModal(car)}
+                      className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-2"
+                    >
+                      <Eye size={12} />
+                      View Details
+                    </button>
+                    <button 
+                      onClick={() => openEditModal(car)}
+                      className="px-3 py-1.5 bg-muted text-muted-foreground rounded-lg text-xs font-bold hover:bg-muted/80 transition-colors flex items-center gap-2"
+                    >
+                      <Edit3 size={12} />
+                      Edit
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteCar(car.id)}
+                      className="px-3 py-1.5 bg-error text-white rounded-lg text-xs font-bold hover:bg-error/90 transition-colors flex items-center gap-2"
+                    >
+                      <Trash2 size={12} />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          
+          {filteredCars.length === 0 && (
+            <div className="p-12 text-center bg-card border border-border rounded-xl">
+              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                <Car size={32} className="text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-bold mb-1">No cars found</h3>
+              <p className="text-muted-foreground">Try adjusting your search or filters.</p>
+            </div>
+          )}
+
+          {/* Mobile Pagination */}
+          <div className="px-4 py-3 bg-card border border-border rounded-xl flex flex-col items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground font-medium">
+              Showing {cars.length} of {totalCount} entries
+            </span>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50 hover:bg-muted transition-colors"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-1">
+                <span className="text-xs font-bold px-2">Page {page}</span>
+              </div>
+              <button 
+                onClick={() => setPage(p => p + 1)}
+                disabled={cars.length < pageSize}
+                className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50 hover:bg-muted transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Car Detail Modal */}
       {isDetailModalOpen && selectedCar && (
