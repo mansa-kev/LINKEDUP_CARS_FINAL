@@ -582,6 +582,11 @@ DROP POLICY IF EXISTS "Owners can update their car bookings" ON bookings;
 CREATE POLICY "Owners can update their car bookings" ON bookings FOR UPDATE USING (fleet_owner_id = auth.uid());
 DROP POLICY IF EXISTS "Anyone can create bookings" ON bookings;
 CREATE POLICY "Anyone can create bookings" ON bookings FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Clients can cancel their own bookings" ON bookings;
+CREATE POLICY "Clients can cancel their own bookings" ON bookings
+  FOR UPDATE
+  USING (client_id = auth.uid() AND status IN ('confirmed', 'pending', 'pending_payment_verification'))
+  WITH CHECK (client_id = auth.uid() AND status = 'cancelled');
 DROP POLICY IF EXISTS "Anyone can view their booking by id" ON bookings;
 CREATE POLICY "Anyone can view their booking by id" ON bookings FOR SELECT USING (
   client_id = auth.uid() OR client_id IS NULL OR is_admin() OR fleet_owner_id = auth.uid()
