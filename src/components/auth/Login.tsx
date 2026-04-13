@@ -169,8 +169,17 @@ export function Login() {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
       if (signInError) {
+        const msg = signInError.message || '';
+        if (msg.toLowerCase().includes('email not confirmed')) {
+          // Account exists but email isn't verified yet — show OTP entry
+          setPendingVerifyEmail(email);
+          setOtpCode('');
+          setMode('verify-otp');
+          startResendCooldown();
+          return;
+        }
         incrementAttempts();
-        setError(signInError.message || 'Invalid email or password');
+        setError(msg || 'Invalid email or password');
         return;
       }
 
