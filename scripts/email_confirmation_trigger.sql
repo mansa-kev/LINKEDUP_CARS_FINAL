@@ -5,19 +5,22 @@
 CREATE OR REPLACE FUNCTION send_welcome_email_after_confirmation()
 RETURNS TRIGGER AS $$
 DECLARE
-  app_url TEXT;
   login_url TEXT;
   profile_name TEXT;
+  profile_role TEXT;
 BEGIN
   -- Only send if email confirmation just happened
   IF NEW.email_confirmed_at IS NOT NULL AND OLD.email_confirmed_at IS NULL THEN
     BEGIN
-      SELECT full_name INTO profile_name
+      SELECT full_name, role::TEXT INTO profile_name, profile_role
       FROM public.user_profiles
       WHERE id = NEW.id;
 
-      app_url := 'https://app.linkedupcarsrentals.com/login';
-      login_url := app_url;
+      login_url := CASE
+        WHEN profile_role = 'fleet_owner' THEN 'https://fleet.linkedupcarsrentals.com/login'
+        WHEN profile_role = 'admin'       THEN 'https://admin.linkedupcarsrentals.com/login'
+        ELSE                                   'https://app.linkedupcarsrentals.com/login'
+      END;
 
       INSERT INTO public.notification_queue (
         channel,
