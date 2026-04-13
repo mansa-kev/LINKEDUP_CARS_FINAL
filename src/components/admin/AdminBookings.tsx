@@ -268,7 +268,10 @@ export function AdminBookings() {
         .insert({
           user_id: booking.client_id,
           type: 'booking_confirmed',
-          message: `Your booking #${booking.id} has been confirmed. Welcome aboard!`,
+          title: 'Booking Confirmed',
+          content: `Your booking #${booking.id} has been confirmed. Welcome aboard!`,
+          is_read: false,
+          link: `/booking-confirmation/${booking.id}`,
           created_at: new Date().toISOString()
         });
 
@@ -380,7 +383,10 @@ export function AdminBookings() {
         .insert({
           user_id: booking.client_id,
           type: 'booking_rejected',
-          message: `Your booking #${booking.id} was rejected: ${reason}. Please re-submit with correct documents.`,
+          title: 'Booking Rejected',
+          content: `Your booking #${booking.id} was rejected: ${reason}. Please re-submit with correct documents.`,
+          is_read: false,
+          link: `/booking-confirmation/${booking.id}`,
           created_at: new Date().toISOString()
         });
 
