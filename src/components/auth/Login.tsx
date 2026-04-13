@@ -338,7 +338,7 @@ export function Login() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpCode.trim().length < 6) {
-      setError('Please enter the 6-digit code from your email');
+      setError('Please enter the verification code from your email');
       return;
     }
     setLoading(true);
@@ -649,7 +649,7 @@ export function Login() {
                 <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl text-center space-y-1">
                   <p className="text-sm font-bold text-foreground">Check your email</p>
                   <p className="text-xs text-muted-foreground">
-                    We sent a 6-digit code to <span className="font-bold text-foreground">{pendingVerifyEmail}</span>
+                    We sent a verification code to <span className="font-bold text-foreground">{pendingVerifyEmail}</span>
                   </p>
                 </div>
 
@@ -658,11 +658,11 @@ export function Login() {
                   <input
                     type="text"
                     inputMode="numeric"
-                    maxLength={6}
+                    maxLength={8}
                     value={otpCode}
                     onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '')); setError(null); }}
                     className="w-full px-4 py-4 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-mono text-2xl text-center tracking-[0.5em] text-foreground"
-                    placeholder="------"
+                    placeholder="--------"
                     autoFocus
                     required
                   />
