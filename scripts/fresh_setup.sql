@@ -69,6 +69,11 @@ BEGIN
   )
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Never block auth signup even if profile insert fails.
+    -- The profile will be created on first login via the app fallback.
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
