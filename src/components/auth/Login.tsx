@@ -50,7 +50,7 @@ export function Login() {
   const config = PORTAL_CONFIG[portal];
 
   // Auth state
-  const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'force-change'>('login');
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'force-change' | 'verify-otp'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -62,6 +62,11 @@ export function Login() {
   const [signUpName, setSignUpName] = useState('');
   const [signUpPhone, setSignUpPhone] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // OTP verification
+  const [otpCode, setOtpCode] = useState('');
+  const [pendingVerifyEmail, setPendingVerifyEmail] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Forgot password
   const [resetEmail, setResetEmail] = useState('');
@@ -294,16 +299,81 @@ export function Login() {
       if (authError) throw authError;
 
       if (authData.user) {
-        // Profile is created on first login (user has no session until email is confirmed).
-        // All required fields are stored in auth metadata above and read back in handleLogin.
-        setSuccessMsg('Account created! Check your email to confirm your account, then log in.');
-        setMode('login');
+        setPendingVerifyEmail(email);
+        setOtpCode('');
         setPassword('');
+        setConfirmPassword('');
+        setMode('verify-otp');
+        startResendCooldown();
       }
     } catch (err: any) {
       setError(err.message || 'Failed to create account');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // OTP Verification
+  // ---------------------------------------------------------------------------
+  const startResendCooldown = () => {
+    setResendCooldown(60);
+    const interval = setInterval(() => {
+      setResendCooldown(prev => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otpCode.trim().length < 6) {
+      setError('Please enter the 6-digit code from your email');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: pendingVerifyEmail,
+        token: otpCode.trim(),
+        type: 'signup',
+      });
+      if (verifyError) throw verifyError;
+
+      const user = data.user;
+      if (user) {
+        const meta = user.user_metadata || {};
+        await supabase.from('user_profiles').upsert({
+          id: user.id,
+          email: user.email,
+          full_name: meta.full_name || '',
+          phone_number: meta.phone_number || '',
+          role: meta.role || 'client',
+          status: 'active',
+        }, { onConflict: 'id' });
+        redirectAfterLogin(meta.role || 'client');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Invalid or expired code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: pendingVerifyEmail,
+      });
+      if (resendError) throw resendError;
+      setSuccessMsg('New code sent — check your inbox.');
+      startResendCooldown();
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend code');
     }
   };
 
@@ -562,6 +632,50 @@ export function Login() {
               </form>
             )}
 
+            {/* --------------- Verify OTP --------------- */}
+            {mode === 'verify-otp' && (
+              <form onSubmit={handleVerifyOtp} className="p-8 space-y-5">
+                {error && <ErrorAlert message={error} />}
+
+                <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl text-center space-y-1">
+                  <p className="text-sm font-bold text-foreground">Check your email</p>
+                  <p className="text-xs text-muted-foreground">
+                    We sent a 6-digit code to <span className="font-bold text-foreground">{pendingVerifyEmail}</span>
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Verification Code</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '')); setError(null); }}
+                    className="w-full px-4 py-4 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-mono text-2xl text-center tracking-[0.5em] text-foreground"
+                    placeholder="------"
+                    autoFocus
+                    required
+                  />
+                </div>
+
+                <SubmitButton loading={loading} disabled={loading || otpCode.length < 6}>
+                  Verify &amp; Sign In
+                </SubmitButton>
+
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={resendCooldown > 0}
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+                  >
+                    {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code'}
+                  </button>
+                </div>
+              </form>
+            )}
+
             {/* --------------- Sign Up Form (clients only) --------------- */}
             {mode === 'signup' && (
               <form onSubmit={handleSignUp} className="p-8 space-y-5">
@@ -684,6 +798,14 @@ export function Login() {
                   Already have an account?{' '}
                   <button onClick={() => { setMode('login'); setError(null); }} className="font-bold text-primary hover:underline">
                     Sign In
+                  </button>
+                </p>
+              )}
+              {mode === 'verify-otp' && (
+                <p className="text-xs text-muted-foreground">
+                  Wrong email?{' '}
+                  <button onClick={() => { setMode('signup'); setError(null); setOtpCode(''); }} className="font-bold text-primary hover:underline">
+                    Go back
                   </button>
                 </p>
               )}
