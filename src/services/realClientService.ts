@@ -62,20 +62,76 @@ export const clientService = {
 
   getClientDocuments: async (clientId: string) => {
     const { data, error } = await supabase
-      .from('client_documents')
-      .select('*')
-      .eq('client_id', clientId);
-    if (error) return handleSupabaseError(error, 'getClientDocuments');
+      .from('bookings')
+      .select('id, document_status, admin_notes, metadata, start_date, end_date, cars(make, model)')
+      .eq('client_id', clientId)
+      .not('metadata->documents', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return null;
     return data;
+  },
+
+  getGloveboxData: async (clientId: string) => {
+    const [bookingsRes, paymentsRes] = await Promise.all([
+      supabase
+        .from('bookings')
+        .select('id, document_status, admin_notes, metadata, start_date, end_date, cars(make, model)')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('pending_payments')
+        .select('*, bookings(id, start_date, end_date, cars(make, model))')
+        .eq('client_id', clientId)
+        .order('submitted_at', { ascending: false }),
+    ]);
+
+    const bookings = bookingsRes.data || [];
+    const payments = paymentsRes.data || [];
+
+    // Most recent booking that has documents
+    const docBooking = bookings.find((b: any) => b.metadata?.documents);
+    const docs = docBooking?.metadata?.documents || {};
+    const idNumber = docBooking?.metadata?.guest_info?.idNumber || docBooking?.metadata?.idNumber || null;
+
+    // Contracts vault: bookings that have a contract or signature URL
+    const contracts = bookings
+      .filter((b: any) => b.metadata?.contract_url || b.metadata?.signature_url)
+      .map((b: any) => ({
+        id: b.id,
+        car: b.cars ? `${b.cars.make} ${b.cars.model}` : 'Unknown Car',
+        start_date: b.start_date,
+        end_date: b.end_date,
+        contract_url: b.metadata?.contract_url || null,
+        signature_url: b.metadata?.signature_url || null,
+      }));
+
+    return {
+      docBooking,
+      documents: {
+        facePhotoUrl:    docs.facePhotoUrl    || null,
+        licenseFrontUrl: docs.licenseFrontUrl || null,
+        licenseBackUrl:  docs.licenseBackUrl  || null,
+        idFrontUrl:      docs.idFrontUrl      || null,
+        idBackUrl:       docs.idBackUrl       || null,
+        idNumber,
+        status:     docBooking?.document_status || null,
+        bookingId:  docBooking?.id || null,
+      },
+      contracts,
+      payments,
+    };
   },
 
   getSignedContracts: async (clientId: string) => {
     const { data, error } = await supabase
-      .from('e_contracts')
-      .select('*, bookings!inner(*, cars(*))')
-      .eq('bookings.client_id', clientId);
-    if (error) return handleSupabaseError(error, 'getSignedContracts');
-    return data;
+      .from('bookings')
+      .select('id, start_date, end_date, metadata, cars(make, model)')
+      .eq('client_id', clientId)
+      .not('metadata->contract_url', 'is', null);
+    if (error) return [];
+    return data || [];
   },
 
   getTransactions: async (clientId: string) => {
@@ -84,8 +140,8 @@ export const clientService = {
       .select('*, bookings(id, cars(make, model))')
       .eq('user_id', clientId)
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getTransactions');
-    return data;
+    if (error) return [];
+    return data || [];
   },
 
   getAllBookings: async (clientId: string) => {

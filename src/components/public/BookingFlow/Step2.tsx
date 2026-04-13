@@ -1,9 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Car } from '../../../types';
-import { Upload, ArrowRight, ArrowLeft, User, Mail, Phone, FileText, CheckCircle2, Loader2, Camera, Image } from 'lucide-react';
+import { Upload, ArrowRight, ArrowLeft, User, Mail, Phone, FileText, CheckCircle2, Loader2, Camera, Image, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDropzone } from 'react-dropzone';
 import { bookingService } from '../../../services/bookingService';
+import { clientService } from '../../../services/clientService';
+import { supabase } from '../../../lib/supabase';
 import { toast } from 'sonner';
 import { validateFile } from '../../../utils/fileValidation';
 import { CameraCapture } from './CameraCapture';
@@ -101,6 +103,7 @@ function DocumentSlot({ type, uploadedUrl, isUploading, onUploadFile, onOpenCame
 export function Step2({ car, onNext, onPrev }: Step2Props) {
   const [uploading, setUploading] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState<DocType | null>(null);
+  const [prefilled, setPrefilled] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -113,6 +116,35 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
     idFrontUrl: '',
     idBackUrl: ''
   });
+
+  // Pre-fill from profile + glovebox for logged-in users
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const [profileRes, gloveboxRes] = await Promise.allSettled([
+        supabase.from('user_profiles').select('full_name, email, phone_number, license_number').eq('id', user.id).single(),
+        clientService.getGloveboxData(user.id),
+      ]);
+      const profile = profileRes.status === 'fulfilled' ? profileRes.value.data : null;
+      const glovebox = gloveboxRes.status === 'fulfilled' ? gloveboxRes.value : null;
+      const docs = glovebox?.documents || {};
+      setFormData(prev => ({
+        ...prev,
+        fullName:       profile?.full_name    || prev.fullName,
+        email:          profile?.email        || prev.email,
+        phone:          profile?.phone_number || prev.phone,
+        license:        profile?.license_number || prev.license,
+        idNumber:       docs.idNumber         || prev.idNumber,
+        facePhotoUrl:   docs.facePhotoUrl     || prev.facePhotoUrl,
+        licenseFrontUrl:docs.licenseFrontUrl  || prev.licenseFrontUrl,
+        licenseBackUrl: docs.licenseBackUrl   || prev.licenseBackUrl,
+        idFrontUrl:     docs.idFrontUrl       || prev.idFrontUrl,
+        idBackUrl:      docs.idBackUrl        || prev.idBackUrl,
+      }));
+      if (profile?.full_name) setPrefilled(true);
+    })();
+  }, []);
 
   const uploadFile = useCallback(async (file: File, type: DocType) => {
     setUploading(type);
@@ -147,7 +179,7 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
       toast.error(`Please upload: ${missing.map(t => DOC_LABELS[t]).join(', ')}`);
       return;
     }
-    onNext(formData);
+    onNext({ ...formData, _fromGlovebox: prefilled });
   };
 
   return (
@@ -163,6 +195,12 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
         <div className="space-y-1">
           <h3 className="text-xl sm:text-2xl md:text-3xl font-serif font-black italic text-foreground">Your Details</h3>
           <p className="text-muted-foreground text-xs sm:text-sm">Provide your information and verification documents.</p>
+          {prefilled && (
+            <div className="flex items-center gap-2 mt-2 px-3 py-2 bg-success/10 border border-success/20 rounded-xl">
+              <ShieldCheck size={14} className="text-success shrink-0" />
+              <p className="text-xs text-success font-medium">Pre-filled from your profile &amp; glovebox — review and continue.</p>
+            </div>
+          )}
         </div>
 
         <div className="space-y-3 sm:space-y-4 md:space-y-6">

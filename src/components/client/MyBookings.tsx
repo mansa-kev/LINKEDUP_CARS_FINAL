@@ -156,9 +156,10 @@ export function MyBookings() {
   };
 
   const filteredBookings = bookings.filter(b => {
+    if (!b.cars) return false;
     const matchesFilter = filter === 'all' || b.status === filter;
-    const matchesSearch = b.cars.make.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         b.cars.model.toLowerCase().includes(searchTerm.toLowerCase());
+    const carLabel = `${b.cars.make || ''} ${b.cars.model || ''}`.toLowerCase();
+    const matchesSearch = !searchTerm || carLabel.includes(searchTerm.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 

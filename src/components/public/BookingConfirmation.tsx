@@ -315,6 +315,30 @@ export function BookingConfirmation() {
           )}
         </motion.div>
 
+        {/* Glovebox auto-save notice for logged-in users */}
+        {!isGuest && booking?.metadata?.documents && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="flex items-center justify-between gap-4 p-5 rounded-[24px] bg-success/5 border border-success/20"
+          >
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="text-success shrink-0" size={20} />
+              <div>
+                <p className="text-sm font-bold text-success">Documents saved to your Glovebox</p>
+                <p className="text-xs text-success/70 mt-0.5">Your documents are on file — next booking will be pre-filled automatically.</p>
+              </div>
+            </div>
+            <Link
+              to="/client/glovebox"
+              className="shrink-0 px-4 py-2 bg-success/10 border border-success/20 rounded-xl text-xs font-bold text-success hover:bg-success/20 transition-colors flex items-center gap-1.5"
+            >
+              View Glovebox <ArrowRight size={12} />
+            </Link>
+          </motion.div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           {/* Booking Summary */}
           <motion.div 
