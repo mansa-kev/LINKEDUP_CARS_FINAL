@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Mail, Lock, Loader2, AlertCircle, ArrowRight, Car, Clock, UserPlus, Eye, EyeOff, X, CheckCircle2, User } from 'lucide-react';
+import { Mail, Lock, Loader2, AlertCircle, ArrowRight, Clock, UserPlus, Eye, EyeOff, X, CheckCircle2, User } from 'lucide-react';
+import { Logo } from '../shared/Logo';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSubdomain } from '../../contexts/SubdomainContext';
 import { toast } from 'sonner';
@@ -177,8 +178,31 @@ export function Login() {
           .eq('id', data.user.id)
           .single();
 
-        const userRole = profile?.role || 'client';
-        const userName = profile?.full_name || 'Valued Customer';
+        // First login after email confirmation: profile row doesn't exist yet.
+        // Create it now — user has a valid session so RLS passes.
+        if (!profile) {
+          const meta = data.user.user_metadata || {};
+          await supabase.from('user_profiles').upsert({
+            id: data.user.id,
+            email: data.user.email,
+            full_name: meta.full_name || '',
+            phone_number: meta.phone_number || '',
+            license_number: meta.license_number || '',
+            role: meta.role || 'client',
+          }, { onConflict: 'id' });
+
+          // Link a pending booking created as guest (stored in metadata at account creation)
+          if (meta.pending_booking_id) {
+            await supabase
+              .from('bookings')
+              .update({ client_id: data.user.id })
+              .eq('id', meta.pending_booking_id);
+            await supabase.auth.updateUser({ data: { pending_booking_id: null } });
+          }
+        }
+
+        const userRole = profile?.role || data.user.user_metadata?.role || 'client';
+        const userName = profile?.full_name || data.user.user_metadata?.full_name || 'Valued Customer';
 
         // Portal role enforcement — reject logins from users with the wrong role
         if (portal === 'fleet' && userRole !== 'fleet_owner') {
@@ -252,7 +276,6 @@ export function Login() {
     }
 
     try {
-      // After confirming email, redirect clients to app portal login
       const appUrl = isDev ? window.location.origin : getPortalUrl('app');
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -263,6 +286,7 @@ export function Login() {
           data: {
             full_name: signUpName,
             phone_number: signUpPhone,
+            role: 'client',
           },
         },
       });
@@ -270,15 +294,8 @@ export function Login() {
       if (authError) throw authError;
 
       if (authData.user) {
-        // Create user profile
-        await supabase.from('user_profiles').upsert({
-          id: authData.user.id,
-          email,
-          full_name: signUpName,
-          phone_number: signUpPhone,
-          role: 'client',
-        });
-
+        // Profile is created on first login (user has no session until email is confirmed).
+        // All required fields are stored in auth metadata above and read back in handleLogin.
         setSuccessMsg('Account created! Check your email to confirm your account, then log in.');
         setMode('login');
         setPassword('');
@@ -440,8 +457,8 @@ export function Login() {
           <div className="bg-card border border-border rounded-3xl shadow-2xl overflow-hidden">
             {/* Header */}
             <div className="p-8 pb-0 flex flex-col items-center">
-              <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-5">
-                <Car size={28} />
+              <div className="mb-5">
+                <Logo size="lg" showText={false} />
               </div>
               <h1 className="text-2xl font-serif font-black tracking-tighter text-foreground italic mb-1">
                 {config.title}

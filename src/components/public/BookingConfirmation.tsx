@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Car, CheckCircle2, Download, Calendar, MapPin, CreditCard, FileText, ShieldCheck, Clock, AlertCircle, UserPlus, ArrowRight, Loader2, Phone, Hourglass, Star, MessageSquare, Send } from 'lucide-react';
 import { LogoLoader } from '../shared/LogoLoader';
+import { ContractModal } from './ContractModal';
 import { bookingService } from '../../services/bookingService';
 import { fleetService } from '../../services/fleetService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,11 +21,14 @@ export function BookingConfirmation() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const isGuest = !user;
-  const isPendingPayment = booking?.status === 'pending_payment_verification' || 
-                          booking?.payment_status === 'pending' || 
-                          booking?.status === 'pending';
+  const isCancelled = booking?.status === 'cancelled';
+  const isPendingPayment = !isCancelled && (
+    booking?.status === 'pending_payment_verification' ||
+    booking?.payment_status === 'pending' ||
+    booking?.status === 'pending'
+  );
   const isConfirmed = booking?.status === 'confirmed' && booking?.payment_status === 'paid';
-  const isFailed = booking?.payment_status === 'failed' || booking?.status === 'cancelled';
+  const isFailed = !isCancelled && booking?.payment_status === 'failed';
 
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewHover, setReviewHover] = useState(0);
@@ -123,6 +127,7 @@ export function BookingConfirmation() {
   }, [bookingId]);
 
   const [creatingAccount, setCreatingAccount] = useState(false);
+  const [showContract, setShowContract] = useState(false);
 
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,41 +142,28 @@ export function BookingConfirmation() {
 
     setCreatingAccount(true);
     try {
-      // Sign up with Supabase Auth
       const appUrl = import.meta.env.VITE_APP_URL || 'https://app.linkedupcarsrentals.com';
+      const guestInfo = booking?.metadata?.guest_info;
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${appUrl}/login`,
+          data: {
+            full_name: guestInfo?.full_name || '',
+            phone_number: guestInfo?.phone || '',
+            license_number: guestInfo?.license_number || '',
+            role: 'client',
+            pending_booking_id: bookingId || null,
+          },
         },
       });
 
       if (authError) throw authError;
 
       if (authData.user) {
-        // Create user profile with guest info from booking
-        const guestInfo = booking?.metadata?.guest_info;
-        await supabase.from('user_profiles').upsert({
-          id: authData.user.id,
-          email,
-          full_name: guestInfo?.full_name || '',
-          phone_number: guestInfo?.phone || '',
-          license_number: guestInfo?.license_number || '',
-          role: 'client',
-        });
-
-        // Link the booking to the new user account
-        if (bookingId) {
-          await supabase
-            .from('bookings')
-            .update({ client_id: authData.user.id })
-            .eq('id', bookingId);
-        }
-
-        toast.success('Account created successfully! Welcome to the family.');
-        navigate('/client');
+        toast.success('Account created! Check your email to confirm, then log in to manage your booking.');
       }
     } catch (error: any) {
       console.error('Signup error:', error);
@@ -266,6 +258,28 @@ export function BookingConfirmation() {
             </motion.div>
           )}
 
+          {isCancelled && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-6 bg-red-500/5 rounded-[24px] border border-red-500/20 space-y-3 mb-8 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <AlertCircle className="text-red-500" size={20} />
+                <p className="text-sm font-bold text-red-500">Booking Cancelled</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                This booking has been cancelled. If you believe this is an error or would like a refund, please contact our support team.
+              </p>
+              <button
+                onClick={() => navigate('/cars')}
+                className="mt-3 px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-xs font-bold text-red-500 hover:bg-red-500/20 transition-colors"
+              >
+                Browse Cars
+              </button>
+            </motion.div>
+          )}
+
           {isFailed && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -289,14 +303,16 @@ export function BookingConfirmation() {
           )}
 
           <button
-            onClick={() => {
-              toast.info('Contract download will be available once your booking is fully confirmed.');
-            }}
+            onClick={() => setShowContract(true)}
             disabled={!isConfirmed}
             className="px-10 py-5 bg-card text-foreground font-black uppercase tracking-widest text-xs rounded-full flex items-center gap-3 mx-auto hover:bg-primary hover:text-primary-foreground transition-all hover:scale-105 active:scale-95 shadow-xl shadow-border/20 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed border border-border"
           >
             <Download size={18} /> Download Rental Contract
           </button>
+
+          {showContract && booking && (
+            <ContractModal booking={booking} onClose={() => setShowContract(false)} />
+          )}
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">

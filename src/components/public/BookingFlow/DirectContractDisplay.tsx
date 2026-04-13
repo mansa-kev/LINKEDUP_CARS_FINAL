@@ -54,27 +54,27 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
   return (
     <div className="bg-gradient-to-br from-card to-muted rounded-xl overflow-hidden shadow-xl border border-border">
       {/* Professional Header */}
-      <div className="bg-gradient-to-r from-foreground to-muted text-primary-foreground p-6">
+      <div className="bg-primary p-6">
         <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold tracking-wide">
-            RENTAL AGREEMENT
+          <h1 className="text-2xl font-black tracking-widest uppercase text-black">
+            Rental Agreement
           </h1>
-          <div className="text-lg font-medium text-primary-foreground/80">
-            This Rental Agreement is made and entered into on this{" "}
-            <span className="text-primary-foreground font-semibold">
+          <div className="text-sm font-medium text-black/70">
+            Made and entered into on{" "}
+            <span className="text-black font-bold">
               {formatDate(bookingData?.startDate || new Date())}
             </span>
             {" "}between:
           </div>
-          <div className="bg-muted/50 rounded-lg p-4 mt-3 max-w-3xl mx-auto border border-border">
+          <div className="bg-black/10 rounded-xl p-4 mt-3 max-w-3xl mx-auto border border-black/10">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div className="text-left">
-                <div className="font-semibold text-foreground">LinkedUp Cars Rentals</div>
-                <div className="text-muted-foreground">Hereinafter referred to as "the Company"</div>
+                <div className="font-black text-black">LinkedUp Cars Rentals</div>
+                <div className="text-black/60 text-xs">Hereinafter referred to as "the Company"</div>
               </div>
               <div className="text-right">
-                <div className="font-semibold text-foreground">{getClientName()}</div>
-                <div className="text-muted-foreground">Hereinafter referred to as "the Client"</div>
+                <div className="font-black text-black">{getClientName()}</div>
+                <div className="text-black/60 text-xs">Hereinafter referred to as "the Client"</div>
               </div>
             </div>
           </div>

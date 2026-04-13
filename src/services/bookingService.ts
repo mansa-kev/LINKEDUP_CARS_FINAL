@@ -94,7 +94,7 @@ export const bookingService = {
   getBookingById: async (id: string) => {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*, cars(*)')
+      .select('*, cars(*), pending_payments(transaction_code, status, verified_at, amount)')
       .eq('id', id)
       .single();
     if (error) return handleSupabaseError(error, 'getBookingById');

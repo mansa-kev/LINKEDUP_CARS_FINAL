@@ -143,6 +143,34 @@ export function AdminBookings() {
     try {
       await adminService.updateBookingStatus(id, status);
       toast.success(`Booking status updated to ${status}`);
+
+      // Send cancellation notification to client when admin cancels via dropdown
+      if (status === 'cancelled') {
+        const booking = bookings.find(b => b.id === id);
+        if (booking?.client_id) {
+          await supabase.from('notifications').insert({
+            user_id: booking.client_id,
+            type: 'booking_cancelled',
+            title: 'Booking Cancelled',
+            content: `Your booking #${id} has been cancelled. Please contact support if you believe this is an error or to request a refund.`,
+            link: `/booking-confirmation/${id}`,
+            is_read: false,
+            created_at: new Date().toISOString(),
+          });
+
+          const clientEmail = booking.client?.email || booking.metadata?.guest_info?.email;
+          if (clientEmail) {
+            supabase.functions.invoke('send-email', {
+              body: {
+                to: clientEmail,
+                subject: 'Booking Cancelled - LinkedUp Cars',
+                message: `Dear ${booking.client?.full_name || 'Valued Customer'},\n\nYour booking #${id} has been cancelled.\n\nIf you believe this is an error or would like to request a refund, please contact our support team.\n\nThank you,\nLinkedUp Cars Team`,
+              },
+            }).catch(() => {});
+          }
+        }
+      }
+
       fetchBookings();
     } catch (error) {
       logger.error('Error updating status:', error);

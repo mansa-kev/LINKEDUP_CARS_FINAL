@@ -29,6 +29,8 @@ export function MyBookings() {
   });
   const [uploadingDoc, setUploadingDoc] = useState<DocType | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     fetchBookings();
@@ -98,6 +100,40 @@ export function MyBookings() {
       toast.error('Failed to submit documents. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleCancelBooking = async (bookingId: string) => {
+    setCancelling(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', bookingId)
+        .eq('client_id', user?.id);
+
+      if (error) throw error;
+
+      if (user) {
+        await supabase.from('notifications').insert({
+          user_id: user.id,
+          type: 'booking_cancelled',
+          title: 'Booking Cancelled',
+          content: `Your booking #${bookingId} has been cancelled as requested. Contact support if you need a refund.`,
+          link: `/booking-confirmation/${bookingId}`,
+          is_read: false,
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      toast.success('Booking cancelled successfully.');
+      setCancelConfirmId(null);
+      fetchBookings();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to cancel booking. Please try again.');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -237,9 +273,31 @@ export function MyBookings() {
                     )}
 
                     {booking.status === 'confirmed' && (
-                      <button className="flex-1 sm:flex-none px-4 py-2 bg-error/10 text-error hover:bg-error/20 rounded-xl text-sm font-bold flex items-center justify-center gap-2">
-                        <XCircle size={16} /> Cancel
-                      </button>
+                      cancelConfirmId === booking.id ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Confirm cancel?</span>
+                          <button
+                            onClick={() => handleCancelBooking(booking.id)}
+                            disabled={cancelling}
+                            className="px-3 py-2 bg-error text-white rounded-xl text-xs font-bold hover:bg-error/90 transition-colors disabled:opacity-50 flex items-center gap-1"
+                          >
+                            {cancelling ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />} Yes, Cancel
+                          </button>
+                          <button
+                            onClick={() => setCancelConfirmId(null)}
+                            className="px-3 py-2 bg-muted text-muted-foreground rounded-xl text-xs font-bold hover:bg-muted/80 transition-colors"
+                          >
+                            Keep
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setCancelConfirmId(booking.id)}
+                          className="flex-1 sm:flex-none px-4 py-2 bg-error/10 text-error hover:bg-error/20 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+                        >
+                          <XCircle size={16} /> Cancel
+                        </button>
+                      )
                     )}
 
                     {booking.status === 'in_progress' && (
