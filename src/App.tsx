@@ -20,6 +20,8 @@ import { CarDetails } from './components/public/CarDetails';
 import { BookingConfirmation } from './components/public/BookingConfirmation';
 import { HowItWorks } from './components/public/HowItWorks';
 import { FAQ } from './components/public/FAQ';
+import { InsightsHome } from './components/public/InsightsHome';
+import { InsightsDetail } from './components/public/InsightsDetail';
 import { Terms } from './components/public/Terms';
 import { Privacy } from './components/public/Privacy';
 import { SunsetRays } from './components/SunsetRays';
@@ -61,6 +63,8 @@ export default function App() {
                           <Route path="/booking-confirmation/:bookingId" element={<BookingConfirmation />} />
                           <Route path="/how-it-works" element={<HowItWorks />} />
                           <Route path="/faq" element={<FAQ />} />
+                          <Route path="/insights" element={<InsightsHome />} />
+                          <Route path="/insights/:slug" element={<InsightsDetail />} />
                           <Route path="/terms" element={<Terms />} />
                           <Route path="/privacy" element={<Privacy />} />
                           <Route path="*" element={<Navigate to="/" replace />} />

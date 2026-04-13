@@ -139,11 +139,9 @@ export function CarShowroom() {
       <SearchControls onSearch={setSearchParams} initialParams={searchParams} />
 
       <section className="py-8 md:py-20 px-4 md:px-6 relative overflow-hidden">
-        <div className="flex gap-6">
-          {/* Filter Sidebar - Desktop Only */}
-          <div className="hidden md:block w-72 flex-shrink-0">
-            <FilterPanel onFilterChange={setFilters} />
-          </div>
+        <div className="flex flex-col md:flex-row gap-6">
+          {/* FilterPanel — handles its own responsive display internally */}
+          <FilterPanel onFilterChange={setFilters} />
 
           {/* Main Content Area */}
           <div className="flex-1 min-w-0">
@@ -262,11 +260,11 @@ export function CarShowroom() {
                             </div>
 
                             {/* BOOK NOW + View Details */}
-                            <div className="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-white/10 text-xs">
+                            <div className="flex items-center justify-between gap-1 md:gap-2 mt-3 pt-2 border-t border-white/10">
                               {car.status === 'booked' ? (
                                 <button
                                   disabled
-                                  className="bg-green-500 text-green-100 text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-full whitespace-nowrap cursor-not-allowed opacity-75"
+                                  className="bg-green-500 text-green-100 text-[10px] md:text-xs font-black uppercase tracking-wider px-2 md:px-3 py-1 md:py-1.5 rounded-full whitespace-nowrap cursor-not-allowed opacity-75"
                                 >
                                   BOOKED
                                 </button>
@@ -275,20 +273,19 @@ export function CarShowroom() {
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    // Navigate to car details and open booking flow immediately
                                     window.location.href = `/cars/${car.id}?booking=true`;
                                   }}
-                                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-full transition-all cursor-pointer whitespace-nowrap"
+                                  className="bg-orange-500 hover:bg-orange-600 text-white text-[10px] md:text-xs font-black uppercase tracking-wider px-2 md:px-3 py-1 md:py-1.5 rounded-full transition-all cursor-pointer whitespace-nowrap"
                                 >
                                   BOOK NOW
                                 </button>
                               )}
                               <Link 
                                 to={`/cars/${car.id}`}
-                                className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-white hover:underline underline-offset-2 whitespace-nowrap transition-colors"
+                                className="flex items-center gap-1 md:gap-2 text-[10px] md:text-xs font-bold text-gray-400 hover:text-white hover:underline underline-offset-2 whitespace-nowrap transition-colors"
                               >
                                 VIEW DETAILS
-                                <ArrowRight size={14} />
+                                <ArrowRight size={12} className="hidden md:block" />
                               </Link>
                             </div>
                           </div>
@@ -301,11 +298,6 @@ export function CarShowroom() {
               </div>
             )}
           </div>
-        </div>
-        
-        {/* Mobile Filter Panel - Bottom Sheet Style */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4 z-40">
-          <FilterPanel onFilterChange={setFilters} />
         </div>
       </section>
     </div>

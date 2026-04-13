@@ -278,7 +278,9 @@ CREATE TABLE IF NOT EXISTS promotions (
 );
 
 ALTER TABLE promotions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can read active promotions" ON promotions;
 CREATE POLICY "Public can read active promotions" ON promotions FOR SELECT USING (is_active = true AND NOW() BETWEEN start_date AND end_date);
+DROP POLICY IF EXISTS "Admins can manage promotions" ON promotions;
 CREATE POLICY "Admins can manage promotions" ON promotions FOR ALL USING (
   EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
 );
@@ -296,9 +298,11 @@ CREATE TABLE IF NOT EXISTS contact_messages (
 );
 
 ALTER TABLE contact_messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Admins can manage contact messages" ON contact_messages;
 CREATE POLICY "Admins can manage contact messages" ON contact_messages FOR ALL USING (
   EXISTS (SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'admin')
 );
+DROP POLICY IF EXISTS "Anyone can insert contact messages" ON contact_messages;
 CREATE POLICY "Anyone can insert contact messages" ON contact_messages FOR INSERT WITH CHECK (true);
 
 -- 14. Reviews
@@ -395,6 +399,18 @@ BEGIN
   RETURN (SELECT role FROM user_profiles WHERE id = auth.uid()) = 'admin';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Hero Content Policies (PUBLIC read for active, ADMIN full access)
+DROP POLICY IF EXISTS "Public can read active hero content" ON hero_content;
+CREATE POLICY "Public can read active hero content" ON hero_content FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Admins can manage hero content" ON hero_content;
+CREATE POLICY "Admins can manage hero content" ON hero_content FOR ALL USING (is_admin());
+
+-- Contracts Master Policies (PUBLIC read for active, ADMIN full access)
+DROP POLICY IF EXISTS "Public can read active contracts" ON contracts_master;
+CREATE POLICY "Public can read active contracts" ON contracts_master FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Admins can manage contracts master" ON contracts_master;
+CREATE POLICY "Admins can manage contracts master" ON contracts_master FOR ALL USING (is_admin());
 
 -- User Profiles Policies
 DROP POLICY IF EXISTS "Admins can view all profiles" ON user_profiles;
@@ -795,8 +811,11 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- Booking columns for payment method, locations, chauffeur
+-- Booking columns for payment method, locations, chauffeur, payment_status
 DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'payment_status') THEN
+    ALTER TABLE bookings ADD COLUMN payment_status TEXT DEFAULT 'pending';
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'payment_method') THEN
     ALTER TABLE bookings ADD COLUMN payment_method TEXT;
   END IF;
@@ -868,3 +887,17 @@ CREATE POLICY "Admins can manage secure docs" ON storage.objects FOR ALL USING (
 -- Allow notifications to be inserted by the system (for guest bookings too)
 DROP POLICY IF EXISTS "Anyone can insert notifications" ON notifications;
 CREATE POLICY "Anyone can insert notifications" ON notifications FOR INSERT WITH CHECK (true);
+
+-- M-Pesa integration: add metadata column to pending_payments for STK Push tracking
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'pending_payments' AND column_name = 'metadata') THEN
+    ALTER TABLE pending_payments ADD COLUMN metadata JSONB;
+  END IF;
+END $$;
+
+-- Allow admins and system to read/update pending_payments
+DROP POLICY IF EXISTS "Admins can manage pending payments" ON pending_payments;
+CREATE POLICY "Admins can manage pending payments" ON pending_payments FOR ALL USING (is_admin());
+
+DROP POLICY IF EXISTS "System can update pending payments" ON pending_payments;
+CREATE POLICY "System can update pending payments" ON pending_payments FOR UPDATE WITH CHECK (true);

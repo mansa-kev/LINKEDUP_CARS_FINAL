@@ -30,7 +30,9 @@ import {
   Truck,
   Clock,
   CreditCard,
-  Loader2
+  Loader2,
+  Star,
+  PenLine
 } from 'lucide-react';
 
 import { PortalHeader } from './PortalHeader';
@@ -62,6 +64,7 @@ const AdminOutsourcedCars = React.lazy(() => import('./admin/AdminOutsourcedCars
 const AdminPromotions = React.lazy(() => import('./admin/AdminPromotions').then(m => ({ default: m.AdminPromotions })));
 const AdminReservations = React.lazy(() => import('./admin/AdminReservations').then(m => ({ default: m.AdminReservations })));
 const AdminPendingPayments = React.lazy(() => import('./admin/AdminPendingPayments').then(m => ({ default: m.AdminPendingPayments })));
+const AdminBlog = React.lazy(() => import('./admin/AdminBlog').then(m => ({ default: m.AdminBlog })));
 
 type ModuleCategory = {
   title: string;
@@ -111,6 +114,8 @@ const MODULE_CATEGORIES: ModuleCategory[] = [
     title: 'Communication & Growth',
     items: [
       { id: 'inbox', label: 'Inbox', icon: Inbox },
+      { id: 'reviews', label: 'Reviews', icon: Star },
+      { id: 'blog', label: 'Blog & Insights', icon: PenLine },
       { id: 'growth', label: 'Growth Tools', icon: Rocket },
       { id: 'incident', label: 'Incident Command', icon: AlertTriangle },
     ]
@@ -323,6 +328,7 @@ export function AdminPortal() {
                 <Route path="reports" element={<AdminReports />} />
                 <Route path="inbox" element={<AdminInbox />} />
                 <Route path="reviews" element={<AdminReviews />} />
+                <Route path="blog" element={<AdminBlog />} />
                 <Route path="growth" element={<AdminGrowthTools />} />
                 <Route path="incident" element={<AdminIncidentCommand />} />
                 <Route path="hero" element={<AdminHeroContent />} />

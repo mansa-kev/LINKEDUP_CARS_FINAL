@@ -384,32 +384,89 @@ export function CarDetails() {
 
           {/* Reviews */}
           {reviews.length > 0 && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
               className="mt-20"
             >
-              <h2 className="text-3xl font-serif font-black italic text-white mb-8">Customer Reviews</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {reviews.map((review) => (
-                  <motion.div 
-                    key={review.id}
-                    whileHover={{ scale: 1.02 }}
-                    className="p-8 bg-card/50 backdrop-blur-xl rounded-3xl border border-white/10 hover:border-primary/20 transition-all"
-                  >
-                    <div className="flex items-center gap-2 mb-4">
-                      {[...Array(5)].map((_, i) => (
-                        <Star 
-                          key={i}
-                          size={16} 
-                          className={i < review.rating ? 'text-amber-500 fill-amber-500' : 'text-white/20'}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-muted-foreground text-sm italic">"{review.comment}"</p>
-                    <p className="text-xs font-bold text-primary mt-4">- {review.user_profiles?.full_name}</p>
-                  </motion.div>
-                ))}
+              {/* Rating Summary */}
+              <div className="flex flex-col md:flex-row md:items-center gap-8 mb-10 p-8 bg-card/50 rounded-3xl border border-white/10">
+                <div className="text-center">
+                  <p className="text-7xl font-black text-foreground leading-none">
+                    {(reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length).toFixed(1)}
+                  </p>
+                  <div className="flex items-center justify-center gap-1 my-2">
+                    {[...Array(5)].map((_, i) => {
+                      const avg = reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length;
+                      return (
+                        <Star key={i} size={18} className={i < Math.round(avg) ? 'text-amber-400 fill-amber-400' : 'text-white/20'} />
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground font-bold">{reviews.length} verified review{reviews.length !== 1 ? 's' : ''}</p>
+                </div>
+                <div className="flex-1 space-y-2">
+                  {[5, 4, 3, 2, 1].map(star => {
+                    const count = reviews.filter((r: any) => r.rating === star).length;
+                    const pct = reviews.length ? (count / reviews.length) * 100 : 0;
+                    return (
+                      <div key={star} className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-muted-foreground w-4">{star}</span>
+                        <Star size={11} className="text-amber-400 fill-amber-400 shrink-0" />
+                        <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-amber-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs text-muted-foreground w-6">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <h2 className="text-3xl font-serif font-black italic text-foreground mb-6">What Customers Say</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {reviews.map((review: any, idx: number) => {
+                  const firstName = (review.user_profiles?.full_name || 'Customer').split(' ')[0];
+                  return (
+                    <motion.div
+                      key={review.id}
+                      initial={{ opacity: 0, y: 16 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="p-6 bg-card/50 backdrop-blur-xl rounded-2xl border border-white/5 hover:border-primary/20 transition-all flex flex-col gap-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} size={14} className={i < review.rating ? 'text-amber-400 fill-amber-400' : 'text-white/10'} />
+                          ))}
+                        </div>
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                          <CheckCircle size={10} /> Verified
+                        </span>
+                      </div>
+                      <p className="text-muted-foreground text-sm leading-relaxed italic flex-1">
+                        "{review.comment}"
+                      </p>
+                      <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-sm">
+                            {firstName[0]}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-foreground">{firstName}</p>
+                            <p className="text-[10px] text-muted-foreground">Verified Hire</p>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                          {new Date(review.created_at).toLocaleDateString('en-KE', { month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
             </motion.div>
           )}

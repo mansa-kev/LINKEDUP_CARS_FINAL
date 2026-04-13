@@ -11,7 +11,8 @@ import {
   Info,
   HelpCircle,
   FileText,
-  Shield
+  Shield,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Logo } from '../shared/Logo';
@@ -30,6 +31,7 @@ const mainNav: NavItem[] = [
 const secondaryNav: NavItem[] = [
   { label: 'About Us', path: '/about', icon: Info },
   { label: 'How It Works', path: '/how-it-works', icon: HelpCircle },
+  { label: 'Insights', path: '/insights', icon: BookOpen },
   { label: 'Contact', path: '/contact', icon: Phone },
   { label: 'FAQ', path: '/faq', icon: HelpCircle },
   { label: 'Terms', path: '/terms', icon: FileText },
@@ -76,7 +78,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               {item.label}
             </Link>
           ))}
-          {secondaryNav.slice(0, 2).map((item) => (
+          {secondaryNav.filter(item => ['/about', '/how-it-works', '/insights', '/faq'].includes(item.path)).map((item) => (
             <Link
               key={item.path}
               to={item.path}
@@ -103,14 +105,25 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Mobile Top Bar */}
-      <header className="md:hidden fixed top-0 left-0 right-0 min-h-16 glass z-50 flex items-center justify-between px-6">
+      <header className="md:hidden fixed top-0 left-0 right-0 min-h-16 glass z-50 flex items-center justify-between px-5 relative">
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+          className="p-2 text-muted-foreground hover:text-foreground transition-colors shrink-0"
         >
           <Menu size={24} />
         </button>
-        <Link to="/" className="flex items-center">
+
+        {/* Centered brand name */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-baseline gap-1 pointer-events-none select-none">
+          <span className="font-serif font-black italic text-[17px] tracking-tight text-foreground leading-none">
+            LinkedUp
+          </span>
+          <span className="font-serif font-black italic text-[17px] tracking-tight text-primary leading-none">
+            Cars
+          </span>
+        </div>
+
+        <Link to="/" className="flex items-center shrink-0">
           <Logo size="lg" showText={false} />
         </Link>
       </header>
@@ -173,10 +186,12 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-20 glass-dark z-50 flex items-center justify-around px-4 border-t border-white/5">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-20 glass-dark z-50 flex items-center justify-around px-2 border-t border-white/5">
         {[
           { label: 'Home', path: '/', icon: Home },
           { label: 'Browse', path: '/cars', icon: Search },
+          { label: 'Insights', path: '/insights', icon: BookOpen },
+          { label: 'FAQ', path: '/faq', icon: HelpCircle },
           { label: 'Login', path: loginUrl, icon: User },
         ].map((item) => {
           const isActive = location.pathname === item.path;

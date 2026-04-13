@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { Car, CheckCircle2, Download, Calendar, MapPin, CreditCard, FileText, ShieldCheck, Clock, AlertCircle, UserPlus, ArrowRight, Loader2, Phone, Hourglass } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Car, CheckCircle2, Download, Calendar, MapPin, CreditCard, FileText, ShieldCheck, Clock, AlertCircle, UserPlus, ArrowRight, Loader2, Phone, Hourglass, Star, MessageSquare, Send } from 'lucide-react';
 import { LogoLoader } from '../shared/LogoLoader';
 import { bookingService } from '../../services/bookingService';
+import { fleetService } from '../../services/fleetService';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
@@ -24,6 +25,35 @@ export function BookingConfirmation() {
                           booking?.status === 'pending';
   const isConfirmed = booking?.status === 'confirmed' && booking?.payment_status === 'paid';
   const isFailed = booking?.payment_status === 'failed' || booking?.status === 'cancelled';
+
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewHover, setReviewHover] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewRating) return toast.error('Please select a rating');
+    if (!reviewComment.trim()) return toast.error('Please write a comment');
+    if (!user || !booking) return;
+    setSubmittingReview(true);
+    try {
+      await fleetService.submitReview({
+        booking_id: booking.id,
+        car_id: booking.car_id,
+        user_id: user.id,
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+      });
+      setReviewSubmitted(true);
+      toast.success('Review submitted! It will appear after admin approval.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   useEffect(() => {
     async function fetchBooking() {
@@ -399,6 +429,106 @@ export function BookingConfirmation() {
             </motion.div>
           )}
         </div>
+
+        {/* Review Prompt — shown only for confirmed bookings to logged-in users */}
+        <AnimatePresence>
+          {isConfirmed && user && !reviewSubmitted && (
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ delay: 0.4 }}
+              className="relative p-10 rounded-[40px] bg-card border border-border overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
+              <div className="flex items-start gap-4 mb-8">
+                <div className="w-12 h-12 rounded-2xl bg-amber-400/10 flex items-center justify-center shrink-0">
+                  <MessageSquare size={22} className="text-amber-400" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-serif font-black italic text-foreground">How Was Your Experience?</h2>
+                  <p className="text-muted-foreground text-sm mt-1">
+                    Share your honest review of the {booking?.cars?.make} {booking?.cars?.model}. It helps other customers and takes 30 seconds.
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmitReview} className="space-y-6">
+                {/* Star Rating */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Your Rating</p>
+                  <div className="flex items-center gap-2">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setReviewRating(star)}
+                        onMouseEnter={() => setReviewHover(star)}
+                        onMouseLeave={() => setReviewHover(0)}
+                        className="transition-transform hover:scale-110 active:scale-95"
+                      >
+                        <Star
+                          size={36}
+                          className={`transition-colors ${
+                            star <= (reviewHover || reviewRating)
+                              ? 'text-amber-400 fill-amber-400'
+                              : 'text-border'
+                          }`}
+                        />
+                      </button>
+                    ))}
+                    {reviewRating > 0 && (
+                      <span className="ml-3 text-sm font-bold text-muted-foreground">
+                        {['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent!'][reviewRating]}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Comment */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Your Comment</p>
+                  <textarea
+                    value={reviewComment}
+                    onChange={e => setReviewComment(e.target.value)}
+                    rows={4}
+                    placeholder="Tell us about the car condition, pickup experience, overall value..."
+                    className="w-full px-6 py-4 bg-card/50 border border-border rounded-[20px] text-sm text-foreground focus:ring-2 focus:ring-amber-400/20 outline-none transition-all resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <p className="text-xs text-muted-foreground">
+                    Your review will be visible after admin approval. Only your first name is shown.
+                  </p>
+                  <button
+                    type="submit"
+                    disabled={submittingReview || !reviewRating}
+                    className="flex items-center gap-3 px-8 py-4 bg-amber-400 text-black rounded-[20px] font-black uppercase tracking-widest text-xs hover:bg-amber-300 transition-all shadow-lg shadow-amber-400/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submittingReview ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                    Submit Review
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          )}
+
+          {isConfirmed && user && reviewSubmitted && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="p-10 rounded-[40px] bg-amber-400/5 border border-amber-400/20 text-center"
+            >
+              <div className="w-16 h-16 rounded-full bg-amber-400/10 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 size={32} className="text-amber-400" />
+              </div>
+              <h3 className="text-2xl font-serif font-black italic text-foreground mb-2">Review Submitted!</h3>
+              <p className="text-muted-foreground text-sm">Thank you. Your review will appear on the car page once approved by our team.</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
       </div>
     </div>
   );

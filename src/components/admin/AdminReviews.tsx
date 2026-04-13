@@ -1,233 +1,240 @@
 import React, { useState, useEffect } from 'react';
-import { adminService } from '../../services/adminService';
-import { 
-  Star, 
-  Search, 
-  Filter, 
-  MoreVertical, 
-  Trash2, 
-  Flag, 
-  CheckCircle2, 
-  User, 
-  Car,
-  ChevronLeft,
-  ChevronRight,
-  Loader2
+import { supabase } from '../../lib/supabase';
+import { motion } from 'motion/react';
+import {
+  Star, Search, Trash2, CheckCircle2, XCircle,
+  Car, Clock, MessageSquare
 } from 'lucide-react';
 import { toast } from 'sonner';
-
-// --- Types ---
+import { LogoLoader } from '../shared/LogoLoader';
 
 interface Review {
   id: string;
-  userName: string;
-  userAvatar?: string;
-  carName: string;
+  car_id: string;
+  booking_id: string;
+  user_id: string;
   rating: number;
   comment: string;
-  date: string;
-  status: 'published' | 'pending' | 'flagged';
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  user_profiles: { full_name: string } | null;
+  cars: { make: string; model: string; year: number } | null;
 }
 
-// --- Components ---
+type TabType = 'pending' | 'approved' | 'rejected';
 
 export function AdminReviews() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterRating, setFilterRating] = useState<number | 'all'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [tab, setTab] = useState<TabType>('pending');
+  const [search, setSearch] = useState('');
 
   const fetchReviews = async () => {
     setLoading(true);
-    try {
-      const data = await adminService.getReviews();
-      const formattedReviews: Review[] = (data || []).map((r: any) => ({
-        id: r.id,
-        userName: r.user_profiles?.full_name || 'Anonymous',
-        userAvatar: undefined,
-        carName: `${r.cars?.make} ${r.cars?.model}` || 'Unknown Car',
-        rating: r.rating,
-        comment: r.comment,
-        date: new Date(r.created_at).toLocaleDateString(),
-        status: r.status as any
-      }));
-      setReviews(formattedReviews);
-    } catch (error) {
-      console.error('Failed to fetch reviews:', error);
-    } finally {
-      setLoading(false);
-    }
+    const { data, error } = await supabase
+      .from('car_reviews')
+      .select('*, user_profiles(full_name), cars(make, model, year)')
+      .order('created_at', { ascending: false });
+    if (!error) setReviews((data as Review[]) || []);
+    setLoading(false);
   };
 
-  useEffect(() => {
-    fetchReviews();
-  }, []);
+  useEffect(() => { fetchReviews(); }, []);
 
-  const handleUpdateStatus = async (id: string, status: string) => {
-    const promise = (async () => {
-      await adminService.updateReviewStatus(id, status);
-      fetchReviews();
-    })();
-
+  const updateStatus = (id: string, status: 'approved' | 'rejected') => {
+    const promise = new Promise<void>(async (resolve, reject) => {
+      const { error } = await supabase.from('car_reviews')
+        .update({ status, admin_reviewed_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) { reject(error); return; }
+      await fetchReviews();
+      resolve();
+    });
     toast.promise(promise, {
-      loading: `Updating review status to ${status}...`,
-      success: `Review status updated to ${status} successfully`,
-      error: 'Failed to update review status'
+      loading: status === 'approved' ? 'Approving review...' : 'Rejecting review...',
+      success: status === 'approved' ? 'Review approved and live on site!' : 'Review rejected',
+      error: 'Failed to update review',
     });
   };
 
-  const handleDelete = async (id: string) => {
-    const promise = (async () => {
-      await adminService.deleteReview(id);
-      fetchReviews();
-    })();
-
-    toast.promise(promise, {
-      loading: 'Deleting review...',
-      success: 'Review deleted successfully',
-      error: 'Failed to delete review'
+  const deleteReview = async (id: string) => {
+    if (!confirm('Delete this review permanently?')) return;
+    const promise = new Promise<void>(async (resolve, reject) => {
+      const { error } = await supabase.from('car_reviews').delete().eq('id', id);
+      if (error) { reject(error); return; }
+      await fetchReviews();
+      resolve();
     });
+    toast.promise(promise, { loading: 'Deleting...', success: 'Review deleted', error: 'Failed to delete' });
   };
 
-  const filteredReviews = reviews.filter(r => {
-    const matchesRating = filterRating === 'all' || r.rating === filterRating;
-    const matchesSearch = r.userName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          r.carName.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesRating && matchesSearch;
+  const counts = {
+    pending: reviews.filter(r => r.status === 'pending').length,
+    approved: reviews.filter(r => r.status === 'approved').length,
+    rejected: reviews.filter(r => r.status === 'rejected').length,
+  };
+
+  const filtered = reviews.filter(r => {
+    if (r.status !== tab) return false;
+    const q = search.toLowerCase();
+    if (!q) return true;
+    const name = r.user_profiles?.full_name?.toLowerCase() ?? '';
+    const car = `${r.cars?.make} ${r.cars?.model}`.toLowerCase();
+    return name.includes(q) || car.includes(q) || r.comment.toLowerCase().includes(q);
   });
 
-  if (loading && reviews.length === 0) {
-    return (
-      <div className="h-full w-full flex items-center justify-center p-20">
-        <Loader2 className="animate-spin text-primary" size={48} />
-      </div>
-    );
-  }
+  if (loading) return <LogoLoader message="Loading reviews..." />;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Header & Filters */}
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 md:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search reviews..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-            />
-          </div>
-          <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2">
-            <Filter size={16} className="text-muted-foreground" />
-            <select 
-              value={filterRating}
-              onChange={(e) => setFilterRating(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-              className="bg-transparent border-none text-sm font-medium outline-none cursor-pointer"
-            >
-              <option value="all">All Ratings</option>
-              <option value="5">5 Stars</option>
-              <option value="4">4 Stars</option>
-              <option value="3">3 Stars</option>
-              <option value="2">2 Stars</option>
-              <option value="1">1 Star</option>
-            </select>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold">Customer Reviews</h1>
+          <p className="text-muted-foreground text-sm">Approve reviews before they appear on car detail pages</p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">{filteredReviews.length}</span> reviews found
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name, car, comment..."
+            className="pl-9 pr-4 py-2.5 bg-card border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 w-72"
+          />
         </div>
       </div>
 
-      {/* Reviews List */}
-      <div className="grid grid-cols-1 gap-4">
-        {filteredReviews.map((review) => (
-          <div key={review.id} className="bg-card p-6 rounded-2xl border border-border shadow-sm hover:border-primary/30 transition-all group">
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
-                  <User size={24} />
-                </div>
-                <div>
-                  <h4 className="font-bold text-foreground">{review.userName}</h4>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Car size={14} />
-                    <span>{review.carName}</span>
-                    <span className="mx-1">•</span>
-                    <span>{review.date}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                  review.status === 'published' ? 'bg-success/10 text-success' : 
-                  review.status === 'pending' ? 'bg-warning/10 text-warning' : 
-                  'bg-error/10 text-error'
-                }`}>
-                  {review.status}
-                </span>
-                <button className="p-2 hover:bg-muted rounded-lg transition-colors">
-                  <MoreVertical size={18} className="text-muted-foreground" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1 mb-4">
-              {[...Array(5)].map((_, i) => (
-                <Star 
-                  key={i} 
-                  size={16} 
-                  className={i < review.rating ? 'fill-warning text-warning' : 'text-muted'} 
-                />
-              ))}
-            </div>
-
-            <p className="text-sm text-foreground leading-relaxed mb-6 italic">
-              "{review.comment}"
-            </p>
-
-            <div className="flex items-center gap-3 pt-4 border-t border-border">
-              {review.status !== 'published' && (
-                <button 
-                  onClick={() => handleUpdateStatus(review.id, 'published')}
-                  className="flex items-center gap-2 px-4 py-2 bg-success/10 text-success rounded-xl text-xs font-bold hover:bg-success/20 transition-colors"
-                >
-                  <CheckCircle2 size={14} /> Approve
-                </button>
-              )}
-              {review.status !== 'flagged' && (
-                <button 
-                  onClick={() => handleUpdateStatus(review.id, 'flagged')}
-                  className="flex items-center gap-2 px-4 py-2 bg-warning/10 text-warning rounded-xl text-xs font-bold hover:bg-warning/20 transition-colors"
-                >
-                  <Flag size={14} /> Flag
-                </button>
-              )}
-              <button 
-                onClick={() => handleDelete(review.id)}
-                className="flex items-center gap-2 px-4 py-2 bg-error/10 text-error rounded-xl text-xs font-bold hover:bg-error/20 transition-colors"
-              >
-                <Trash2 size={14} /> Delete
-              </button>
-            </div>
-          </div>
+      {/* Stat Tabs */}
+      <div className="flex gap-2 flex-wrap">
+        {([
+          { key: 'pending', label: 'Pending', color: 'amber' },
+          { key: 'approved', label: 'Approved', color: 'green' },
+          { key: 'rejected', label: 'Rejected', color: 'red' },
+        ] as { key: TabType; label: string; color: string }[]).map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
+              tab === t.key
+                ? t.key === 'pending' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
+                  : t.key === 'approved' ? 'bg-green-500 text-white shadow-lg shadow-green-500/20'
+                  : 'bg-red-500 text-white shadow-lg shadow-red-500/20'
+                : 'bg-card border border-border text-muted-foreground hover:border-primary/30'
+            }`}
+          >
+            {t.label}
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+              tab === t.key ? 'bg-white/20' : 'bg-muted'
+            }`}>
+              {counts[t.key]}
+            </span>
+          </button>
         ))}
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between pt-4">
-        <p className="text-sm text-muted-foreground">Showing 1 to {filteredReviews.length} of {filteredReviews.length} reviews</p>
-        <div className="flex items-center gap-2">
-          <button className="p-2 border border-border rounded-xl hover:bg-muted transition-colors disabled:opacity-50" disabled>
-            <ChevronLeft size={20} />
-          </button>
-          <button className="w-10 h-10 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20">1</button>
-          <button className="p-2 border border-border rounded-xl hover:bg-muted transition-colors disabled:opacity-50" disabled>
-            <ChevronRight size={20} />
-          </button>
+      {/* Reviews List */}
+      {filtered.length === 0 ? (
+        <div className="text-center py-20">
+          <MessageSquare size={48} className="text-muted-foreground mx-auto mb-4 opacity-30" />
+          <p className="text-muted-foreground">
+            {tab === 'pending' ? 'No reviews awaiting approval.' : `No ${tab} reviews.`}
+          </p>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-4">
+          {filtered.map((review, idx) => {
+            const firstName = (review.user_profiles?.full_name || 'Anonymous').split(' ')[0];
+            const carName = review.cars ? `${review.cars.make} ${review.cars.model} ${review.cars.year}` : 'Unknown Vehicle';
+
+            return (
+              <motion.div
+                key={review.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.04 }}
+                className={`bg-card border rounded-2xl p-6 transition-all ${
+                  tab === 'pending' ? 'border-amber-500/20 hover:border-amber-500/40' :
+                  tab === 'approved' ? 'border-green-500/10 hover:border-green-500/30' :
+                  'border-red-500/10 hover:border-red-500/30'
+                }`}
+              >
+                <div className="flex flex-col md:flex-row md:items-start gap-5">
+                  {/* Avatar & Info */}
+                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-lg shrink-0">
+                      {firstName[0]}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3 flex-wrap mb-1">
+                        <span className="font-bold text-foreground">{firstName}</span>
+                        <span className="text-muted-foreground text-xs flex items-center gap-1">
+                          <Car size={11} /> {carName}
+                        </span>
+                        <span className="text-muted-foreground text-xs flex items-center gap-1">
+                          <Clock size={11} />
+                          {new Date(review.created_at).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
+                      {/* Stars */}
+                      <div className="flex items-center gap-0.5 mb-3">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} size={15} className={i < review.rating ? 'fill-amber-400 text-amber-400' : 'text-border'} />
+                        ))}
+                      </div>
+                      {/* Comment */}
+                      <p className="text-muted-foreground text-sm leading-relaxed italic">
+                        "{review.comment}"
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 shrink-0 md:flex-col md:items-end">
+                    {tab === 'pending' && (
+                      <>
+                        <button
+                          onClick={() => updateStatus(review.id, 'approved')}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-500 rounded-xl text-xs font-bold hover:bg-green-500/20 transition-colors"
+                        >
+                          <CheckCircle2 size={14} /> Approve
+                        </button>
+                        <button
+                          onClick={() => updateStatus(review.id, 'rejected')}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-500 rounded-xl text-xs font-bold hover:bg-red-500/20 transition-colors"
+                        >
+                          <XCircle size={14} /> Reject
+                        </button>
+                      </>
+                    )}
+                    {tab === 'approved' && (
+                      <button
+                        onClick={() => updateStatus(review.id, 'rejected')}
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 text-amber-500 rounded-xl text-xs font-bold hover:bg-amber-500/20 transition-colors"
+                      >
+                        <XCircle size={14} /> Revoke
+                      </button>
+                    )}
+                    {tab === 'rejected' && (
+                      <button
+                        onClick={() => updateStatus(review.id, 'approved')}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-500 rounded-xl text-xs font-bold hover:bg-green-500/20 transition-colors"
+                      >
+                        <CheckCircle2 size={14} /> Approve
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deleteReview(review.id)}
+                      className="flex items-center gap-2 px-4 py-2 bg-error/10 text-error rounded-xl text-xs font-bold hover:bg-error/20 transition-colors"
+                    >
+                      <Trash2 size={14} /> Delete
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -37,7 +37,13 @@
   <url>
     <loc>https://linkedupcarsrentals.com/faq</loc>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://linkedupcarsrentals.com/insights</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
   </url>
 
   <url>

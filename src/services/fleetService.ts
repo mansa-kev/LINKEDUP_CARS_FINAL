@@ -306,12 +306,22 @@ export const fleetService = {
 
   getReviews: async (carId: string) => {
     const { data, error } = await supabase
-      .from('reviews')
+      .from('car_reviews')
       .select('*, user_profiles(full_name)')
       .eq('car_id', carId)
-      .eq('status', 'published')
+      .eq('status', 'approved')
       .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getReviews');
+    if (error) return [];
+    return data;
+  },
+
+  submitReview: async (review: { booking_id: string; car_id: string; user_id: string; rating: number; comment: string }) => {
+    const { data, error } = await supabase
+      .from('car_reviews')
+      .insert([{ ...review, status: 'pending' }])
+      .select()
+      .single();
+    if (error) return handleSupabaseError(error, 'submitReview');
     return data;
   },
 
