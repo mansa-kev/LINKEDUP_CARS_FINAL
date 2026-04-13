@@ -36,6 +36,24 @@ export function MyBookings() {
     fetchBookings();
   }, []);
 
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      channel = supabase
+        .channel(`my-bookings-${user.id}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'bookings',
+          filter: `client_id=eq.${user.id}`,
+        }, () => { fetchBookings(); })
+        .subscribe();
+    })();
+    return () => { if (channel) supabase.removeChannel(channel); };
+  }, []);
+
   const fetchBookings = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();

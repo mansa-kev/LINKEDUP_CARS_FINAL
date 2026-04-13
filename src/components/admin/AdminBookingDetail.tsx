@@ -56,8 +56,10 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
   const [showDocRejection, setShowDocRejection] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
 
+  const handleClose = () => { onRefresh(); onClose(); };
+
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !lightboxUrl) onClose(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !lightboxUrl) handleClose(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose, lightboxUrl]);
@@ -89,7 +91,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
   const clientName  = booking.client?.full_name    || guestInfo.full_name    || 'N/A';
   const clientEmail = booking.client?.email        || guestInfo.email        || 'N/A';
   const clientPhone = booking.client?.phone_number || booking.client?.phone  || guestInfo.phone || 'N/A';
-  const idNumber    = booking.client?.id_number    || guestInfo.id_number    || 'N/A';
+  const idNumber    = guestInfo.id_number || guestInfo.national_id || docs.idNumber || docs.id_number || (meta as any).id_number || booking.client?.id_number || 'N/A';
   const licenseNum  = booking.client?.license_number || guestInfo.license_number || guestInfo.license || 'N/A';
   const isPaid      = booking.payment_status === 'paid';
   const docsOk      = booking.document_status === 'approved';
@@ -210,14 +212,16 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
       }
 
       if (booking.client_id) {
-        await supabase.from('notifications').insert({
-          user_id: booking.client_id,
-          type: communicateMode === 'approval' ? 'booking_confirmed' : 'booking_update',
-          title: communicateMode === 'approval' ? 'Booking Confirmed 🎉' : subject,
-          content: fullMsg.slice(0, 300),
-          is_read: false,
-          link: `/booking-confirmation/${booking.id}`,
-        }).catch(e => logger.warn('Notification error:', e));
+        try {
+          await supabase.from('notifications').insert({
+            user_id: booking.client_id,
+            type: communicateMode === 'approval' ? 'booking_confirmed' : 'booking_update',
+            title: communicateMode === 'approval' ? 'Booking Confirmed 🎉' : subject,
+            content: fullMsg.slice(0, 300),
+            is_read: false,
+            link: `/booking-confirmation/${booking.id}`,
+          });
+        } catch (e) { logger.warn('Notification error:', e); }
       }
 
       if (communicateMode === 'approval') {
@@ -231,7 +235,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
 
       setSendSuccess(true);
       toast.success('Message sent! Booking updated.');
-      setTimeout(() => { onRefresh(); onClose(); }, 1800);
+      setTimeout(() => { handleClose(); }, 1800);
     } catch (e: any) {
       logger.error('Error sending message:', e);
       toast.error('Failed to send message');
@@ -317,7 +321,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-50 flex items-center justify-center p-2 md:p-4 bg-background/80 backdrop-blur-sm"
-        onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+        onClick={e => { if (e.target === e.currentTarget) handleClose(); }}
       >
         <div className="bg-card border border-border rounded-xl md:rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] md:max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
 
@@ -354,7 +358,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
             <button onClick={onDelete} title="Delete booking" className="p-2 hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded-xl transition-colors">
               <Trash2 size={15} />
             </button>
-            <button onClick={onClose} className="p-2 hover:bg-muted text-muted-foreground rounded-xl transition-colors">
+            <button onClick={handleClose} className="p-2 hover:bg-muted text-muted-foreground rounded-xl transition-colors">
               <X size={16} />
             </button>
           </div>

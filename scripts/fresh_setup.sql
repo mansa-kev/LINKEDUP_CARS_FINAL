@@ -40,6 +40,8 @@ DO $$ BEGIN
 END $$;
 
 ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'on_trip';
+ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'pending_collection';
+ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'returned';
 
 -- ===================== HELPER FUNCTIONS (MUST come before policies) =====================
 
@@ -51,6 +53,38 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- handle_new_user: auto-create user_profiles row on signup
+-- SECURITY DEFINER bypasses RLS so it always inserts regardless of anon/authenticated context
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.user_profiles (id, email, full_name, role, status)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
+    COALESCE(NEW.raw_user_meta_data->>'role', 'client')::user_role,
+    'active'
+  )
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- Admin policies needed for fleet owner / driver account creation
+DROP POLICY IF EXISTS "Admins can insert profiles" ON user_profiles;
+CREATE POLICY "Admins can insert profiles" ON user_profiles
+  FOR INSERT WITH CHECK (is_admin());
+
+DROP POLICY IF EXISTS "Admins can insert fleet owner settings" ON fleet_owner_settings;
+CREATE POLICY "Admins can insert fleet owner settings" ON fleet_owner_settings
+  FOR INSERT WITH CHECK (is_admin());
 
 -- Admin check helper
 CREATE OR REPLACE FUNCTION is_admin() RETURNS BOOLEAN AS $$
@@ -161,6 +195,16 @@ CREATE TABLE IF NOT EXISTS bookings (
   metadata JSONB,
   document_status TEXT DEFAULT 'pending',
   admin_notes TEXT,
+  -- Lifecycle tracking
+  pickup_confirmed_at TIMESTAMPTZ,
+  pickup_confirmed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  actual_pickup_location TEXT,
+  return_confirmed_at TIMESTAMPTZ,
+  return_confirmed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  return_condition TEXT DEFAULT 'good',
+  return_notes TEXT,
+  overtime_hours NUMERIC DEFAULT 0,
+  overtime_charge NUMERIC DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -861,6 +905,18 @@ VALUES
 ('Weekend Flash Sale', 'Get 25% off on all SUV rentals this weekend only.', 25, 'Bronze', 'active', 'https://picsum.photos/seed/suv/800/400'),
 ('Personal Concierge Service', 'Complimentary personal concierge for all your travel needs.', 0, 'Platinum', 'active', 'https://picsum.photos/seed/concierge/800/400')
 ON CONFLICT DO NOTHING;
+
+-- ===================== LIVE DB MIGRATIONS (safe to re-run) =====================
+-- Add lifecycle columns if they don't exist on an already-running database
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pickup_confirmed_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pickup_confirmed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS actual_pickup_location TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS return_confirmed_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS return_confirmed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS return_condition TEXT DEFAULT 'good';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS return_notes TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS overtime_hours NUMERIC DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS overtime_charge NUMERIC DEFAULT 0;
 
 -- ===================== REALTIME =====================
 -- Enable realtime for key tables (idempotent — safe to re-run)

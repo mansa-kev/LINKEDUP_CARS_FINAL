@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { adminService } from '../../services/adminService';
 import { supabase } from '../../lib/supabase';
 import { AdminBookingDetail } from './AdminBookingDetail';
+import { AdminBookingLifecycle } from './AdminBookingLifecycle';
 import { 
   Search, 
   Filter, 
@@ -33,7 +34,7 @@ import { logger } from '../../utils/logger';
 
 // --- Types ---
 
-type BookingStatus = 'pending' | 'confirmed' | 'on_trip' | 'completed' | 'cancelled' | 'pending_payment_verification';
+type BookingStatus = 'pending' | 'confirmed' | 'pending_collection' | 'on_trip' | 'returned' | 'completed' | 'cancelled' | 'pending_payment_verification';
 
 interface Booking {
   id: string;
@@ -49,6 +50,15 @@ interface Booking {
   payment_status: 'paid' | 'pending' | 'failed';
   document_status?: 'pending' | 'approved' | 'rejected' | 'resubmission_required' | 'resubmitted';
   admin_notes?: string;
+  pickup_confirmed_at?: string;
+  pickup_confirmed_by?: string;
+  actual_pickup_location?: string;
+  return_confirmed_at?: string;
+  return_confirmed_by?: string;
+  return_condition?: string;
+  return_notes?: string;
+  overtime_hours?: number;
+  overtime_charge?: number;
   created_at: string;
   client?: any;
   fleet_owner?: any;
@@ -62,7 +72,9 @@ const StatusBadge = ({ status }: { status: BookingStatus }) => {
   const styles: Record<BookingStatus, string> = {
     pending: 'bg-warning/10 text-warning border-warning/20',
     confirmed: 'bg-success/10 text-success border-success/20',
+    pending_collection: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
     on_trip: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+    returned: 'bg-teal-500/10 text-teal-500 border-teal-500/20',
     completed: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
     cancelled: 'bg-error/10 text-error border-error/20',
     pending_payment_verification: 'bg-muted/10 text-muted-foreground border-muted/20',
@@ -90,8 +102,12 @@ export function AdminBookings() {
   const [filterFleetOwner, setFilterFleetOwner] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'all' | 'pending_collection' | 'on_trip' | 'returns_due' | 'completed'>('all');
+
   // Modal State
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [lifecycleBooking, setLifecycleBooking] = useState<Booking | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Booking | null>(null);
   
   // Mobile expandable row state
@@ -184,11 +200,31 @@ export function AdminBookings() {
     }
   };
 
-  const filteredBookings = bookings.filter(b => {
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  const tabBookings = bookings.filter(b => {
+    if (activeTab === 'all') return true;
+    if (activeTab === 'pending_collection') return b.status === 'confirmed' || b.status === 'pending_collection';
+    if (activeTab === 'on_trip') return b.status === 'on_trip';
+    if (activeTab === 'returns_due') return b.status === 'on_trip' && new Date(b.end_date) < today;
+    if (activeTab === 'completed') return b.status === 'completed' || b.status === 'returned';
+    return true;
+  });
+
+  const filteredBookings = tabBookings.filter(b => {
+    const name = b.client?.full_name || b.metadata?.guest_info?.full_name || '';
     const matchesSearch = b.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (b.client?.full_name || '').toLowerCase().includes(searchQuery.toLowerCase());
+                          name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
+
+  const tabCounts = {
+    all: bookings.length,
+    pending_collection: bookings.filter(b => b.status === 'confirmed' || b.status === 'pending_collection').length,
+    on_trip: bookings.filter(b => b.status === 'on_trip').length,
+    returns_due: bookings.filter(b => b.status === 'on_trip' && new Date(b.end_date) < today).length,
+    completed: bookings.filter(b => b.status === 'completed' || b.status === 'returned').length,
+  };
 
   if (loading && bookings.length === 0) {
     return (
@@ -206,6 +242,37 @@ export function AdminBookings() {
           <h1 className="text-2xl md:text-3xl font-bold">Bookings Management</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage all car rental bookings</p>
         </div>
+      </div>
+
+      {/* Lifecycle Tabs */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        {([
+          { key: 'all',                label: 'All Bookings',       icon: '📋' },
+          { key: 'pending_collection', label: 'Pending Collection', icon: '🔑' },
+          { key: 'on_trip',            label: 'In Transit',         icon: '🚗' },
+          { key: 'returns_due',        label: 'Returns Due',        icon: '⏰' },
+          { key: 'completed',          label: 'Completed',          icon: '✅' },
+        ] as const).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+              activeTab === tab.key
+                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                : 'bg-card text-muted-foreground border-border hover:bg-muted'
+            }`}
+          >
+            <span>{tab.icon}</span>
+            <span>{tab.label}</span>
+            {tabCounts[tab.key] > 0 && (
+              <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                activeTab === tab.key ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'
+              }${
+                tab.key === 'returns_due' && tabCounts.returns_due > 0 ? ' !bg-error/20 !text-error' : ''
+              }`}>{tabCounts[tab.key]}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Table - Desktop View */}
@@ -255,7 +322,7 @@ export function AdminBookings() {
                         <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                           <User size={12} />
                         </div>
-                        <span className="text-xs md:text-sm font-medium">{booking.client?.full_name || 'Unknown'}</span>
+                        <span className="text-xs md:text-sm font-medium">{booking.client?.full_name || booking.metadata?.guest_info?.full_name || booking.metadata?.guest_info?.name || 'Guest'}</span>
                       </div>
                     </td>
                     <td className="px-3 md:px-6 py-2 md:py-4">
@@ -287,6 +354,15 @@ export function AdminBookings() {
                     </td>
                     <td className="px-3 md:px-6 py-2 md:py-4 text-right">
                       <div className="flex items-center justify-end gap-1 md:gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {['confirmed','pending_collection','on_trip','returned'].includes(booking.status) && (
+                          <button
+                            onClick={() => setLifecycleBooking(booking)}
+                            className="p-1.5 md:p-2 hover:bg-blue-500/10 rounded-lg text-muted-foreground hover:text-blue-500 transition-colors"
+                            title="Manage Lifecycle"
+                          >
+                            <Car size={14} />
+                          </button>
+                        )}
                         <button 
                           onClick={() => setSelectedBooking(booking)}
                           className="p-1.5 md:p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors" 
@@ -326,8 +402,8 @@ export function AdminBookings() {
                     <User size={12} />
                   </div>
                   <div>
-                    <p className="text-sm font-bold">{booking.id.split('-')[0]}...</p>
-                    <p className="text-xs text-muted-foreground">{booking.client?.full_name || 'Unknown'}</p>
+                    <p className="text-sm font-bold">{booking.client?.full_name || booking.metadata?.guest_info?.full_name || booking.id.split('-')[0]}...</p>
+                    <p className="text-xs text-muted-foreground">{booking.client?.email || booking.metadata?.guest_info?.email || booking.id.slice(0,8).toUpperCase()}</p>
                   </div>
                 </div>
                 <ChevronDown 
@@ -346,7 +422,7 @@ export function AdminBookings() {
                     </div>
                     <div>
                       <span className="text-xs text-muted uppercase tracking-wide">Client</span>
-                      <p className="text-sm text-white font-medium">{booking.client?.full_name || 'Unknown'}</p>
+                      <p className="text-sm text-white font-medium">{booking.client?.full_name || booking.metadata?.guest_info?.full_name || 'Guest'}</p>
                     </div>
                     <div>
                       <span className="text-xs text-muted uppercase tracking-wide">Car</span>
@@ -382,6 +458,15 @@ export function AdminBookings() {
 
                   {/* Action Buttons */}
                   <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
+                    {['confirmed','pending_collection','on_trip','returned'].includes(booking.status) && (
+                      <button
+                        onClick={() => setLifecycleBooking(booking)}
+                        className="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-colors flex items-center gap-2"
+                      >
+                        <Car size={12} />
+                        Manage
+                      </button>
+                    )}
                     <button 
                       onClick={() => setSelectedBooking(booking)}
                       className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-2"
@@ -411,6 +496,15 @@ export function AdminBookings() {
           onClose={() => setSelectedBooking(null)}
           onRefresh={fetchBookings}
           onDelete={() => { setDeleteConfirm(selectedBooking); setSelectedBooking(null); }}
+        />
+      )}
+
+      {/* Lifecycle Modal */}
+      {lifecycleBooking && (
+        <AdminBookingLifecycle
+          booking={lifecycleBooking as any}
+          onClose={() => setLifecycleBooking(null)}
+          onRefresh={fetchBookings}
         />
       )}
 
