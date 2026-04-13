@@ -132,14 +132,15 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
 </body>
 </html>`;
 
-    const win = window.open('', '_blank', 'width=900,height=700');
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      // Delay print to allow iframe PDF to load
-      setTimeout(() => win.print(), pdfUrl ? 2000 : 300);
-    }
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = `rental-contract-${bookingRef}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
   };
 
   return (
@@ -161,9 +162,10 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
             <button
               onClick={handleSaveAsPDF}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-black/80 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-black/80 transition-colors disabled:opacity-50"
             >
-              <Printer size={14} /> Save as PDF
+              <Printer size={14} />
+              <span className="hidden sm:inline">Save as PDF</span>
             </button>
             {pdfUrl && (
               <a
@@ -172,7 +174,8 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 px-3 py-2 bg-black/20 text-black rounded-xl text-xs font-bold hover:bg-black/30 transition-colors"
               >
-                <ExternalLink size={14} /> Open PDF
+                <ExternalLink size={14} />
+                <span className="hidden sm:inline">Open PDF</span>
               </a>
             )}
             <button
@@ -208,7 +211,7 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
         )}
 
         {/* Contract PDF area */}
-        <div className="flex-1 overflow-hidden bg-muted/30 min-h-0">
+        <div className="bg-muted/30" style={{ height: 'calc(100dvh - 220px)', minHeight: '300px', overflow: 'auto' }}>
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 py-20">
               <Loader2 className="animate-spin text-primary" size={36} />
@@ -225,8 +228,8 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
           ) : (
             <iframe
               src={`${pdfUrl}#toolbar=1&navpanes=0`}
-              className="w-full h-full border-0"
-              style={{ minHeight: '60vh' }}
+              className="w-full border-0"
+              style={{ height: '100%', minHeight: '300px', display: 'block' }}
               title="Rental Agreement"
             />
           )}
@@ -235,7 +238,7 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
         {/* Footer note */}
         <div className="px-6 py-3 bg-card border-t border-border text-center shrink-0">
           <p className="text-[10px] text-muted-foreground">
-            Click <strong>Save as PDF</strong> to download a copy with all your booking details attached. On mobile, use your browser's share/print menu to save.
+            Click <strong>Save as PDF</strong> to download your booking summary. Open the downloaded file in a browser and use <strong>Print → Save as PDF</strong> to get a PDF copy.
           </p>
         </div>
       </div>

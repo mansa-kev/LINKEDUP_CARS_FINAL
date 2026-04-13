@@ -24,6 +24,80 @@ const DOC_LABELS: Record<DocType, string> = {
   idBack: 'ID Back'
 };
 
+interface DocumentSlotProps {
+  type: DocType;
+  uploadedUrl: string;
+  isUploading: boolean;
+  onUploadFile: (file: File, type: DocType) => void;
+  onOpenCamera: (type: DocType) => void;
+}
+
+function DocumentSlot({ type, uploadedUrl, isUploading, onUploadFile, onOpenCamera }: DocumentSlotProps) {
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop: (files) => { if (files[0]) onUploadFile(files[0], type); },
+    accept: { 'image/*': ['.jpeg', '.jpg', '.png', '.webp'], 'application/pdf': ['.pdf'] },
+    maxFiles: 1,
+    multiple: false,
+    noClick: true
+  } as any);
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[9px] font-black uppercase tracking-widest text-white/50 text-center">{DOC_LABELS[type]}</p>
+      <div
+        {...getRootProps()}
+        className={`relative p-4 border-2 border-dashed rounded-[16px] md:rounded-[20px] text-center transition-all ${
+          uploadedUrl ? 'border-green-500/50 bg-green-500/5'
+          : isDragActive ? 'border-primary bg-primary/5'
+          : 'border-white/10 hover:border-white/20'
+        }`}
+      >
+        <input {...getInputProps()} />
+        <AnimatePresence mode="wait">
+          {isUploading ? (
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-1 py-2">
+              <Loader2 className="animate-spin text-primary" size={20} />
+              <p className="text-[9px] font-black uppercase tracking-widest text-primary">Uploading...</p>
+            </motion.div>
+          ) : uploadedUrl ? (
+            <motion.div key="success" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-1 py-2">
+              <CheckCircle2 className="text-green-500" size={20} />
+              <p className="text-[9px] font-black uppercase tracking-widest text-green-500">Done</p>
+            </motion.div>
+          ) : (
+            <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-2 py-1">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onOpenCamera(type)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 rounded-xl text-primary hover:bg-primary/20 transition-colors"
+                >
+                  <Camera size={14} />
+                  <span className="text-[9px] font-bold uppercase tracking-wider">Camera</span>
+                </button>
+                <label className="flex items-center gap-1.5 px-3 py-2 bg-white/5 rounded-xl text-white/50 hover:bg-white/10 transition-colors cursor-pointer">
+                  <Image size={14} />
+                  <span className="text-[9px] font-bold uppercase tracking-wider">File</span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) onUploadFile(file, type);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
 export function Step2({ car, onNext, onPrev }: Step2Props) {
   const [uploading, setUploading] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState<DocType | null>(null);
@@ -65,75 +139,6 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
     setShowCamera(null);
   };
 
-  const DocumentSlot = ({ type }: { type: DocType }) => {
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({
-      onDrop: (files) => { if (files[0]) uploadFile(files[0], type); },
-      accept: { 'image/*': ['.jpeg', '.jpg', '.png', '.webp'], 'application/pdf': ['.pdf'] },
-      maxFiles: 1,
-      multiple: false,
-      noClick: true
-    } as any);
-
-    const urlKey = `${type}Url` as keyof typeof formData;
-    const isUploaded = !!formData[urlKey];
-    const isThisUploading = uploading === type;
-
-    return (
-      <div className="space-y-2">
-        <p className="text-[9px] font-black uppercase tracking-widest text-white/50 text-center">{DOC_LABELS[type]}</p>
-        <div
-          {...getRootProps()}
-          className={`relative p-4 border-2 border-dashed rounded-[16px] md:rounded-[20px] text-center transition-all ${
-            isUploaded ? 'border-green-500/50 bg-green-500/5'
-            : isDragActive ? 'border-primary bg-primary/5'
-            : 'border-white/10 hover:border-white/20'
-          }`}
-        >
-          <input {...getInputProps()} />
-          <AnimatePresence mode="wait">
-            {isThisUploading ? (
-              <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-1 py-2">
-                <Loader2 className="animate-spin text-primary" size={20} />
-                <p className="text-[9px] font-black uppercase tracking-widest text-primary">Uploading...</p>
-              </motion.div>
-            ) : isUploaded ? (
-              <motion.div key="success" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-1 py-2">
-                <CheckCircle2 className="text-green-500" size={20} />
-                <p className="text-[9px] font-black uppercase tracking-widest text-green-500">Done</p>
-              </motion.div>
-            ) : (
-              <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-2 py-1">
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowCamera(type)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 rounded-xl text-primary hover:bg-primary/20 transition-colors"
-                  >
-                    <Camera size={14} />
-                    <span className="text-[9px] font-bold uppercase tracking-wider">Camera</span>
-                  </button>
-                  <label className="flex items-center gap-1.5 px-3 py-2 bg-white/5 rounded-xl text-white/50 hover:bg-white/10 transition-colors cursor-pointer">
-                    <Image size={14} />
-                    <span className="text-[9px] font-bold uppercase tracking-wider">File</span>
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadFile(file, type);
-                      }}
-                    />
-                  </label>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-    );
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const required: DocType[] = ['facePhoto', 'licenseFront', 'licenseBack', 'idFront', 'idBack'];
@@ -151,6 +156,7 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
         <CameraCapture
           onCapture={handleCameraCapture}
           onClose={() => setShowCamera(null)}
+          defaultFacing={showCamera === 'facePhoto' ? 'user' : 'environment'}
         />
       )}
       <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -212,7 +218,7 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
           <div>
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-3 block">Face Photo / Passport Photo</label>
             <div className="max-w-xs mx-auto">
-              <DocumentSlot type="facePhoto" />
+              <DocumentSlot type="facePhoto" uploadedUrl={formData.facePhotoUrl} isUploading={uploading === 'facePhoto'} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
             </div>
           </div>
 
@@ -220,8 +226,8 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
           <div>
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-3 block">Driver's License</label>
             <div className="grid grid-cols-2 gap-3 md:gap-4">
-              <DocumentSlot type="licenseFront" />
-              <DocumentSlot type="licenseBack" />
+              <DocumentSlot type="licenseFront" uploadedUrl={formData.licenseFrontUrl} isUploading={uploading === 'licenseFront'} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
+              <DocumentSlot type="licenseBack" uploadedUrl={formData.licenseBackUrl} isUploading={uploading === 'licenseBack'} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
             </div>
           </div>
 
@@ -229,8 +235,8 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
           <div>
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-3 block">National ID / Passport</label>
             <div className="grid grid-cols-2 gap-3 md:gap-4">
-              <DocumentSlot type="idFront" />
-              <DocumentSlot type="idBack" />
+              <DocumentSlot type="idFront" uploadedUrl={formData.idFrontUrl} isUploading={uploading === 'idFront'} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
+              <DocumentSlot type="idBack" uploadedUrl={formData.idBackUrl} isUploading={uploading === 'idBack'} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
             </div>
           </div>
         </div>

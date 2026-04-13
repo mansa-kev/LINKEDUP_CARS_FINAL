@@ -135,13 +135,27 @@ export function ContractViewer({ contract, bookingData, car, onContractLoaded }:
   const handleZoomOut = () => setScale(prev => Math.max(prev - 0.1, 0.5));
   const handleRotate = () => setRotation(prev => prev + 90);
 
-  const handleDownload = () => {
-    // In a real implementation, this would generate and download the PDF with overlays
-    const link = document.createElement('a');
-    link.href = contractUrl;
-    link.download = `rental-contract-${bookingData?.id || 'default'}.pdf`;
-    link.click();
-    toast.success('Contract downloaded successfully');
+  const handleDownload = async () => {
+    try {
+      toast.loading('Preparing download...');
+      const response = await fetch(contractUrl);
+      if (!response.ok) throw new Error('Failed to fetch contract');
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `rental-contract-${bookingData?.id || 'default'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+      toast.dismiss();
+      toast.success('Contract downloaded');
+    } catch {
+      toast.dismiss();
+      toast.error('Download failed — opening in new tab instead');
+      window.open(contractUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   if (error) {

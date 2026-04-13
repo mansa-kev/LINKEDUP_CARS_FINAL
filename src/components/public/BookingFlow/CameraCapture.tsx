@@ -1,18 +1,19 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Camera, X, RotateCcw, Check } from 'lucide-react';
+import { X, RotateCcw, Check } from 'lucide-react';
 
 interface CameraCaptureProps {
   onCapture: (file: File) => void;
   onClose: () => void;
+  defaultFacing?: 'user' | 'environment';
 }
 
-export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
+export function CameraCapture({ onCapture, onClose, defaultFacing = 'environment' }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>(defaultFacing);
 
   const startCamera = useCallback(async () => {
     try {
@@ -76,8 +77,13 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
           <X size={24} />
         </button>
         <span className="text-white text-xs font-bold uppercase tracking-widest">Take Photo</span>
-        <button type="button" onClick={switchCamera} className="text-white p-2">
-          <RotateCcw size={20} />
+        <button
+          type="button"
+          onClick={switchCamera}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 border border-white/30 text-white text-xs font-bold"
+        >
+          <RotateCcw size={13} />
+          {facingMode === 'user' ? 'Front' : 'Rear'}
         </button>
       </div>
 
