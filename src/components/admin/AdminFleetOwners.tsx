@@ -243,17 +243,24 @@ export function AdminFleetOwners() {
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
+    const owner = owners.find(o => o.id === id);
+    const existingSettings = owner?.fleet_owner_settings?.[0] || {};
     try {
-      await adminService.updateFleetOwnerSettings(id, { status: newStatus });
-      fetchData();
+      await adminService.updateFleetOwnerSettings(id, {
+        status: newStatus,
+        commission_rate: existingSettings.commission_rate ?? 0.15,
+        company_name: existingSettings.company_name ?? ''
+      });
+      toast.success(`Status updated to ${newStatus.replace('_', ' ')}`);
+      await fetchData();
       if (selectedOwner && selectedOwner.id === id) {
-        setSelectedOwner({
-          ...selectedOwner,
-          fleet_owner_settings: [{ ...selectedOwner.fleet_owner_settings[0], status: newStatus }]
-        });
+        setSelectedOwner((prev: any) => ({
+          ...prev,
+          fleet_owner_settings: [{ ...(prev.fleet_owner_settings?.[0] || {}), status: newStatus }]
+        }));
       }
     } catch (error: any) {
-      alert(`Failed to update status: ${error.message || 'Unknown error'}`);
+      toast.error(`Failed to update status: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -382,13 +389,13 @@ export function AdminFleetOwners() {
                             <Building2 size={20} />
                           </div>
                           <div>
-                            <p className="font-bold text-sm">{settings.company_name || 'No Company Name'}</p>
-                            <p className="text-xs text-muted-foreground">{owner.full_name} â¢ {owner.email}</p>
+                            <p className="font-bold text-sm">{settings.company_name || owner.full_name || 'No Company Name'}</p>
+                            <p className="text-xs text-muted-foreground">{owner.full_name} &bull; {owner.email}</p>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm font-bold">{(settings.commission_rate * 100).toFixed(0)}%</span>
+                        <span className="text-sm font-bold">{settings.commission_rate != null ? (Number(settings.commission_rate) * 100).toFixed(0) + '%' : '—'}</span>
                       </td>
                       <td className="px-6 py-4">
                         <StatusBadge status={settings.status || 'pending_verification'} />
@@ -474,7 +481,7 @@ export function AdminFleetOwners() {
                       <Building2 size={20} />
                     </div>
                     <div>
-                      <p className="text-sm font-bold truncate max-w-[150px]">{settings.company_name || 'No Company Name'}</p>
+                      <p className="text-sm font-bold truncate max-w-[150px]">{settings.company_name || owner.full_name || 'No Company Name'}</p>
                       <p className="text-xs text-muted-foreground">{owner.full_name}</p>
                     </div>
                   </div>
@@ -494,7 +501,7 @@ export function AdminFleetOwners() {
                       </div>
                       <div>
                         <span className="text-xs text-muted uppercase tracking-wide">Company Name</span>
-                        <p className="text-sm text-white font-medium">{settings.company_name || 'No Company Name'}</p>
+                        <p className="text-sm text-white font-medium">{settings.company_name || owner.full_name || 'No Company Name'}</p>
                       </div>
                       <div>
                         <span className="text-xs text-muted uppercase tracking-wide">Contact Name</span>
@@ -510,7 +517,7 @@ export function AdminFleetOwners() {
                       </div>
                       <div>
                         <span className="text-xs text-muted uppercase tracking-wide">Commission Rate</span>
-                        <p className="text-sm text-white font-medium">{(settings.commission_rate * 100).toFixed(0)}%</p>
+                        <p className="text-sm text-white font-medium">{settings.commission_rate != null ? (Number(settings.commission_rate) * 100).toFixed(0) + '%' : '—'}</p>
                       </div>
                       <div>
                         <span className="text-xs text-muted uppercase tracking-wide">Status</span>
