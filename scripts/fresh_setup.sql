@@ -159,7 +159,10 @@ CREATE TABLE IF NOT EXISTS bookings (
   needs_chauffeur BOOLEAN DEFAULT FALSE,
   driver_id UUID REFERENCES user_profiles(id) ON DELETE SET NULL,
   metadata JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  document_status TEXT DEFAULT 'pending',
+  admin_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 5. Transactions
@@ -792,6 +795,8 @@ CREATE TRIGGER update_client_preferences_updated_at BEFORE UPDATE ON client_pref
 
 DROP TRIGGER IF EXISTS update_extension_requests_updated_at ON extension_requests;
 CREATE TRIGGER update_extension_requests_updated_at BEFORE UPDATE ON extension_requests FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+DROP TRIGGER IF EXISTS update_bookings_updated_at ON bookings;
+CREATE TRIGGER update_bookings_updated_at BEFORE UPDATE ON bookings FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
 -- ===================== STORAGE BUCKETS =====================
 
