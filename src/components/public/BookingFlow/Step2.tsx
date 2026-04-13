@@ -32,6 +32,7 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
     email: '',
     phone: '',
     license: '',
+    idNumber: '',
     facePhotoUrl: '',
     licenseFrontUrl: '',
     licenseBackUrl: '',
@@ -196,6 +197,15 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
                 className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
               />
             </div>
+          </div>
+
+          <div className="group relative">
+            <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-primary transition-colors" size={18} />
+            <input
+              type="text" placeholder="National ID / Passport Number" required
+              value={formData.idNumber} onChange={(e) => setFormData({...formData, idNumber: e.target.value})}
+              className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
+            />
           </div>
 
           {/* Face Photo */}

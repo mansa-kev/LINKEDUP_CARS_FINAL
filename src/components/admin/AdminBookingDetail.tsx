@@ -135,11 +135,22 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
 
       if (status === 'verified') {
         await supabase.from('bookings').update({
+          status: 'confirmed',
           payment_status: 'paid',
           updated_at: new Date().toISOString(),
         }).eq('id', booking.id);
 
-        setBooking(prev => ({ ...prev, payment_status: 'paid' }));
+        // Create a transaction record so finances reflect immediately
+        await supabase.from('transactions').insert({
+          booking_id: booking.id,
+          user_id: booking.client_id,
+          amount: localPayment.amount,
+          type: 'payment_in',
+          status: 'completed',
+          transaction_code: localPayment.transaction_code || localPayment.id,
+        });
+
+        setBooking(prev => ({ ...prev, status: 'confirmed', payment_status: 'paid' }));
         setLocalPayment((prev: any) => ({ ...prev, status: 'verified' }));
         toast.success('Payment verified ✓');
         setStep('documents');
@@ -206,8 +217,9 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
 
     try {
       if (clientEmail !== 'N/A') {
+        const htmlBody = `<div style="font-family:sans-serif;line-height:1.6;white-space:pre-wrap">${fullMsg.replace(/\n/g, '<br>')}</div>`;
         await supabase.functions.invoke('send-email', {
-          body: { to: clientEmail, subject, message: fullMsg },
+          body: { to: clientEmail, subject, html: htmlBody, text: fullMsg },
         }).catch(e => logger.warn('Email send error:', e));
       }
 
@@ -244,10 +256,37 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
     }
   };
 
-  const openWhatsApp = () => {
+  const openWhatsApp = async () => {
     if (!hasPhone) { toast.error('No valid phone number on record'); return; }
     const text = encodeURIComponent(adminMessage.trim() + (additionalNotes.trim() ? `\n\nAdmin Notes:\n${additionalNotes.trim()}` : ''));
     window.open(`https://wa.me/${waPhone}?text=${text}`, '_blank', 'noopener,noreferrer');
+
+    if (communicateMode === 'approval') {
+      try {
+        await supabase.from('bookings').update({
+          status: 'confirmed',
+          payment_status: 'paid',
+          updated_at: new Date().toISOString(),
+        }).eq('id', booking.id);
+        setBooking(prev => ({ ...prev, status: 'confirmed', payment_status: 'paid' }));
+
+        if (booking.client_id) {
+          try {
+            await supabase.from('notifications').insert({
+              user_id: booking.client_id,
+              type: 'booking_confirmed',
+              title: 'Booking Confirmed 🎉',
+              content: adminMessage.slice(0, 300),
+              is_read: false,
+              link: `/booking-confirmation/${booking.id}`,
+            });
+          } catch (e) { logger.warn('Notification error:', e); }
+        }
+        setSendSuccess(true);
+      } catch (e: any) {
+        logger.warn('WhatsApp confirm DB update failed:', e);
+      }
+    }
   };
 
   const stepConfig = [
@@ -552,7 +591,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
                 </SectionCard>
 
                 {/* Contract & Signature */}
-                {(meta.contract_url || docs.signatureUrl || meta.signature) && (
+                {(meta.contract_url || docs.signatureUrl || meta.signature || meta.signature_url) && (
                   <SectionCard icon={<FileText size={13} />} title="Contract & Signature">
                     <div className="flex flex-wrap gap-4 items-start">
                       {meta.contract_url && (
@@ -561,11 +600,11 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
                           <ExternalLink size={12} /> View Contract PDF
                         </a>
                       )}
-                      {(docs.signatureUrl || meta.signature) && (
+                      {(docs.signatureUrl || meta.signature || meta.signature_url) && (
                         <div>
                           <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1.5">Digital Signature</p>
-                          <button onClick={() => setLightboxUrl(docs.signatureUrl || meta.signature)} className="cursor-zoom-in">
-                            <img src={docs.signatureUrl || meta.signature} alt="Signature" className="h-16 bg-white rounded-lg p-1.5 border border-border hover:border-primary transition-colors object-contain" />
+                          <button onClick={() => setLightboxUrl(docs.signatureUrl || meta.signature || meta.signature_url)} className="cursor-zoom-in">
+                            <img src={docs.signatureUrl || meta.signature || meta.signature_url} alt="Signature" className="h-16 bg-white rounded-lg p-1.5 border border-border hover:border-primary transition-colors object-contain" />
                           </button>
                         </div>
                       )}

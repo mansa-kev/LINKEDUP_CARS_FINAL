@@ -42,7 +42,8 @@ export const bookingService = {
         fleet_owner_id: car.fleet_owner_id,
         start_date: bookingData.startDate,
         end_date: bookingData.endDate,
-        pickup_location: bookingData.location,
+        pickup_location: bookingData.pickupLocation || bookingData.location,
+        dropoff_location: bookingData.dropoffLocation || bookingData.pickupLocation || bookingData.location,
         total_amount: totalAmount,
         platform_commission: platformCommission,
         status: bookingData.paymentMethod === 'mpesa' ? 'pending_payment_verification' : 'confirmed',
@@ -53,7 +54,8 @@ export const bookingService = {
             full_name: bookingData.fullName,
             email: bookingData.email,
             phone: bookingData.phone,
-            license_number: bookingData.license
+            license_number: bookingData.license,
+            id_number: bookingData.idNumber || null,
           } : null,
           signature_url: bookingData.signatureUrl,
           documents: bookingData.documents ?? {
