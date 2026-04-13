@@ -18,14 +18,10 @@ export default defineConfig(({mode}) => {
       },
     },
     build: {
-      sourcemap: false, // Disable source maps in production
-      minify: 'terser',
-      terserOptions: {
-        compress: {
-          drop_console: isProduction, // Remove console statements in production
-          drop_debugger: isProduction, // Remove debugger statements in production
-          pure_funcs: isProduction ? ['console.log', 'console.error', 'console.warn', 'console.info', 'console.debug'] : [],
-        },
+      sourcemap: false,
+      minify: 'esbuild',
+      esbuildOptions: {
+        drop: isProduction ? ['console', 'debugger'] : [],
       },
     },
     server: {
