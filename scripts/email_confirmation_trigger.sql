@@ -7,24 +7,19 @@ RETURNS TRIGGER AS $$
 DECLARE
   app_url TEXT;
   login_url TEXT;
+  profile_name TEXT;
 BEGIN
   -- Only send if email confirmation just happened
-  -- Check if user was created but not confirmed, and now is confirmed
   IF NEW.email_confirmed_at IS NOT NULL AND OLD.email_confirmed_at IS NULL THEN
-    -- Get the user's profile name
-    DECLARE
-      profile_name TEXT;
     BEGIN
       SELECT full_name INTO profile_name
-      FROM user_profiles
+      FROM public.user_profiles
       WHERE id = NEW.id;
-      
-      -- Set login URL based on environment
+
       app_url := 'https://app.linkedupcarsrentals.com/login';
       login_url := app_url;
-      
-      -- Send welcome email via notification queue (processed by edge function)
-      INSERT INTO notification_queue (
+
+      INSERT INTO public.notification_queue (
         channel,
         recipient,
         content,
@@ -45,9 +40,13 @@ BEGIN
         0,
         NOW()
       );
+    EXCEPTION
+      WHEN OTHERS THEN
+        -- Never block email confirmation even if welcome email queueing fails.
+        NULL;
     END;
   END IF;
-  
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
