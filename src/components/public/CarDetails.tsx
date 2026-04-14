@@ -16,7 +16,12 @@ import {
   Heart,
   X,
   Clock,
-  CheckCircle
+  CheckCircle,
+  Share2,
+  Copy,
+  Check,
+  QrCode,
+  MessageCircle
 } from 'lucide-react';
 import { fleetService } from '../../services/fleetService';
 import { reservationService } from '../../services/reservationService';
@@ -37,6 +42,9 @@ export function CarDetails() {
   const [showBooking, setShowBooking] = useState(false);
   const [showReservation, setShowReservation] = useState(false);
   const [availabilityStatus, setAvailabilityStatus] = useState<'available' | 'booked' | 'reserved'>('available');
+  const [showShare, setShowShare] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [showQr, setShowQr] = useState(false);
 
   useEffect(() => {
     async function fetchCar() {
@@ -88,6 +96,24 @@ export function CarDetails() {
   }, [location.search, car, availabilityStatus]);
 
   if (loading || !car) return <LogoLoader fullScreen message="Loading vehicle details..." />;
+
+  const shareUrl = `https://linkedupcarsrentals.com/cars/${car.id}?booking=true`;
+  const shareTitle = `${car.make} ${car.model} ${car.year} — KES ${car.daily_rate?.toLocaleString()}/day`;
+  const shareText = `🚗 Book the ${car.make} ${car.model} (${car.year}) in Nairobi from KES ${car.daily_rate?.toLocaleString()}/day. Tap to book instantly:`;
+  const waUrl = `https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`;
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareUrl)}&bgcolor=1a1a1a&color=f97316&margin=10`;
+
+  const handleCopy = async () => {
+    try { await navigator.clipboard.writeText(shareUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
+  };
+
+  const handleNativeShare = async () => {
+    if (navigator.share) {
+      try { await navigator.share({ title: shareTitle, text: shareText, url: shareUrl }); } catch {}
+    } else {
+      handleCopy();
+    }
+  };
 
   const carTitle = `${car.make} ${car.model} ${car.year} | Hire in Nairobi — LinkedUp Cars`;
   const carDesc = `Hire the ${car.make} ${car.model} (${car.year}) in Nairobi from KES ${car.daily_rate?.toLocaleString()}/day. ${car.seats} seats, ${car.transmission}. Instant booking — chauffeur or self-drive available.`;
@@ -274,7 +300,7 @@ export function CarDetails() {
               </div>
 
               {/* CTA Buttons */}
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
                 {availabilityStatus === 'available' ? (
                   <>
                     <motion.button 
@@ -303,6 +329,81 @@ export function CarDetails() {
                   </motion.button>
                 )}
               </div>
+
+              {/* Share Button */}
+              <button
+                onClick={() => { setShowShare(s => !s); setShowQr(false); }}
+                className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-white/5 border border-white/10 rounded-[14px] text-white/70 hover:text-white hover:bg-white/10 transition-all text-sm font-bold"
+              >
+                <Share2 size={15} /> Share this Car
+              </button>
+
+              {/* Share Panel */}
+              {showShare && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-3 p-4 bg-card/80 backdrop-blur-xl border border-white/10 rounded-[20px] space-y-3"
+                >
+                  {/* Link row */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0 px-3 py-2 bg-background/60 border border-white/10 rounded-xl text-xs text-white/60 font-mono truncate">
+                      {shareUrl}
+                    </div>
+                    <button
+                      onClick={handleCopy}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary rounded-xl text-xs font-bold transition-colors"
+                    >
+                      {copied ? <><Check size={13} /> Copied!</> : <><Copy size={13} /> Copy</>}
+                    </button>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <a
+                      href={waUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex flex-col items-center gap-1.5 py-3 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-400 rounded-xl text-[11px] font-bold transition-colors"
+                    >
+                      <MessageCircle size={18} />
+                      WhatsApp
+                    </a>
+                    <button
+                      onClick={handleNativeShare}
+                      className="flex flex-col items-center gap-1.5 py-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded-xl text-[11px] font-bold transition-colors"
+                    >
+                      <Share2 size={18} />
+                      {typeof navigator !== 'undefined' && navigator.share ? 'Share' : 'Copy Link'}
+                    </button>
+                    <button
+                      onClick={() => setShowQr(q => !q)}
+                      className={`flex flex-col items-center gap-1.5 py-3 border rounded-xl text-[11px] font-bold transition-colors ${
+                        showQr ? 'bg-primary/20 border-primary/30 text-primary' : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/70'
+                      }`}
+                    >
+                      <QrCode size={18} />
+                      QR Code
+                    </button>
+                  </div>
+
+                  {/* QR Code */}
+                  {showQr && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="flex flex-col items-center gap-3 pt-2"
+                    >
+                      <img
+                        src={qrSrc}
+                        alt="QR Code"
+                        className="w-40 h-40 rounded-2xl border border-white/10"
+                      />
+                      <p className="text-[10px] text-white/40 text-center">Scan to open booking on any phone</p>
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
             </motion.div>
           </div>
 

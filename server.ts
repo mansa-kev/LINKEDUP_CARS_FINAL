@@ -321,6 +321,57 @@ async function startServer() {
     }
   });
 
+  // ─── CAR SHARE — OG TAG SERVING FOR SOCIAL CRAWLERS ─────────────────
+  // WhatsApp/Telegram/Facebook crawlers don't run JS, so we serve OG HTML
+  // server-side. Real users get next() → React SPA handles the route.
+  app.get('/cars/:id', async (req: any, res: any, next: any) => {
+    const ua = req.headers['user-agent'] || '';
+    const isCrawler = /facebookexternalhit|facebot|twitterbot|linkedinbot|whatsapp|telegram|slackbot|discordbot|googlebot|bingbot|applebot|pinterest|snapchat|skype|yahoo|bot|crawl|spider/i.test(ua);
+    if (!isCrawler) return next();
+
+    try {
+      const { data: car } = await supabase
+        .from('cars')
+        .select('id, make, model, year, daily_rate, seats, transmission, primary_image_url, photos, description')
+        .eq('id', req.params.id)
+        .single();
+      if (!car) return next();
+
+      const carImage = car.primary_image_url ||
+        (Array.isArray(car.photos) && car.photos[0]) ||
+        'https://linkedupcarsrentals.com/logo.png';
+      const carTitle = `${car.make} ${car.model} ${car.year} | Hire in Nairobi — LinkedUp Cars`;
+      const carDesc  = `Book the ${car.make} ${car.model} (${car.year}) in Nairobi from KES ${Number(car.daily_rate).toLocaleString()}/day. ${car.seats} seats · ${car.transmission}. Tap to book instantly.`;
+      const carUrl   = `https://linkedupcarsrentals.com/cars/${car.id}?booking=true`;
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(`<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <title>${carTitle}</title>
+  <meta name="description" content="${carDesc}">
+  <meta property="og:title"       content="${carTitle}">
+  <meta property="og:description" content="${carDesc}">
+  <meta property="og:image"       content="${carImage}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:url"         content="${carUrl}">
+  <meta property="og:type"        content="product">
+  <meta property="og:site_name"   content="LinkedUp Cars">
+  <meta name="twitter:card"       content="summary_large_image">
+  <meta name="twitter:title"      content="${carTitle}">
+  <meta name="twitter:description" content="${carDesc}">
+  <meta name="twitter:image"      content="${carImage}">
+  <meta http-equiv="refresh" content="0; url=${carUrl}">
+  <script>window.location.replace("${carUrl}");</script>
+</head><body>
+  <p>Redirecting&#8230; <a href="${carUrl}">${carTitle}</a></p>
+</body></html>`);
+    } catch (_) {
+      next();
+    }
+  });
+
   // ─── VITE / STATIC SERVING ────────────────────────────────────────
 
   if (process.env.NODE_ENV !== "production") {
