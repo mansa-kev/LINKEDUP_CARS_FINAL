@@ -1139,24 +1139,26 @@ export const adminService = {
       .select();
     if (error) return handleSupabaseError(error, 'verifyPayment');
 
-    if (status === 'verified' && bookingId && amount && clientId) {
-      // Update booking status to confirmed
+    if (status === 'verified' && bookingId) {
+      // Update booking status to confirmed + payment to paid
       await supabase
         .from('bookings')
-        .update({ status: 'confirmed' })
+        .update({ status: 'confirmed', payment_status: 'paid' })
         .eq('id', bookingId);
 
-      // Create a transaction record
-      await supabase
-        .from('transactions')
-        .insert({
-          booking_id: bookingId,
-          user_id: clientId,
-          amount: amount,
-          type: 'payment_in',
-          status: 'completed',
-          transaction_code: transactionCode || id
-        });
+      // Create a transaction record (only if we have client context)
+      if (clientId && amount) {
+        await supabase
+          .from('transactions')
+          .insert({
+            booking_id: bookingId,
+            user_id: clientId,
+            amount: amount,
+            type: 'payment_in',
+            status: 'completed',
+            transaction_code: transactionCode || id
+          });
+      }
     } else if (status === 'rejected' && bookingId) {
       // Revert booking status to pending_payment
       await supabase

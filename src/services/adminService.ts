@@ -1333,7 +1333,7 @@ export const adminService = {
       .select();
     if (error) return handleSupabaseErrorWrapper(error, 'verifyPayment');
 
-    if (status === 'verified' && bookingId && amount && clientId) {
+    if (status === 'verified' && bookingId) {
       // First check if booking is cancelled
       const { data: booking } = await supabase
         .from('bookings')
@@ -1356,32 +1356,33 @@ export const adminService = {
         throw new Error('Failed to update booking status');
       }
 
-      // Create a transaction record
-      const { error: transactionError } = await supabase
-        .from('transactions')
-        .insert({
-          booking_id: bookingId,
+      // Create a transaction record (only if we have client context)
+      if (clientId && amount) {
+        const { error: transactionError } = await supabase
+          .from('transactions')
+          .insert({
+            booking_id: bookingId,
+            user_id: clientId,
+            amount: amount,
+            type: 'payment_in',
+            status: 'completed',
+            transaction_code: transactionCode || id
+          });
+
+        if (transactionError) {
+          logger.error('Error creating transaction:', transactionError);
+        }
+
+        // Send in-app notification to the client
+        await supabase.from('notifications').insert({
           user_id: clientId,
-          amount: amount,
-          type: 'payment_in',
-          status: 'completed',
-          transaction_code: transactionCode || id
-        });
-
-      if (transactionError) {
-        logger.error('Error creating transaction:', transactionError);
-        // Don't throw here - payment verification succeeded even if transaction creation failed
+          title: 'Payment Approved',
+          content: `Your M-Pesa payment of KSh ${Number(amount).toLocaleString()} has been verified. Your booking is now confirmed!`,
+          type: 'success',
+          is_read: false,
+          link: `/bookings/${bookingId}`,
+        }).then(() => {}, (err: any) => logger.error('Notification insert error:', err));
       }
-
-      // Send in-app notification to the client
-      await supabase.from('notifications').insert({
-        user_id: clientId,
-        title: 'Payment Approved',
-        content: `Your M-Pesa payment of KSh ${Number(amount).toLocaleString()} has been verified. Your booking is now confirmed!`,
-        type: 'success',
-        is_read: false,
-        link: `/bookings/${bookingId}`,
-      }).then(() => {}, (err: any) => logger.error('Notification insert error:', err));
 
       logger.log('Payment verification completed successfully');
     } else if (status === 'rejected' && bookingId) {
