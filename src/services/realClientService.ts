@@ -81,10 +81,10 @@ export const clientService = {
         .eq('client_id', clientId)
         .order('created_at', { ascending: false }),
       supabase
-        .from('pending_payments')
+        .from('transactions')
         .select('*, bookings(id, start_date, end_date, cars(make, model))')
-        .eq('client_id', clientId)
-        .order('submitted_at', { ascending: false }),
+        .eq('user_id', clientId)
+        .order('created_at', { ascending: false }),
     ]);
 
     const bookings = bookingsRes.data || [];

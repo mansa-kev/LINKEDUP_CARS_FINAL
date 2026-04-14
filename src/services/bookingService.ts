@@ -76,15 +76,13 @@ export const bookingService = {
 
       if (error) throw error;
 
-      // 6. If M-Pesa, also log to pending_payments
+      // 6. If M-Pesa, save transaction code directly on the booking
       if (bookingData.paymentMethod === 'mpesa' && bookingData.mpesaCode) {
-        await supabase.from('pending_payments').insert([{
-          booking_id: data.id,
-          client_id: user?.id || null,
-          amount: bookingData.totalAmount,
-          transaction_code: bookingData.mpesaCode,
-          status: 'submitted'
-        }]);
+        await supabase
+          .from('bookings')
+          .update({ transaction_code: bookingData.mpesaCode })
+          .eq('id', data.id);
+        data.transaction_code = bookingData.mpesaCode;
       }
 
       return data;
@@ -96,7 +94,7 @@ export const bookingService = {
   getBookingById: async (id: string) => {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*, cars(*), pending_payments(transaction_code, status, verified_at, amount)')
+      .select('*, cars(*)')
       .eq('id', id)
       .single();
     if (error) return handleSupabaseError(error, 'getBookingById');

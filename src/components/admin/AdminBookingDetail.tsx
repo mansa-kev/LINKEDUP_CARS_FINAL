@@ -43,8 +43,7 @@ type CommunicateMode = 'approval' | 'payment_rejected' | 'docs_rejected';
 export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh, onDelete }: Props) {
   const [booking, setBooking] = useState(initialBooking);
   const [step, setStep] = useState<Step>('payment');
-  const [localPayment, setLocalPayment] = useState<any>(null);
-  const [loadingPayment, setLoadingPayment] = useState(true);
+  const [loadingPayment, setLoadingPayment] = useState(false);
   const [communicateMode, setCommunicateMode] = useState<CommunicateMode>('approval');
   const [adminMessage, setAdminMessage] = useState('');
   const [additionalNotes, setAdditionalNotes] = useState('');
@@ -64,26 +63,6 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
     return () => window.removeEventListener('keydown', handler);
   }, [onClose, lightboxUrl]);
 
-  useEffect(() => { fetchPayment(); }, []);
-
-  const fetchPayment = async () => {
-    setLoadingPayment(true);
-    try {
-      const { data } = await supabase
-        .from('pending_payments')
-        .select('*')
-        .eq('booking_id', initialBooking.id)
-        .order('submitted_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      setLocalPayment(data);
-    } catch (e) {
-      logger.warn('Payment fetch error:', e);
-    } finally {
-      setLoadingPayment(false);
-    }
-  };
-
   // Derived values
   const meta        = booking.metadata || {};
   const guestInfo   = meta.guest_info || {};
@@ -93,6 +72,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
   const clientPhone = booking.client?.phone_number || booking.client?.phone  || guestInfo.phone || 'N/A';
   const idNumber    = guestInfo.id_number || guestInfo.national_id || docs.idNumber || docs.id_number || (meta as any).id_number || booking.client?.id_number || 'N/A';
   const licenseNum  = booking.client?.license_number || guestInfo.license_number || guestInfo.license || 'N/A';
+  const transactionCode = booking.transaction_code || null;
   const isPaid      = booking.payment_status === 'paid';
   const docsOk      = booking.document_status === 'approved';
   const bookingRef  = booking.id.slice(0, 8).toUpperCase();
@@ -108,7 +88,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
     if (mode === 'approval') {
       return `Dear ${clientName},\n\nGreat news! Your car rental booking has been fully reviewed and confirmed.\n\n✅ Payment Verified — KES ${Number(booking.total_amount).toLocaleString()}\n✅ Documents Approved\n✅ Vehicle Ready — ${carFull}\n\nPickup Location: ${booking.pickup_location || 'Contact us for details'}\nPickup Date: ${booking.start_date || 'N/A'}\nReturn Date: ${booking.end_date || 'N/A'}\n\nPlease bring your original driving licence and ID on pickup day.\n\nThank you for choosing LinkedUp Cars!\n\nThe LinkedUp Cars Team`;
     } else if (mode === 'payment_rejected') {
-      return `Dear ${clientName},\n\nOur team has reviewed your payment submission for Booking #${bookingRef}.\n\nUnfortunately, we were unable to verify the M-Pesa transaction${localPayment?.transaction_code ? ` (Code: ${localPayment.transaction_code})` : ''}.\n\nNext Steps:\n1. Confirm that the transaction code is correct\n2. Ensure the full amount of KES ${Number(booking.total_amount).toLocaleString()} was sent to our M-Pesa paybill\n3. Resubmit your payment details via your booking confirmation page\n\nPlease contact us if you need assistance.\n\nThe LinkedUp Cars Team`;
+      return `Dear ${clientName},\n\nOur team has reviewed your payment submission for Booking #${bookingRef}.\n\nUnfortunately, we were unable to verify the M-Pesa transaction${transactionCode ? ` (Code: ${transactionCode})` : ''}.\n\nNext Steps:\n1. Confirm that the transaction code is correct\n2. Ensure the full amount of KES ${Number(booking.total_amount).toLocaleString()} was sent to our M-Pesa paybill\n3. Resubmit your payment details via your booking confirmation page\n\nPlease contact us if you need assistance.\n\nThe LinkedUp Cars Team`;
     } else {
       return `Dear ${clientName},\n\nOur team has reviewed your submitted documents for Booking #${bookingRef}.\n\nUnfortunately, we were unable to approve your documents at this time.\n\nReason: ${docRejectionReason || 'Documents require correction'}\n\nNext Steps:\n1. Log into your client portal at linkedupcars.com\n2. Navigate to My Bookings\n3. Click "Resubmit Documents" to upload corrected copies\n\n✅ IMPORTANT: Your payment has been verified — you do NOT need to pay again.\n\nPlease contact us if you need help.\n\nThe LinkedUp Cars Team`;
     }
@@ -121,17 +101,11 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
   };
 
   const handleVerifyPayment = async (status: 'verified' | 'rejected') => {
-    if (!localPayment) return;
+    if (!transactionCode) return;
     setIsVerifying(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { toast.error('Admin authentication required'); return; }
-
-      await supabase.from('pending_payments').update({
-        status: status === 'verified' ? 'verified' : 'rejected',
-        verified_by: user.id,
-        verified_at: new Date().toISOString(),
-      }).eq('id', localPayment.id);
 
       if (status === 'verified') {
         await supabase.from('bookings').update({
@@ -141,21 +115,26 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
         }).eq('id', booking.id);
 
         // Create a transaction record so finances reflect immediately
-        await supabase.from('transactions').insert({
-          booking_id: booking.id,
-          user_id: booking.client_id,
-          amount: localPayment.amount,
-          type: 'payment_in',
-          status: 'completed',
-          transaction_code: localPayment.transaction_code || localPayment.id,
-        });
+        if (booking.client_id) {
+          await supabase.from('transactions').insert({
+            booking_id: booking.id,
+            user_id: booking.client_id,
+            amount: booking.total_amount,
+            type: 'payment_in',
+            status: 'completed',
+            transaction_code: transactionCode || booking.id,
+          }).then(null, (e: any) => logger.warn('Transaction record error:', e));
+        }
 
         setBooking(prev => ({ ...prev, status: 'confirmed', payment_status: 'paid' }));
-        setLocalPayment((prev: any) => ({ ...prev, status: 'verified' }));
         toast.success('Payment verified ✓');
         setStep('documents');
       } else {
-        setLocalPayment((prev: any) => ({ ...prev, status: 'rejected' }));
+        await supabase.from('bookings').update({
+          payment_status: 'failed',
+          updated_at: new Date().toISOString(),
+        }).eq('id', booking.id);
+        setBooking(prev => ({ ...prev, payment_status: 'failed' }));
         toast.info('Payment rejected — composing client notification');
         enterCommunicateStep('payment_rejected');
       }
@@ -412,39 +391,30 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
               <div className="p-4 md:p-6 space-y-4">
                 <BookingStrip />
 
-                {loadingPayment ? (
-                  <div className="flex items-center justify-center h-40">
-                    <Loader2 className="animate-spin text-primary" size={32} />
-                  </div>
-                ) : (
-                  <>
                     {/* M-Pesa code card */}
                     <SectionCard icon={<CreditCard size={13} />} title="M-Pesa Payment">
                       <div className="mb-4">
                         <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1.5">Transaction Code</p>
-                        {localPayment?.transaction_code ? (
-                          <p className="text-4xl font-mono font-black text-warning tracking-widest">{localPayment.transaction_code}</p>
+                        {transactionCode ? (
+                          <p className="text-4xl font-mono font-black text-warning tracking-widest">{transactionCode}</p>
                         ) : (
                           <p className="text-sm text-muted-foreground italic">No transaction code submitted yet</p>
                         )}
                       </div>
-                      {localPayment && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-border">
-                          <Field label="Amount Expected" value={`KES ${Number(booking.total_amount).toLocaleString()}`} />
-                          <Field label="Amount Submitted" value={localPayment.amount ? `KES ${Number(localPayment.amount).toLocaleString()}` : 'N/A'} />
-                          <Field label="Date Submitted" value={new Date(localPayment.submitted_at || localPayment.created_at).toLocaleDateString('en-KE', { dateStyle: 'medium' })} />
-                          <div>
-                            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Status</p>
-                            <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                              isPaid ? 'bg-green-500/10 text-green-500' :
-                              localPayment.status === 'rejected' ? 'bg-red-500/10 text-red-500' :
-                              'bg-amber-500/10 text-amber-500'
-                            }`}>
-                              {isPaid ? '✓ Verified' : localPayment.status || 'submitted'}
-                            </span>
-                          </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-border">
+                        <Field label="Amount" value={`KES ${Number(booking.total_amount).toLocaleString()}`} />
+                        <Field label="Date Submitted" value={new Date(booking.created_at).toLocaleDateString('en-KE', { dateStyle: 'medium' })} />
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Status</p>
+                          <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            isPaid ? 'bg-green-500/10 text-green-500' :
+                            booking.payment_status === 'failed' ? 'bg-red-500/10 text-red-500' :
+                            'bg-amber-500/10 text-amber-500'
+                          }`}>
+                            {isPaid ? '✓ Verified' : booking.payment_status || 'pending'}
+                          </span>
                         </div>
-                      )}
+                      </div>
                     </SectionCard>
 
                     {/* Action area */}
@@ -464,12 +434,12 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
                           Review Docs <ArrowRight size={14} />
                         </button>
                       </div>
-                    ) : localPayment ? (
+                    ) : transactionCode ? (
                       <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-3">
                         <div className="flex items-start gap-2">
                           <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={15} />
                           <p className="text-xs text-amber-600 font-bold leading-relaxed">
-                            Cross-check that M-Pesa code <span className="font-mono bg-amber-500/20 px-1 rounded">{localPayment.transaction_code}</span> corresponds to a real transaction of <span className="font-mono">KES {Number(booking.total_amount).toLocaleString()}</span> before confirming.
+                            Cross-check that M-Pesa code <span className="font-mono bg-amber-500/20 px-1 rounded">{transactionCode}</span> corresponds to a real transaction of <span className="font-mono">KES {Number(booking.total_amount).toLocaleString()}</span> before confirming.
                           </p>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -496,8 +466,6 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
                         <p className="text-sm text-muted-foreground">No payment has been submitted yet. Awaiting M-Pesa submission from client.</p>
                       </div>
                     )}
-                  </>
-                )}
               </div>
             )}
 
@@ -511,7 +479,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
                 <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-xl">
                   <CheckCircle2 size={13} className="text-green-500 shrink-0" />
                   <span className="text-xs font-black text-green-500">Payment Verified</span>
-                  <span className="text-xs font-mono text-green-500/60 ml-1">· {localPayment?.transaction_code}</span>
+                  <span className="text-xs font-mono text-green-500/60 ml-1">· {transactionCode}</span>
                   <span className="ml-auto text-xs font-black text-green-500">KES {Number(booking.total_amount).toLocaleString()}</span>
                 </div>
 
@@ -581,7 +549,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
                     </div>
                     <div>
                       <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Transaction Code</p>
-                      <p className="text-lg font-mono font-black text-foreground mt-0.5">{localPayment?.transaction_code || 'N/A'}</p>
+                      <p className="text-lg font-mono font-black text-foreground mt-0.5">{transactionCode || 'N/A'}</p>
                     </div>
                     <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-xl">
                       <CheckCircle2 size={15} className="text-green-500" />

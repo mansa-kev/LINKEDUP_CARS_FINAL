@@ -33,10 +33,8 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
   const clientPhone   = guestInfo?.phone          || booking?.client?.phone_number   || 'N/A';
   const licenseNumber = guestInfo?.license_number || booking?.client?.license_number || 'N/A';
 
-  // M-Pesa code from joined pending_payments (may be array or single object)
-  const rawPayments   = booking?.pending_payments;
-  const latestPayment = Array.isArray(rawPayments) ? rawPayments[0] : rawPayments;
-  const mpesaCode     = latestPayment?.transaction_code || null;
+  // M-Pesa code stored directly on the booking
+  const mpesaCode = booking?.transaction_code || null;
 
   const bookingRef = booking?.id ? booking.id.slice(0, 8).toUpperCase() : 'N/A';
 

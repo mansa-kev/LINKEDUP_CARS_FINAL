@@ -1305,33 +1305,9 @@ export const adminService = {
     return true;
   },
 
-  // --- Payment Approval Queue ---
-  getPendingPayments: async () => {
-    const { data, error } = await supabase
-      .from('pending_payments')
-      .select(`
-        *,
-        bookings (*),
-        client:user_profiles!pending_payments_client_id_fkey (*)
-      `)
-      .order('submitted_at', { ascending: false });
-    if (error) return handleSupabaseErrorWrapper(error, 'getPendingPayments');
-    return data;
-  },
-
-  verifyPayment: async (id: string, status: 'verified' | 'rejected', verifiedById: string, bookingId?: string, amount?: number, clientId?: string, transactionCode?: string) => {
-    logger.log('Verifying payment:', { id, status, bookingId, amount, clientId, transactionCode });
-    
-    const { data, error } = await supabase
-      .from('pending_payments')
-      .update({ 
-        status, 
-        verified_by: verifiedById, 
-        verified_at: new Date().toISOString() 
-      })
-      .eq('id', id)
-      .select();
-    if (error) return handleSupabaseErrorWrapper(error, 'verifyPayment');
+  verifyPayment: async (_id: string, status: 'verified' | 'rejected', _verifiedById: string, bookingId?: string, amount?: number, clientId?: string, transactionCode?: string) => {
+    logger.log('Verifying payment:', { status, bookingId, amount, clientId, transactionCode });
+    const data = { status };
 
     if (status === 'verified' && bookingId) {
       // First check if booking is cancelled
@@ -1366,7 +1342,7 @@ export const adminService = {
             amount: amount,
             type: 'payment_in',
             status: 'completed',
-            transaction_code: transactionCode || id
+            transaction_code: transactionCode || bookingId
           });
 
         if (transactionError) {

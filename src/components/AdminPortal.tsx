@@ -63,7 +63,6 @@ const AdminLogout = React.lazy(() => import('./admin/AdminLogout').then(m => ({ 
 const AdminOutsourcedCars = React.lazy(() => import('./admin/AdminOutsourcedCars').then(m => ({ default: m.AdminOutsourcedCars })));
 const AdminPromotions = React.lazy(() => import('./admin/AdminPromotions').then(m => ({ default: m.AdminPromotions })));
 const AdminReservations = React.lazy(() => import('./admin/AdminReservations').then(m => ({ default: m.AdminReservations })));
-const AdminPendingPayments = React.lazy(() => import('./admin/AdminPendingPayments').then(m => ({ default: m.AdminPendingPayments })));
 const AdminBlog = React.lazy(() => import('./admin/AdminBlog').then(m => ({ default: m.AdminBlog })));
 
 type ModuleCategory = {
@@ -86,7 +85,6 @@ const MODULE_CATEGORIES: ModuleCategory[] = [
     title: 'Core Operations',
     items: [
       { id: 'bookings', label: 'Bookings Management', icon: Calendar },
-      { id: 'pending-payments', label: 'Pending Payments', icon: CreditCard },
       { id: 'reservations', label: 'Reservations', icon: Clock },
       { id: 'cars', label: 'Cars Management', icon: Car },
       { id: 'outsourced', label: 'Outsourced Cars', icon: Truck },
@@ -314,7 +312,6 @@ export function AdminPortal() {
               <Routes>
                 <Route index element={<AdminDashboard />} />
                 <Route path="bookings" element={<AdminBookings />} />
-                <Route path="pending-payments" element={<AdminPendingPayments />} />
                 <Route path="reservations" element={<AdminReservations />} />
                 <Route path="cars" element={<AdminCars />} />
                 <Route path="outsourced" element={<AdminOutsourcedCars />} />

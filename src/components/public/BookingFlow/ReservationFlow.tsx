@@ -118,16 +118,6 @@ export function ReservationFlow({ car, onClose }: ReservationFlowProps) {
         // Create reservation with payment details
         const reservation = await reservationService.createReservation(formData);
         
-        // Insert to pending_payments table
-        await supabase.from('pending_payments').insert({
-          booking_id: reservation.id,
-          amount: reservationFee,
-          transaction_code: mpesaCode,
-          method: 'mpesa',
-          status: 'pending',
-          type: 'reservation'
-        });
-
         // Update reservation record with payment details
         await supabase
           .from('car_reservations')
