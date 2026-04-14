@@ -101,18 +101,23 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
   };
 
   const handleVerifyPayment = async (status: 'verified' | 'rejected') => {
-    if (!transactionCode) return;
     setIsVerifying(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { toast.error('Admin authentication required'); return; }
 
       if (status === 'verified') {
-        await supabase.from('bookings').update({
+        const { error: bookingErr } = await supabase.from('bookings').update({
           status: 'confirmed',
           payment_status: 'paid',
           updated_at: new Date().toISOString(),
         }).eq('id', booking.id);
+
+        if (bookingErr) {
+          logger.error('Booking update error:', bookingErr);
+          toast.error(`Failed to update booking: ${bookingErr.message}`);
+          return;
+        }
 
         // Create a transaction record so finances reflect immediately
         if (booking.client_id) {
@@ -130,10 +135,11 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
         toast.success('Payment verified ✓');
         setStep('documents');
       } else {
-        await supabase.from('bookings').update({
+        const { error: rejectErr } = await supabase.from('bookings').update({
           payment_status: 'failed',
           updated_at: new Date().toISOString(),
         }).eq('id', booking.id);
+        if (rejectErr) { toast.error(`Failed to reject: ${rejectErr.message}`); return; }
         setBooking(prev => ({ ...prev, payment_status: 'failed' }));
         toast.info('Payment rejected — composing client notification');
         enterCommunicateStep('payment_rejected');
@@ -434,12 +440,15 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
                           Review Docs <ArrowRight size={14} />
                         </button>
                       </div>
-                    ) : transactionCode ? (
+                    ) : (
                       <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-3">
                         <div className="flex items-start gap-2">
                           <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={15} />
                           <p className="text-xs text-amber-600 font-bold leading-relaxed">
-                            Cross-check that M-Pesa code <span className="font-mono bg-amber-500/20 px-1 rounded">{transactionCode}</span> corresponds to a real transaction of <span className="font-mono">KES {Number(booking.total_amount).toLocaleString()}</span> before confirming.
+                            {transactionCode
+                              ? <>Cross-check that M-Pesa code <span className="font-mono bg-amber-500/20 px-1 rounded">{transactionCode}</span> corresponds to a real transaction of <span className="font-mono">KES {Number(booking.total_amount).toLocaleString()}</span> before confirming.</>
+                              : <>No M-Pesa code on file. Confirm only if you have verified this payment of <span className="font-mono">KES {Number(booking.total_amount).toLocaleString()}</span> through other means.</>
+                            }
                           </p>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -459,11 +468,6 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
                             <XCircle size={14} /> Reject Payment
                           </button>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3 p-4 bg-muted/20 border border-border rounded-xl">
-                        <Clock className="text-muted-foreground shrink-0" size={18} />
-                        <p className="text-sm text-muted-foreground">No payment has been submitted yet. Awaiting M-Pesa submission from client.</p>
                       </div>
                     )}
               </div>
