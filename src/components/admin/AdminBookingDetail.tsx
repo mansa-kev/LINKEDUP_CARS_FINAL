@@ -110,7 +110,6 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
         const { error: bookingErr } = await supabase.from('bookings').update({
           status: 'confirmed',
           payment_status: 'paid',
-          updated_at: new Date().toISOString(),
         }).eq('id', booking.id);
 
         if (bookingErr) {
@@ -137,7 +136,6 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
       } else {
         const { error: rejectErr } = await supabase.from('bookings').update({
           payment_status: 'failed',
-          updated_at: new Date().toISOString(),
         }).eq('id', booking.id);
         if (rejectErr) { toast.error(`Failed to reject: ${rejectErr.message}`); return; }
         setBooking(prev => ({ ...prev, payment_status: 'failed' }));
