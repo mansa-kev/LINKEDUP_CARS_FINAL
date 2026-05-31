@@ -28,8 +28,7 @@ interface Filters {
 
 // Helper function to determine car status from database fields
 const getCarStatus = (car: Car): 'available' | 'booked' | 'reserved' | 'unavailable' => {
-  if (car.status === 'booked') return 'booked';
-  if (car.status === 'reserved') return 'reserved';
+  if (car.status === 'rented') return 'booked';
   if (car.status === 'maintenance' || car.status === 'unavailable') return 'unavailable';
   return 'available';
 };

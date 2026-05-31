@@ -41,7 +41,8 @@ export interface Booking {
   total_amount: number;
   platform_commission: number;
   payment_status: 'pending' | 'paid' | 'failed' | 'refunded';
-  payment_method?: 'mpesa' | 'cash';
+  payment_method?: 'mpesa' | 'cash' | 'ncba_stk';
+  payment_provider?: 'mpesa' | 'cash' | 'ncba';
   pickup_location?: string;
   dropoff_location?: string;
   needs_chauffeur?: boolean;

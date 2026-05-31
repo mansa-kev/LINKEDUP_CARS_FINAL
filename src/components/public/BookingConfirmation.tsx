@@ -243,7 +243,7 @@ export function BookingConfirmation() {
                 <p className="text-sm font-bold text-amber-500">Payment Pending Verification</p>
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Your M-Pesa payment is being verified. This page will automatically update once your payment is confirmed. If you paid via STK Push, this usually takes under a minute.
+                Your NCBA STK Push payment is being verified. This page will automatically update once NCBA confirms your payment. This usually takes under a minute.
               </p>
               <div className="flex items-center gap-2 mt-2">
                 <Loader2 size={14} className="text-amber-500 animate-spin" />

@@ -9,7 +9,7 @@ export function MyProfile() {
   const [preferences, setPreferences] = useState<any>({
     preferred_pickup_location: '',
     preferred_dropoff_location: '',
-    default_payment_method: 'mpesa',
+    default_payment_method: 'ncba_stk',
     always_include_chauffeur: false
   });
   const [wishlist, setWishlist] = useState<any[]>([]);
@@ -30,7 +30,7 @@ export function MyProfile() {
           clientService.getWishlist(user.id),
           clientService.getAllBookings(user.id)
         ]);
-        
+
         setProfile(authProfile);
         if (prefs) setPreferences(prefs);
         setWishlist(wish || []);
@@ -111,43 +111,43 @@ export function MyProfile() {
             <form onSubmit={handleProfileUpdate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase">Full Name</label>
-                <input 
-                  type="text" 
-                  value={profile?.full_name || ''} 
+                <input
+                  type="text"
+                  value={profile?.full_name || ''}
                   onChange={(e) => setProfile({...profile, full_name: e.target.value})}
                   className="w-full px-4 py-2 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase">Email Address</label>
-                <input 
-                  type="email" 
-                  value={profile?.email || ''} 
+                <input
+                  type="email"
+                  value={profile?.email || ''}
                   disabled
                   className="w-full px-4 py-2 bg-muted/50 rounded-xl text-sm outline-none cursor-not-allowed"
                 />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase">Phone Number</label>
-                <input 
-                  type="text" 
-                  value={profile?.phone_number || ''} 
+                <input
+                  type="text"
+                  value={profile?.phone_number || ''}
                   onChange={(e) => setProfile({...profile, phone_number: e.target.value})}
                   className="w-full px-4 py-2 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase">Address</label>
-                <input 
-                  type="text" 
-                  value={profile?.address || ''} 
+                <input
+                  type="text"
+                  value={profile?.address || ''}
                   onChange={(e) => setProfile({...profile, address: e.target.value})}
                   className="w-full px-4 py-2 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
               <div className="md:col-span-2 flex justify-end">
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={saving}
                   className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-bold hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
@@ -169,10 +169,10 @@ export function MyProfile() {
                   <label className="text-xs font-bold text-muted-foreground uppercase">Preferred Pickup Location</label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="e.g. Jomo Kenyatta Airport"
-                      value={preferences.preferred_pickup_location || ''} 
+                      value={preferences.preferred_pickup_location || ''}
                       onChange={(e) => setPreferences({...preferences, preferred_pickup_location: e.target.value})}
                       className="w-full pl-10 pr-4 py-2 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
                     />
@@ -182,10 +182,10 @@ export function MyProfile() {
                   <label className="text-xs font-bold text-muted-foreground uppercase">Preferred Drop-off Location</label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="e.g. Nairobi CBD"
-                      value={preferences.preferred_dropoff_location || ''} 
+                      value={preferences.preferred_dropoff_location || ''}
                       onChange={(e) => setPreferences({...preferences, preferred_dropoff_location: e.target.value})}
                       className="w-full pl-10 pr-4 py-2 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
                     />
@@ -195,22 +195,20 @@ export function MyProfile() {
                   <label className="text-xs font-bold text-muted-foreground uppercase">Default Payment Method</label>
                   <div className="relative">
                     <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                    <select 
-                      value={preferences.default_payment_method || 'mpesa'} 
+                    <select
+                      value={preferences.default_payment_method || 'ncba_stk'}
                       onChange={(e) => setPreferences({...preferences, default_payment_method: e.target.value})}
                       className="w-full pl-10 pr-4 py-2 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 appearance-none"
                     >
-                      <option value="mpesa">M-Pesa</option>
-                      <option value="card">Credit/Debit Card</option>
-                      <option value="bank">Bank Transfer</option>
+                      <option value="ncba_stk">NCBA STK Push</option>
                     </select>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 pt-6">
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
                       checked={preferences.always_include_chauffeur}
                       onChange={(e) => setPreferences({...preferences, always_include_chauffeur: e.target.checked})}
                     />
@@ -220,8 +218,8 @@ export function MyProfile() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={saving}
                   className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-bold hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
@@ -241,13 +239,13 @@ export function MyProfile() {
               {bookings.slice(0, 5).map((booking, idx) => (
                 <div key={booking.id} className="relative pl-8">
                   <div className={`absolute left-0 top-1.5 w-4 h-4 rounded-full border-2 border-background ${
-                    booking.status === 'completed' ? 'bg-green-500' : 
+                    booking.status === 'completed' ? 'bg-green-500' :
                     booking.status === 'in_progress' ? 'bg-primary' : 'bg-blue-500'
                   }`} />
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                     <div>
                       <p className="text-sm font-bold">
-                        {booking.status === 'completed' ? 'Completed rental of' : 
+                        {booking.status === 'completed' ? 'Completed rental of' :
                          booking.status === 'in_progress' ? 'Currently driving' : 'Booked'} {booking.cars.make} {booking.cars.model}
                       </p>
                       <p className="text-xs text-muted-foreground">{new Date(booking.start_date).toLocaleDateString()} - {new Date(booking.end_date).toLocaleDateString()}</p>
@@ -291,7 +289,7 @@ export function MyProfile() {
                           <p className="text-[10px] text-muted-foreground capitalize">{item.cars.status}</p>
                         </div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => handleRemoveFromWishlist(item.car_id)}
                         className="p-2 text-muted-foreground hover:text-error transition-colors"
                         title="Remove from favorites"

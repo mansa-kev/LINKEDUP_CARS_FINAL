@@ -1,9 +1,9 @@
-interface StkPushParams {
+interface ReservationStkPushParams {
   phone: string;
-  bookingId: string;
+  reservationId: string;
 }
 
-interface StkPushResult {
+interface ReservationStkPushResult {
   success: boolean;
   paymentRequestId?: string;
   transactionId?: string;
@@ -13,17 +13,19 @@ interface StkPushResult {
   error?: string;
 }
 
-interface PaymentStatusResult {
+interface ReservationPaymentStatusResult {
   success: boolean;
-  bookingId: string;
+  reservationId: string;
   status: string;
   paymentStatus: string;
   paid: boolean;
-  confirmed: boolean;
+  reserved: boolean;
+  linkedBookingId?: string | null;
+  reservationToken?: string | null;
   paymentRequest?: any;
 }
 
-interface StkQueryResult {
+interface ReservationStkQueryResult {
   success: boolean;
   paid: boolean;
   failed: boolean;
@@ -32,10 +34,10 @@ interface StkQueryResult {
   error?: string;
 }
 
-export const paymentService = {
-  async initiateSTKPush(params: StkPushParams): Promise<StkPushResult> {
+export const reservationPaymentService = {
+  async initiateSTKPush(params: ReservationStkPushParams): Promise<ReservationStkPushResult> {
     try {
-      const response = await fetch('/api/ncba/stk-push', {
+      const response = await fetch('/api/ncba/reservations/stk-push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
@@ -43,14 +45,14 @@ export const paymentService = {
       const data = await response.json();
       return data;
     } catch (error: any) {
-      console.error('[paymentService] STK Push error:', error);
+      console.error('[reservationPaymentService] STK Push error:', error);
       return { success: false, error: error.message || 'Network error' };
     }
   },
 
-  async querySTKStatus(paymentRequestId: string): Promise<StkQueryResult> {
+  async querySTKStatus(paymentRequestId: string): Promise<ReservationStkQueryResult> {
     try {
-      const response = await fetch('/api/ncba/query', {
+      const response = await fetch('/api/ncba/reservations/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paymentRequestId }),
@@ -58,23 +60,23 @@ export const paymentService = {
       const data = await response.json();
       return data;
     } catch (error: any) {
-      console.error('[paymentService] STK Query error:', error);
+      console.error('[reservationPaymentService] STK Query error:', error);
       return { success: false, paid: false, failed: false, error: error.message || 'Network error' };
     }
   },
 
-  async getPaymentStatus(bookingId: string): Promise<PaymentStatusResult> {
+  async getPaymentStatus(reservationId: string): Promise<ReservationPaymentStatusResult> {
     try {
-      const response = await fetch(`/api/ncba/payment-status/${bookingId}`);
+      const response = await fetch(`/api/ncba/reservations/payment-status/${reservationId}`);
       const data = await response.json();
       return data;
     } catch (error: any) {
-      console.error('[paymentService] Status poll error:', error);
-      return { success: false, bookingId, status: '', paymentStatus: '', paid: false, confirmed: false };
+      console.error('[reservationPaymentService] Status poll error:', error);
+      return { success: false, reservationId, status: '', paymentStatus: '', paid: false, reserved: false };
     }
   },
 
-  async pollUntilPaid(paymentRequestId: string, bookingId: string, intervalMs = 5000, timeoutMs = 120000): Promise<'paid' | 'failed' | 'timeout'> {
+  async pollUntilPaid(paymentRequestId: string, reservationId: string, intervalMs = 5000, timeoutMs = 120000): Promise<'paid' | 'failed' | 'timeout'> {
     const start = Date.now();
     return new Promise((resolve) => {
       const check = async () => {
@@ -91,8 +93,8 @@ export const paymentService = {
           resolve('failed');
           return;
         }
-        const status = await this.getPaymentStatus(bookingId);
-        if (status.paid && status.confirmed) {
+        const status = await this.getPaymentStatus(reservationId);
+        if (status.paid && status.reserved) {
           resolve('paid');
           return;
         }

@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { adminService } from '../../services/adminService';
-import { 
-  Search, 
-  Filter, 
-  CheckCircle2, 
-  XCircle, 
-  Eye, 
-  MessageSquare,
+import {
+  Search,
+  Filter,
+  CheckCircle2,
+  Eye,
   Loader2,
   AlertCircle,
   X,
-  ChevronDown
+  ChevronDown,
+  RefreshCw,
+  Smartphone
 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
 export function AdminPaymentApprovals() {
@@ -22,7 +21,7 @@ export function AdminPaymentApprovals() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedPayment, setSelectedPayment] = useState<any | null>(null);
   const [processing, setProcessing] = useState(false);
-  
+
   // Mobile expandable row state
   const [isMobile, setIsMobile] = useState(false);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
@@ -30,11 +29,11 @@ export function AdminPaymentApprovals() {
   const fetchPayments = async () => {
     setLoading(true);
     try {
-      const data = await adminService.getPendingPayments();
+      const data = await adminService.getPaymentRequests();
       setPayments(data || []);
     } catch (error) {
-      console.error('Failed to fetch pending payments:', error);
-      toast.error('Failed to fetch pending payments');
+      console.error('Failed to fetch NCBA payment requests:', error);
+      toast.error('Failed to fetch NCBA payment requests');
     } finally {
       setLoading(false);
     }
@@ -52,54 +51,18 @@ export function AdminPaymentApprovals() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const handleApprove = async (payment: any) => {
+  const handleSync = async (payment: any) => {
     setProcessing(true);
     const promise = (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      await adminService.verifyPayment(
-        payment.id, 
-        'verified', 
-        user?.id || '', 
-        payment.booking_id, 
-        payment.amount,
-        payment.client_id,
-        payment.transaction_code
-      );
+      await adminService.syncPaymentRequest(payment.id);
       setSelectedPayment(null);
-      fetchPayments();
+      await fetchPayments();
     })();
 
     toast.promise(promise, {
-      loading: 'Approving payment...',
-      success: 'Payment approved successfully',
-      error: 'Failed to approve payment'
-    });
-    
-    try {
-      await promise;
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleReject = async (payment: any) => {
-    setProcessing(true);
-    const promise = (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      await adminService.verifyPayment(
-        payment.id, 
-        'rejected', 
-        user?.id || '', 
-        payment.booking_id
-      );
-      setSelectedPayment(null);
-      fetchPayments();
-    })();
-
-    toast.promise(promise, {
-      loading: 'Rejecting payment...',
-      success: 'Payment rejected successfully',
-      error: 'Failed to reject payment'
+      loading: 'Syncing NCBA payment...',
+      success: 'NCBA payment status synced',
+      error: 'Failed to sync NCBA payment'
     });
 
     try {
@@ -110,13 +73,14 @@ export function AdminPaymentApprovals() {
   };
 
   const filteredPayments = payments.filter(p => {
-    const matchesSearch = 
-      p.transaction_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch =
+      p.provider_transaction_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.provider_reference_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.booking_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.client?.full_name?.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -132,8 +96,8 @@ export function AdminPaymentApprovals() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold">Payment Approval Queue</h2>
-          <p className="text-sm text-muted-foreground">Verify and manage manual M-Pesa transactions.</p>
+          <h2 className="text-xl font-bold">NCBA Payment Requests</h2>
+          <p className="text-sm text-muted-foreground">Monitor NCBA STK Push attempts, failures, and confirmations.</p>
         </div>
       </div>
 
@@ -142,9 +106,9 @@ export function AdminPaymentApprovals() {
           <div className="flex items-center gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-              <input 
-                type="text" 
-                placeholder="Search by Code, Booking ID, or Client..." 
+              <input
+                type="text"
+                placeholder="Search by Transaction ID, Reference, Booking, or Client..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-xs w-72 outline-none focus:ring-2 focus:ring-primary/20"
@@ -152,15 +116,16 @@ export function AdminPaymentApprovals() {
             </div>
             <div className="flex items-center gap-2">
               <Filter size={16} className="text-muted-foreground" />
-              <select 
+              <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="px-3 py-2 bg-background border border-border rounded-xl text-xs outline-none focus:ring-2 focus:ring-primary/20"
               >
                 <option value="all">All Statuses</option>
-                <option value="submitted">Pending</option>
-                <option value="verified">Approved</option>
-                <option value="rejected">Rejected</option>
+                <option value="pending">Pending</option>
+                <option value="success">Success</option>
+                <option value="failed">Failed</option>
+                <option value="timeout">Timeout</option>
               </select>
             </div>
           </div>
@@ -174,7 +139,7 @@ export function AdminPaymentApprovals() {
                 <tr className="border-b border-border bg-muted/10">
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Booking ID</th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Client Name</th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">M-Pesa Code</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">NCBA Transaction</th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Amount</th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Date</th>
                   <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
@@ -194,30 +159,30 @@ export function AdminPaymentApprovals() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded-md">
-                        {payment.transaction_code}
+                        {payment.provider_transaction_id || payment.provider_reference_id || 'N/A'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm font-bold">KES {Number(payment.amount).toLocaleString()}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm text-muted-foreground">{new Date(payment.submitted_at).toLocaleDateString()}</span>
+                      <span className="text-sm text-muted-foreground">{new Date(payment.created_at).toLocaleDateString()}</span>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                        payment.status === 'verified' ? 'bg-success/10 text-success border-success/20' :
-                        payment.status === 'rejected' ? 'bg-error/10 text-error border-error/20' :
+                        payment.status === 'success' ? 'bg-success/10 text-success border-success/20' :
+                        payment.status === 'failed' ? 'bg-error/10 text-error border-error/20' :
                         'bg-warning/10 text-warning border-warning/20'
                       }`}>
-                        {payment.status === 'submitted' ? 'Pending' : payment.status}
+                        {payment.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button 
+                      <button
                         onClick={() => setSelectedPayment(payment)}
                         className="px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-lg text-xs font-bold transition-colors"
                       >
-                        Review
+                        View
                       </button>
                     </td>
                   </tr>
@@ -240,21 +205,21 @@ export function AdminPaymentApprovals() {
             {filteredPayments.map((payment) => (
               <div key={payment.id}>
                 {/* Summary Row */}
-                <div 
+                <div
                   className="flex justify-between items-center px-4 py-3 bg-card border border-border rounded-xl cursor-pointer select-none hover:bg-muted/30 transition-colors"
                   onClick={() => setExpandedRowId(expandedRowId === payment.id ? null : payment.id)}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                      <CheckCircle2 size={20} />
+                      <Smartphone size={20} />
                     </div>
                     <div>
-                      <p className="text-sm font-bold">{payment.transaction_code}</p>
+                      <p className="text-sm font-bold">{payment.provider_transaction_id || payment.provider_reference_id || 'NCBA STK'}</p>
                       <p className="text-xs text-muted-foreground">{payment.client?.full_name || 'Unknown'}</p>
                     </div>
                   </div>
-                  <ChevronDown 
-                    size={16} 
+                  <ChevronDown
+                    size={16}
                     className={`transition-transform duration-200 ${expandedRowId === payment.id ? 'rotate-180' : ''}`}
                   />
                 </div>
@@ -276,26 +241,26 @@ export function AdminPaymentApprovals() {
                         <p className="text-sm text-white font-medium">{payment.client?.full_name || 'Unknown'}</p>
                       </div>
                       <div>
-                        <span className="text-xs text-muted uppercase tracking-wide">M-Pesa Code</span>
-                        <p className="text-sm text-white font-medium font-mono">{payment.transaction_code}</p>
+                        <span className="text-xs text-muted uppercase tracking-wide">NCBA Transaction ID</span>
+                        <p className="text-sm text-white font-medium font-mono">{payment.provider_transaction_id || 'N/A'}</p>
                       </div>
                       <div>
                         <span className="text-xs text-muted uppercase tracking-wide">Amount</span>
                         <p className="text-sm text-white font-medium">KES {Number(payment.amount).toLocaleString()}</p>
                       </div>
                       <div>
-                        <span className="text-xs text-muted uppercase tracking-wide">Submitted Date</span>
-                        <p className="text-sm text-white font-medium">{new Date(payment.submitted_at).toLocaleDateString()}</p>
+                        <span className="text-xs text-muted uppercase tracking-wide">Created Date</span>
+                        <p className="text-sm text-white font-medium">{new Date(payment.created_at).toLocaleDateString()}</p>
                       </div>
                       <div>
                         <span className="text-xs text-muted uppercase tracking-wide">Status</span>
                         <div className="mt-1">
                           <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                            payment.status === 'verified' ? 'bg-success/10 text-success border-success/20' :
-                            payment.status === 'rejected' ? 'bg-error/10 text-error border-error/20' :
+                            payment.status === 'success' ? 'bg-success/10 text-success border-success/20' :
+                            payment.status === 'failed' ? 'bg-error/10 text-error border-error/20' :
                             'bg-warning/10 text-warning border-warning/20'
                           }`}>
-                            {payment.status === 'submitted' ? 'Pending' : payment.status}
+                            {payment.status}
                           </span>
                         </div>
                       </div>
@@ -303,19 +268,19 @@ export function AdminPaymentApprovals() {
 
                     {/* Action Buttons */}
                     <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
-                      <button 
+                      <button
                         onClick={() => setSelectedPayment(payment)}
                         className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-2"
                       >
                         <Eye size={12} />
-                        Review Payment
+                        View Request
                       </button>
                     </div>
                   </div>
                 )}
               </div>
             ))}
-            
+
             {filteredPayments.length === 0 && (
               <div className="p-12 text-center bg-card border border-border rounded-xl">
                 <p className="text-muted-foreground">No payment submissions found matching your criteria.</p>
@@ -330,15 +295,15 @@ export function AdminPaymentApprovals() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-in fade-in duration-300">
           <div className="relative w-full max-w-2xl bg-card rounded-3xl overflow-hidden shadow-2xl flex flex-col">
             <div className="p-6 border-b border-border flex justify-between items-center bg-muted/30">
-              <h3 className="font-bold text-lg">Review Payment Submission</h3>
-              <button 
+              <h3 className="font-bold text-lg">NCBA Payment Request</h3>
+              <button
                 onClick={() => setSelectedPayment(null)}
                 className="p-2 hover:bg-muted rounded-full transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
               {/* Booking Summary */}
               <div className="space-y-3">
@@ -378,61 +343,55 @@ export function AdminPaymentApprovals() {
 
               {/* Payment Details */}
               <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Submitted Payment Details</h4>
+                <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">NCBA Payment Details</h4>
                 <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs text-muted-foreground">M-Pesa Code</p>
-                    <p className="text-lg font-mono font-bold text-primary">{selectedPayment.transaction_code}</p>
+                    <p className="text-xs text-muted-foreground">Transaction ID</p>
+                    <p className="text-lg font-mono font-bold text-primary break-all">{selectedPayment.provider_transaction_id || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Amount Claimed</p>
+                    <p className="text-xs text-muted-foreground">Reference ID</p>
+                    <p className="text-lg font-mono font-bold text-primary break-all">{selectedPayment.provider_reference_id || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Amount</p>
                     <p className="text-lg font-bold">KES {Number(selectedPayment.amount).toLocaleString()}</p>
                   </div>
-                  <div className="col-span-2">
-                    <p className="text-xs text-muted-foreground">Submission Date</p>
-                    <p className="text-sm font-bold">{new Date(selectedPayment.submitted_at).toLocaleString()}</p>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Phone</p>
+                    <p className="text-lg font-bold">{selectedPayment.phone || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Status Description</p>
+                    <p className="text-sm font-bold">{selectedPayment.status_description || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Created Date</p>
+                    <p className="text-sm font-bold">{new Date(selectedPayment.created_at).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
 
-              {selectedPayment.status === 'submitted' && (
+              {selectedPayment.status !== 'success' && (
                 <div className="bg-warning/10 p-4 rounded-xl border border-warning/20 flex gap-3">
                   <AlertCircle className="text-warning shrink-0" size={20} />
                   <p className="text-sm text-warning font-medium">
-                    Please verify this M-Pesa code against your official statements before approving. Approving will automatically confirm the booking.
+                    NCBA remains the source of truth. Use sync to query the latest STK status; do not manually approve this payment.
                   </p>
                 </div>
               )}
             </div>
 
             <div className="p-6 border-t border-border bg-muted/10 flex flex-wrap gap-3 justify-end">
-              <a 
-                href={`mailto:${selectedPayment.client?.email}?subject=Regarding your M-Pesa Payment for Booking ${selectedPayment.booking_id}`}
-                className="px-4 py-2 bg-muted text-foreground hover:bg-muted/80 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
-              >
-                <MessageSquare size={16} />
-                Contact Client
-              </a>
-              
-              {selectedPayment.status === 'submitted' && (
-                <>
-                  <button 
-                    onClick={() => handleReject(selectedPayment)}
-                    disabled={processing}
-                    className="px-4 py-2 bg-error/10 text-error hover:bg-error hover:text-white rounded-xl text-sm font-bold transition-colors flex items-center gap-2 disabled:opacity-50"
-                  >
-                    <XCircle size={16} />
-                    Reject Payment
-                  </button>
-                  <button 
-                    onClick={() => handleApprove(selectedPayment)}
-                    disabled={processing}
-                    className="px-6 py-2 bg-success text-white hover:bg-success/90 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 shadow-lg shadow-success/20 disabled:opacity-50"
-                  >
-                    <CheckCircle2 size={16} />
-                    Approve Payment
-                  </button>
-                </>
+              {selectedPayment.status !== 'success' && (
+                <button
+                  onClick={() => handleSync(selectedPayment)}
+                  disabled={processing || !selectedPayment.provider_transaction_id}
+                  className="px-6 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-50"
+                >
+                  {processing ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+                  Sync NCBA Status
+                </button>
               )}
             </div>
           </div>

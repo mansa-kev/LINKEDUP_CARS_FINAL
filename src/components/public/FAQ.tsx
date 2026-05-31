@@ -10,6 +10,8 @@ interface FaqItem {
   answer: string;
 }
 
+type FaqCategory = 'all' | FaqItem['category'];
+
 const FAQ_CATEGORIES = [
   { id: 'all', label: 'All' },
   { id: 'booking', label: 'Booking' },
@@ -149,10 +151,10 @@ function FaqAccordionItem({ faq, index }: { faq: FaqItem; index: number }) {
 }
 
 export function FAQ() {
-  const [activeCategory, setActiveCategory] = useState('all');
+  const [activeCategory, setActiveCategory] = useState<FaqCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filtered = useMemo(() => {
+  const filtered = useMemo<FaqItem[]>(() => {
     return FAQS.filter((f) => {
       const matchesCat = activeCategory === 'all' || f.category === activeCategory;
       const q = searchQuery.toLowerCase();
@@ -283,7 +285,9 @@ export function FAQ() {
               </div>
             ) : (
               filtered.map((faq, i) => (
-                <FaqAccordionItem key={`${faq.category}-${i}`} faq={faq} index={i} />
+                <React.Fragment key={`${faq.category}-${i}`}>
+                  <FaqAccordionItem faq={faq} index={i} />
+                </React.Fragment>
               ))
             )}
           </div>

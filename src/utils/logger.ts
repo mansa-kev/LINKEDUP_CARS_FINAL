@@ -3,7 +3,8 @@
  * Logs only in development mode to prevent exposing sensitive information in production
  */
 
-const isDev = import.meta.env.DEV;
+const viteEnv = typeof import.meta !== 'undefined' ? import.meta.env : undefined;
+const isDev = Boolean(viteEnv?.DEV || process.env.NODE_ENV !== 'production');
 
 export const logger = {
   log: (...args: any[]) => {

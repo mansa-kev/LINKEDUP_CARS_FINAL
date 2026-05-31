@@ -37,7 +37,13 @@ CREATE POLICY "Users can view own reservations" ON car_reservations
   
 DROP POLICY IF EXISTS "Users can insert own reservations" ON car_reservations;
 CREATE POLICY "Users can insert own reservations" ON car_reservations
-  FOR INSERT WITH CHECK (auth.uid() = client_id);
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = client_id);
+
+ DROP POLICY IF EXISTS "Guests can insert reservations" ON car_reservations;
+ CREATE POLICY "Guests can insert reservations" ON car_reservations
+  FOR INSERT TO anon
+  WITH CHECK (client_id IS NULL);
   
 DROP POLICY IF EXISTS "Fleet owners can view their car reservations" ON car_reservations;
 CREATE POLICY "Fleet owners can view their car reservations" ON car_reservations

@@ -132,12 +132,12 @@ export function AdminBookingLifecycle({ booking: init, onClose, onRefresh }: Pro
       alertedRef.current.warn24 = true;
       toast.warning(`⏰ Return due in ${fmtDur(remainMs)} — ${clientName} · ${carLine}`);
       if (booking.client_id) {
-        supabase.from('notifications').insert({
+        void supabase.from('notifications').insert({
           user_id: booking.client_id, type: 'booking_update',
           title: '⏰ Return Reminder',
           content: `Your ${carLine} is due back in ${fmtDur(remainMs)}. Please return on time.`,
           is_read: false,
-        }).catch(() => {});
+        });
       }
     }
     if (!alertedRef.current.warn2 && remainMs > 0 && remainMs <= h2) {
@@ -200,12 +200,12 @@ export function AdminBookingLifecycle({ booking: init, onClose, onRefresh }: Pro
       }).eq('id', booking.id);
       if (error) { toast.error(`Failed to log pickup: ${error.message}`); return; }
       if (booking.client_id) {
-        supabase.from('notifications').insert({
+        void supabase.from('notifications').insert({
           user_id: booking.client_id, type: 'booking_update',
           title: 'Your rental has started 🚗',
           content: `Your ${carLine} rental (#${ref}) has started. Enjoy your drive!`,
           is_read: false, link: `/booking-confirmation/${booking.id}`,
-        }).catch(() => {});
+        });
       }
       toast.success('Pickup logged — now In Transit');
       setBooking((p: any) => ({
@@ -223,8 +223,8 @@ export function AdminBookingLifecycle({ booking: init, onClose, onRefresh }: Pro
   const handleSendReminder = async () => {
     setSaving(true);
     try {
-      if (clientEmail) supabase.functions.invoke('send-email', { body: { to: clientEmail, subject: `Return Reminder — Booking #${ref}`, message: reminderMsg } }).catch(() => {});
-      if (booking.client_id) supabase.from('notifications').insert({ user_id: booking.client_id, type: 'booking_update', title: 'Return Reminder', content: reminderMsg.slice(0, 200), is_read: false }).catch(() => {});
+      if (clientEmail) void supabase.functions.invoke('send-email', { body: { to: clientEmail, subject: `Return Reminder — Booking #${ref}`, message: reminderMsg } });
+      if (booking.client_id) void supabase.from('notifications').insert({ user_id: booking.client_id, type: 'booking_update', title: 'Return Reminder', content: reminderMsg.slice(0, 200), is_read: false });
       toast.success('Reminder sent!');
       setShowReminder(false);
     } catch { toast.error('Failed to send reminder'); }
@@ -247,11 +247,11 @@ export function AdminBookingLifecycle({ booking: init, onClose, onRefresh }: Pro
       }).eq('id', booking.id);
       if (error) { toast.error(`Failed to log return: ${error.message}`); return; }
       if (booking.client_id) {
-        supabase.from('notifications').insert({
+        void supabase.from('notifications').insert({
           user_id: booking.client_id, type: 'booking_update', title: 'Return Confirmed ✅',
           content: `Your ${carLine} return is confirmed. Rental #${ref} complete.${otCharge > 0 ? ` Overtime: KES ${otCharge.toLocaleString()}.` : ''}`,
           is_read: false,
-        }).catch(() => {});
+        });
       }
       toast.success('Return logged — booking completed!');
       setBooking((p: any) => ({

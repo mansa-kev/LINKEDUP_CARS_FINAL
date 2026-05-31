@@ -1,91 +1,32 @@
 import { supabase, handleSupabaseErrorWrapper as handleSupabaseError } from '../lib/supabase';
-import { reservationService } from './reservationService';
 
 const DEFAULT_COMMISSION_RATE = 0.15; // 15% platform commission
 
 export const bookingService = {
   createBooking: async (bookingData: any) => {
     try {
-      // 1. Get current user if logged in
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          ...bookingData,
+          platformCommission: Math.round(Number(bookingData.totalAmount || 0) * DEFAULT_COMMISSION_RATE * 100) / 100,
+        }),
+      });
 
-      // 2. Check availability first
-      const availability = await reservationService.checkAvailability(
-        bookingData.carId,
-        bookingData.startDate,
-        bookingData.endDate
-      );
+      const rawResponse = await response.text();
+      const result = rawResponse ? JSON.parse(rawResponse) : null;
 
-      if (!availability.available) {
-        throw new Error('Selected dates are not available. The car is either booked or reserved for these dates.');
+      if (!response.ok || result?.error || !result?.booking) {
+        throw new Error(result?.error || rawResponse || 'Failed to create booking');
       }
 
-      // 3. Look up the car to get fleet_owner_id
-      const { data: car, error: carError } = await supabase
-        .from('cars')
-        .select('fleet_owner_id')
-        .eq('id', bookingData.carId)
-        .single();
-
-      if (carError || !car) {
-        throw new Error('Could not find the selected car. Please try again.');
-      }
-
-      // 4. Calculate platform commission
-      const totalAmount = bookingData.totalAmount;
-      const platformCommission = Math.round(totalAmount * DEFAULT_COMMISSION_RATE * 100) / 100;
-
-      // 5. Prepare the booking record
-      const payload = {
-        car_id: bookingData.carId,
-        client_id: user?.id || null,
-        fleet_owner_id: car.fleet_owner_id,
-        start_date: bookingData.startDate,
-        end_date: bookingData.endDate,
-        pickup_location: bookingData.pickupLocation || bookingData.location,
-        dropoff_location: bookingData.dropoffLocation || bookingData.pickupLocation || bookingData.location,
-        total_amount: totalAmount,
-        platform_commission: platformCommission,
-        status: bookingData.paymentMethod === 'mpesa' ? 'pending_payment_verification' : 'confirmed',
-        payment_status: bookingData.paymentMethod === 'mpesa' ? 'pending' : 'paid',
-        payment_method: bookingData.paymentMethod,
-        metadata: {
-          guest_info: !user ? {
-            full_name: bookingData.fullName,
-            email: bookingData.email,
-            phone: bookingData.phone,
-            license_number: bookingData.license,
-            id_number: bookingData.idNumber || null,
-          } : null,
-          signature_url: bookingData.signatureUrl,
-          documents: bookingData.documents ?? {
-            facePhotoUrl:    bookingData.facePhotoUrl    || null,
-            licenseFrontUrl: bookingData.licenseFrontUrl || null,
-            licenseBackUrl:  bookingData.licenseBackUrl  || null,
-            idFrontUrl:      bookingData.idFrontUrl      || null,
-            idBackUrl:       bookingData.idBackUrl       || null,
-          }
-        }
-      };
-
-      const { data, error } = await supabase
-        .from('bookings')
-        .insert([payload])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // 6. If M-Pesa, save transaction code directly on the booking
-      if (bookingData.paymentMethod === 'mpesa' && bookingData.mpesaCode) {
-        await supabase
-          .from('bookings')
-          .update({ transaction_code: bookingData.mpesaCode })
-          .eq('id', data.id);
-        data.transaction_code = bookingData.mpesaCode;
-      }
-
-      return data;
+      return result.booking;
     } catch (error) {
       return handleSupabaseError(error, 'createBooking');
     }

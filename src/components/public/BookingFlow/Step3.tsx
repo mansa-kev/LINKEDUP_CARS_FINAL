@@ -64,7 +64,9 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       onNext({
+        contractSigned: true,
         contractAccepted: true,
+        signatureUrl: signatureData,
         signatureData: signatureData,
         contractId: contract?.id || 'temp-' + Date.now()
       });

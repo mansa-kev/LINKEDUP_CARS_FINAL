@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Users, 
-  Fuel, 
-  Settings, 
-  Briefcase, 
-  ShieldCheck, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Users,
+  Fuel,
+  Settings,
+  Briefcase,
+  ShieldCheck,
   Calendar,
   Star,
   ArrowRight,
@@ -35,6 +35,8 @@ export function CarDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const reservationToken = searchParams.get('reservationToken');
   const [car, setCar] = useState<Car | null>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +59,7 @@ export function CarDetails() {
         console.log('Car data received:', carData); // Debug log
         setCar(carData);
         setReviews(reviewsData || []);
-        
+
         // Check availability based on car status
         if (carData.status === 'rented') {
           setAvailabilityStatus('booked');
@@ -67,13 +69,13 @@ export function CarDetails() {
           const futureDate = new Date();
           futureDate.setDate(futureDate.getDate() + 30);
           const futureDateStr = futureDate.toISOString().split('T')[0];
-          
+
           const availability = await reservationService.checkAvailability(
             carData.id,
             today,
             futureDateStr
           );
-          
+
           if (!availability.available) {
             setAvailabilityStatus('reserved');
           }
@@ -89,11 +91,10 @@ export function CarDetails() {
 
   // Check for booking parameter to open booking flow automatically
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    if (searchParams.get('booking') === 'true' && car && availabilityStatus === 'available') {
+    if (searchParams.get('booking') === 'true' && car && (availabilityStatus === 'available' || Boolean(reservationToken))) {
       setShowBooking(true);
     }
-  }, [location.search, car, availabilityStatus]);
+  }, [searchParams, car, availabilityStatus, reservationToken]);
 
   if (loading || !car) return <LogoLoader fullScreen message="Loading vehicle details..." />;
 
@@ -155,8 +156,8 @@ export function CarDetails() {
     <div className="relative bg-background min-h-screen overflow-hidden">
       {/* Immersive Background with Gradient Overlay */}
       <div className="fixed inset-0 z-0">
-        <img 
-          src={images[activeImage]} 
+        <img
+          src={images[activeImage]}
           alt="Background"
           className="w-full h-full object-cover blur-3xl opacity-20"
           referrerPolicy="no-referrer"
@@ -187,14 +188,14 @@ export function CarDetails() {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-20">
             {/* Hero Image Gallery */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               className="space-y-6"
             >
               <div className="relative aspect-[16/10] rounded-[20px] md:rounded-[60px] overflow-hidden border border-white/10 bg-card/50 backdrop-blur-xl group">
-                <img 
-                  src={images[activeImage]} 
+                <img
+                  src={images[activeImage]}
                   alt={`${car.make} ${car.model}`}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   referrerPolicy="no-referrer"
@@ -211,16 +212,16 @@ export function CarDetails() {
               {images.length > 1 && (
                 <div className="flex gap-4 overflow-x-auto pb-2">
                   {images.map((img, idx) => (
-                    <motion.button 
-                      key={idx} 
-                      onClick={() => setActiveImage(idx)} 
+                    <motion.button
+                      key={idx}
+                      onClick={() => setActiveImage(idx)}
                       whileHover={{ scale: 1.05 }}
                       className={`w-20 h-20 rounded-2xl overflow-hidden border-2 shrink-0 transition-all ${activeImage === idx ? 'border-primary shadow-lg shadow-primary/20' : 'border-white/10'}`}
                     >
-                      <img 
-                        src={img} 
-                        alt="thumbnail" 
-                        className="w-full h-full object-cover" 
+                      <img
+                        src={img}
+                        alt="thumbnail"
+                        className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
                         onError={(e) => {
                           console.log('Thumbnail failed to load:', img);
@@ -234,7 +235,7 @@ export function CarDetails() {
             </motion.div>
 
             {/* Car Overview & Booking */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               className="flex flex-col justify-between"
@@ -248,9 +249,9 @@ export function CarDetails() {
                   <span className="text-primary">KES {car.daily_rate?.toLocaleString()}</span>
                   <span className="text-xs sm:text-sm text-muted-foreground font-bold">/day</span>
                 </p>
-                
+
                 <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 sm:mb-12">
-                  <motion.div 
+                  <motion.div
                     whileHover={{ scale: 1.05 }}
                     className="p-2.5 sm:p-4 md:p-5 bg-card/50 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3"
                   >
@@ -260,7 +261,7 @@ export function CarDetails() {
                       <span className="text-xs sm:text-sm font-bold text-white">{car.seats}</span>
                     </div>
                   </motion.div>
-                  <motion.div 
+                  <motion.div
                     whileHover={{ scale: 1.05 }}
                     className="p-2.5 sm:p-4 md:p-5 bg-card/50 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3"
                   >
@@ -270,7 +271,7 @@ export function CarDetails() {
                       <span className="text-xs sm:text-sm font-bold text-white">{car.fuel_type}</span>
                     </div>
                   </motion.div>
-                  <motion.div 
+                  <motion.div
                     whileHover={{ scale: 1.05 }}
                     className="p-2.5 sm:p-4 md:p-5 bg-card/50 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-white/10 hover:border-primary/30 transition-all flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3"
                   >
@@ -286,8 +287,8 @@ export function CarDetails() {
               {/* Availability Status */}
               <div className="mb-4">
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold ${
-                  availabilityStatus === 'available' 
-                    ? 'bg-success/10 text-success' 
+                  availabilityStatus === 'available'
+                    ? 'bg-success/10 text-success'
                     : availabilityStatus === 'booked'
                     ? 'bg-error/10 text-error'
                     : 'bg-warning/10 text-warning'
@@ -301,31 +302,33 @@ export function CarDetails() {
 
               {/* CTA Buttons */}
               <div className="flex gap-3 flex-wrap">
-                {availabilityStatus === 'available' ? (
+                {availabilityStatus === 'available' || reservationToken ? (
                   <>
-                    <motion.button 
+                    <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setShowBooking(!showBooking)}
                       className="flex-1 py-3.5 sm:py-5 bg-primary rounded-[14px] sm:rounded-[24px] text-black font-black uppercase tracking-[0.15em] text-xs sm:text-sm shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all"
                     >
-                      {showBooking ? 'Close' : 'Book Now'} <ArrowRight className="inline ml-2" size={18} />
+                      {showBooking ? 'Close' : reservationToken ? 'Continue Booking' : 'Book Now'} <ArrowRight className="inline ml-2" size={18} />
                     </motion.button>
-                    <motion.button 
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setShowReservation(!showReservation)}
-                      className="flex-1 py-3.5 sm:py-5 bg-white/5 border border-white/10 rounded-[14px] sm:rounded-[24px] text-white font-black uppercase tracking-[0.15em] text-xs sm:text-sm hover:bg-white/10 transition-all"
-                    >
-                      {showReservation ? 'Close' : 'Reserve'} <Clock className="inline ml-2" size={18} />
-                    </motion.button>
+                    {!reservationToken && (
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowReservation(!showReservation)}
+                        className="flex-1 py-3.5 sm:py-5 bg-white/5 border border-white/10 rounded-[14px] sm:rounded-[24px] text-white font-black uppercase tracking-[0.15em] text-xs sm:text-sm hover:bg-white/10 transition-all"
+                      >
+                        {showReservation ? 'Close' : 'Reserve'} <Clock className="inline ml-2" size={18} />
+                      </motion.button>
+                    )}
                   </>
                 ) : (
-                  <motion.button 
+                  <motion.button
                     disabled
                     className="flex-1 py-3.5 sm:py-5 bg-muted/20 border border-muted/30 rounded-[14px] sm:rounded-[24px] text-muted-foreground font-black uppercase tracking-[0.15em] text-xs sm:text-sm cursor-not-allowed"
                   >
-                    {availabilityStatus === 'booked' ? 'Currently Booked' : 'Reserved'} 
+                    {availabilityStatus === 'booked' ? 'Currently Booked' : 'Reserved'}
                   </motion.button>
                 )}
               </div>
@@ -410,7 +413,7 @@ export function CarDetails() {
           {/* Booking Flow Modal */}
           <AnimatePresence>
             {showBooking && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
@@ -418,13 +421,13 @@ export function CarDetails() {
               >
                 <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-orange-500/10 to-primary/20 rounded-[16px] sm:rounded-[32px] md:rounded-[48px] blur-2xl" />
                 <div className="relative p-2 sm:p-5 md:p-10 bg-card/50 backdrop-blur-xl rounded-[16px] sm:rounded-[32px] md:rounded-[48px] border border-primary/20">
-                  <button 
+                  <button
                     onClick={() => setShowBooking(false)}
                     className="absolute top-3 right-3 md:top-6 md:right-6 p-2 hover:bg-white/10 rounded-full transition-all z-10"
                   >
                     <X size={24} className="text-white" />
                   </button>
-                  <BookingFlow car={car} />
+                  <BookingFlow car={car} reservationToken={reservationToken} />
                 </div>
               </motion.div>
             )}
@@ -433,7 +436,7 @@ export function CarDetails() {
           {/* Reservation Flow Modal */}
           <AnimatePresence>
             {showReservation && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
@@ -441,7 +444,7 @@ export function CarDetails() {
               >
                 <div className="absolute -inset-1 bg-gradient-to-r from-warning/20 via-orange-500/10 to-warning/20 rounded-[16px] sm:rounded-[32px] md:rounded-[48px] blur-2xl" />
                 <div className="relative p-2 sm:p-5 md:p-10 bg-card/50 backdrop-blur-xl rounded-[16px] sm:rounded-[32px] md:rounded-[48px] border border-warning/20">
-                  <button 
+                  <button
                     onClick={() => setShowReservation(false)}
                     className="absolute top-3 right-3 md:top-6 md:right-6 p-2 hover:bg-white/10 rounded-full transition-all z-10"
                   >
@@ -454,7 +457,7 @@ export function CarDetails() {
           </AnimatePresence>
 
           {/* Detailed Specifications */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             className="mt-20"

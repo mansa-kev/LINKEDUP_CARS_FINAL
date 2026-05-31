@@ -10,6 +10,12 @@ export interface ReservationData {
   notes?: string;
 }
 
+const generateContinuationToken = () => {
+  const first = globalThis.crypto?.randomUUID?.().replace(/-/g, '') || `${Date.now()}`;
+  const second = globalThis.crypto?.randomUUID?.().replace(/-/g, '') || `${Math.random().toString(36).slice(2)}`;
+  return `${first}${second}`;
+};
+
 export const reservationService = {
   // Get current reservation fee from settings
   getReservationFee: async (): Promise<number> => {
@@ -31,57 +37,25 @@ export const reservationService = {
   // Create a car reservation
   createReservation: async (data: ReservationData) => {
     try {
-      // Get car details and calculate fees
-      const { data: car, error: carError } = await supabase
-        .from('cars')
-        .select('fleet_owner_id, daily_rate')
-        .eq('id', data.carId)
-        .single();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const response = await fetch('/api/reservations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify(data),
+      });
 
-      if (carError || !car) {
-        throw new Error('Car not found');
+      const rawResponse = await response.text();
+      const result = rawResponse ? JSON.parse(rawResponse) : null;
+
+      if (!response.ok || result?.error || !result?.reservation) {
+        throw new Error(result?.error || rawResponse || 'Failed to create reservation');
       }
 
-      // Calculate days and total amount
-      const start = new Date(data.startDate);
-      const end = new Date(data.endDate);
-      const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      
-      const reservationFee = await reservationService.getReservationFee();
-      const rentalAmount = car.daily_rate * days;
-      const totalAmount = reservationFee + rentalAmount;
-
-      // Get current user if logged in
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const reservationData = {
-        car_id: data.carId,
-        client_id: user?.id || null,
-        fleet_owner_id: car.fleet_owner_id,
-        start_date: data.startDate,
-        end_date: data.endDate,
-        reservation_fee: reservationFee,
-        total_amount: totalAmount,
-        contact_name: data.contactName,
-        contact_email: data.contactEmail,
-        contact_phone: data.contactPhone,
-        notes: data.notes || null,
-        status: 'reserved',
-        payment_status: 'pending',
-        payment_method: null,
-        transaction_code: null,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours from now
-      };
-
-      const { data: reservation, error } = await supabase
-        .from('car_reservations')
-        .insert([reservationData])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      return reservation;
+      return result.reservation;
     } catch (error) {
       return handleSupabaseError(error, 'createReservation');
     }
@@ -123,7 +97,7 @@ export const reservationService = {
           console.warn(
             "â ï¸ Table 'car_reservations' does not exist in Supabase. Please create it with these columns: " +
             "id, car_id, client_id, fleet_owner_id, start_date, end_date, reservation_fee, total_amount, " +
-            "status, payment_status, payment_method, transaction_code, contact_name, contact_email, " +
+            "status, payment_status, payment_method, payment_provider, payment_reference, transaction_code, contact_name, contact_email, " +
             "contact_phone, notes, expires_at, created_at, updated_at"
           );
           return { data: [], count: 0 };
@@ -140,7 +114,7 @@ export const reservationService = {
         .select(`
           *,
           cars!inner(*),
-          client:user_profiles!inner(full_name, email),
+          user_profiles:user_profiles(full_name, email, phone_number),
           fleet_owner:user_profiles!inner(full_name, email)
         `, { count: 'exact' })
         .order('created_at', { ascending: false })
@@ -148,8 +122,32 @@ export const reservationService = {
 
       if (error) throw error;
 
+      const reservationIds = (data || []).map((reservation: any) => reservation.id);
+      let latestPaymentRequests: any[] = [];
+
+      if (reservationIds.length > 0) {
+        const { data: paymentRequests, error: paymentRequestsError } = await supabase
+          .from('reservation_payment_requests')
+          .select('*')
+          .in('reservation_id', reservationIds)
+          .order('created_at', { ascending: false });
+
+        if (!paymentRequestsError) {
+          const latestMap = new Map<string, any>();
+          for (const paymentRequest of paymentRequests || []) {
+            if (!latestMap.has(paymentRequest.reservation_id)) {
+              latestMap.set(paymentRequest.reservation_id, paymentRequest);
+            }
+          }
+          latestPaymentRequests = Array.from(latestMap.values());
+        }
+      }
+
       return {
-        data: data || [],
+        data: (data || []).map((reservation: any) => ({
+          ...reservation,
+          latest_payment_request: latestPaymentRequests.find((paymentRequest: any) => paymentRequest.reservation_id === reservation.id) || null,
+        })),
         count: count || 0
       };
     } catch (error) {
@@ -158,10 +156,8 @@ export const reservationService = {
     }
   },
 
-  // Convert reservation to booking
-  convertToBooking: async (reservationId: string, bookingData: any) => {
+  prepareBookingContinuation: async (reservationId: string, initiatedBy: 'client' | 'admin', notifyClient: boolean = false) => {
     try {
-      // Get reservation details
       const { data: reservation, error: resError } = await supabase
         .from('car_reservations')
         .select('*')
@@ -172,76 +168,65 @@ export const reservationService = {
         throw new Error('Reservation not found');
       }
 
-      // Create booking
-      const { data: booking, error: bookingError } = await supabase
-        .from('bookings')
-        .insert([{
-          car_id: reservation.car_id,
-          client_id: reservation.client_id,
-          fleet_owner_id: reservation.fleet_owner_id,
-          start_date: reservation.start_date,
-          end_date: reservation.end_date,
-          total_amount: reservation.total_amount - reservation.reservation_fee, // Subtract reservation fee
-          platform_commission: 0, // Already handled in reservation
-          status: 'confirmed',
-          payment_status: 'paid',
-          payment_method: bookingData.paymentMethod || 'mpesa',
-          pickup_location: bookingData.location || 'TBD',
-          metadata: bookingData.metadata || {}
-        }])
-        .select()
-        .single();
+      if (reservation.payment_status !== 'paid' || !['reserved', 'confirmed'].includes(reservation.status)) {
+        throw new Error('Only paid active reservations can continue to booking');
+      }
 
-      if (bookingError) throw bookingError;
+      const continuationToken = reservation.booking_completion_token || generateContinuationToken();
 
-      // Update reservation status
-      await supabase
+      const { error: updateError } = await supabase
         .from('car_reservations')
         .update({
-          status: 'confirmed',
-          payment_status: 'paid',
-          payment_method: bookingData.paymentMethod || 'mpesa',
-          transaction_code: bookingData.mpesaCode
+          booking_completion_token: continuationToken,
+          booking_flow_started_at: new Date().toISOString(),
+          booking_flow_initiated_by: initiatedBy,
         })
         .eq('id', reservationId);
 
-      // Record reservation revenue
-      try {
-        await supabase.from('reservation_revenue').insert({
-          reservation_id: reservation.id,
-          car_id: reservation.car_id,
-          fleet_owner_id: reservation.fleet_owner_id,
-          client_id: reservation.client_id,
-          reservation_fee: reservation.reservation_fee,
-          total_reservation_value: reservation.total_amount,
-          payment_method: bookingData.paymentMethod || 'mpesa',
-          transaction_code: bookingData.mpesaCode,
-          recorded_at: new Date().toISOString(),
-          status: 'collected'
-        });
-      } catch (revenueError: any) {
-        // Graceful table-missing check
-        if (revenueError?.code === '42P01' || revenueError?.message?.includes('relation "reservation_revenue" does not exist')) {
-          console.warn(
-            "⚠️ reservation_revenue table missing. Please create it in Supabase with columns: " +
-            "id (uuid), reservation_id, car_id, fleet_owner_id, client_id, reservation_fee (numeric), " +
-            "total_reservation_value (numeric), payment_method (text), transaction_code (text), " +
-            "recorded_at (timestamptz), status (text)"
-          );
-        } else {
-          console.error('Error recording reservation revenue:', revenueError);
+      if (updateError) throw updateError;
+
+      const link = `${window.location.origin}/cars/${reservation.car_id}?booking=true&reservationToken=${continuationToken}`;
+
+      if (notifyClient && reservation.client_id) {
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: reservation.client_id,
+            title: 'Complete Your Booking',
+            content: 'Your reservation is paid. Use this link to complete the full booking flow.',
+            type: 'info',
+            is_read: false,
+            link,
+          });
+
+        if (notificationError) {
+          console.warn('Failed to notify client about booking continuation:', notificationError);
         }
-        // Continue without crashing
       }
 
-      return booking;
+      return {
+        link,
+        reservationId: reservation.id,
+        token: continuationToken,
+      };
     } catch (error) {
-      return handleSupabaseError(error, 'convertToBooking');
+      return handleSupabaseError(error, 'prepareBookingContinuation');
     }
   },
 
+  getBookingContinuation: async (token: string) => {
+    const response = await fetch(`/api/reservations/continuation/${token}`);
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      throw new Error(data.error || 'Failed to load reservation continuation');
+    }
+
+    return data;
+  },
+
   // Check if car is available for dates
-  checkAvailability: async (carId: string, startDate: string, endDate: string) => {
+  checkAvailability: async (carId: string, startDate: string, endDate: string, ignoreReservationId?: string) => {
     try {
       // Check existing bookings
       const { data: bookings, error: bookingError } = await supabase
@@ -251,11 +236,17 @@ export const reservationService = {
         .in('status', ['confirmed', 'on_trip']);
 
       // Check existing reservations
-      const { data: reservations, error: resError } = await supabase
+      let reservationQuery = supabase
         .from('car_reservations')
-        .select('start_date, end_date, status')
+        .select('id, start_date, end_date, status')
         .eq('car_id', carId)
-        .eq('status', 'reserved');
+        .in('status', ['reserved', 'confirmed']);
+
+      if (ignoreReservationId) {
+        reservationQuery = reservationQuery.neq('id', ignoreReservationId);
+      }
+
+      const { data: reservations, error: resError } = await reservationQuery;
 
       if (bookingError || resError) throw bookingError || resError;
 

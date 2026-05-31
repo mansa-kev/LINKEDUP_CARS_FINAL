@@ -1305,6 +1305,48 @@ export const adminService = {
     return true;
   },
 
+  getPaymentRequests: async () => {
+    const { data: payments, error } = await supabase
+      .from('payment_requests')
+      .select('*, bookings(*)')
+      .order('created_at', { ascending: false });
+
+    if (error) return handleSupabaseErrorWrapper(error, 'getPaymentRequests');
+
+    const clientIds = [...new Set((payments || []).map((payment: any) => payment.client_id).filter(Boolean))];
+    let profiles: any[] = [];
+
+    if (clientIds.length > 0) {
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, email, phone_number')
+        .in('id', clientIds);
+
+      if (profileError) return handleSupabaseErrorWrapper(profileError, 'getPaymentRequestsProfiles');
+      profiles = profileData || [];
+    }
+
+    return (payments || []).map((payment: any) => ({
+      ...payment,
+      client: profiles.find(profile => profile.id === payment.client_id) || null,
+    }));
+  },
+
+  syncPaymentRequest: async (paymentRequestId: string) => {
+    const response = await fetch('/api/ncba/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentRequestId }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      throw new Error(data.error || 'Failed to sync NCBA payment status');
+    }
+
+    return data;
+  },
+
   verifyPayment: async (_id: string, status: 'verified' | 'rejected', _verifiedById: string, bookingId?: string, amount?: number, clientId?: string, transactionCode?: string) => {
     logger.log('Verifying payment:', { status, bookingId, amount, clientId, transactionCode });
     const data = { status };

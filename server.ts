@@ -4,7 +4,7 @@ import { createServer as createViteServer } from "vite";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
-import { mpesaService } from "./src/services/mpesaService.js";
+import { ncbaService } from "./src/services/ncbaService.js";
 
 dotenv.config({ path: '.env.local' });
 
@@ -13,7 +13,8 @@ const __dirname = path.dirname(__filename);
 
 // Server-side Supabase client (uses service role or anon key)
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseKey = supabaseServiceRoleKey || process.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function startServer() {
@@ -97,25 +98,556 @@ async function startServer() {
     }
   });
 
-  // ─── M-PESA API ROUTES ────────────────────────────────────────────
+  // ─── NCBA STK PUSH API ROUTES ─────────────────────────────────────
 
-  /**
-   * POST /api/mpesa/stk-push
-   * Initiates an STK Push to the customer's phone.
-   * Body: { phone, amount, bookingId }
-   */
-  app.post('/api/mpesa/stk-push', async (req, res) => {
-    try {
-      const { phone, amount, bookingId } = req.body;
+  const finalizeNcbaPayment = async (paymentRequest: any, queryResult: any) => {
+    const now = new Date().toISOString();
 
-      if (!phone || !amount || !bookingId) {
-        return res.status(400).json({ success: false, error: 'Missing required fields: phone, amount, bookingId' });
+    if (queryResult.paid) {
+      await supabase
+        .from('payment_requests')
+        .update({
+          status: 'success',
+          status_description: queryResult.description || 'Success',
+          raw_query_response: queryResult.raw || null,
+          updated_at: now,
+          confirmed_at: now,
+        })
+        .eq('id', paymentRequest.id);
+
+      await supabase
+        .from('bookings')
+        .update({
+          status: 'confirmed',
+          payment_status: 'paid',
+          payment_method: 'ncba_stk',
+          payment_provider: 'ncba',
+          payment_reference: paymentRequest.provider_reference_id,
+          transaction_code: paymentRequest.provider_transaction_id,
+        })
+        .eq('id', paymentRequest.booking_id);
+
+      const { data: existingTx } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('booking_id', paymentRequest.booking_id)
+        .eq('transaction_code', paymentRequest.provider_transaction_id)
+        .maybeSingle();
+
+      if (!existingTx) {
+        await supabase.from('transactions').insert({
+          booking_id: paymentRequest.booking_id,
+          user_id: paymentRequest.client_id,
+          amount: paymentRequest.amount,
+          type: 'payment_in',
+          status: 'completed',
+          transaction_code: paymentRequest.provider_transaction_id,
+        });
       }
 
-      // Validate booking exists
+      if (paymentRequest.client_id) {
+        await supabase.from('notifications').insert({
+          user_id: paymentRequest.client_id,
+          title: 'Payment Received',
+          content: `Your NCBA STK payment of KES ${Number(paymentRequest.amount).toLocaleString()} has been received. Booking confirmed!`,
+          type: 'success',
+          is_read: false,
+          link: `/bookings/${paymentRequest.booking_id}`,
+        }).then(() => {}, (err: any) => console.error('[NCBA] Notification insert error:', err));
+      }
+    } else if (queryResult.failed) {
+      await supabase
+        .from('payment_requests')
+        .update({
+          status: 'failed',
+          status_description: queryResult.description || 'Payment failed',
+          raw_query_response: queryResult.raw || null,
+          updated_at: now,
+          failed_at: now,
+        })
+        .eq('id', paymentRequest.id);
+
+      await supabase
+        .from('bookings')
+        .update({
+          status: 'pending_payment_verification',
+          payment_status: 'pending',
+          payment_method: 'ncba_stk',
+          payment_provider: 'ncba',
+        })
+        .eq('id', paymentRequest.booking_id);
+    } else {
+      await supabase
+        .from('payment_requests')
+        .update({
+          status: 'pending',
+          status_description: queryResult.description || 'Payment pending',
+          raw_query_response: queryResult.raw || null,
+          updated_at: now,
+        })
+        .eq('id', paymentRequest.id);
+    }
+  };
+
+  const finalizeReservationNcbaPayment = async (paymentRequest: any, queryResult: any) => {
+    const now = new Date().toISOString();
+
+    if (queryResult.paid) {
+      await supabase
+        .from('reservation_payment_requests')
+        .update({
+          status: 'success',
+          status_description: queryResult.description || 'Success',
+          raw_query_response: queryResult.raw || null,
+          updated_at: now,
+          confirmed_at: now,
+        })
+        .eq('id', paymentRequest.id);
+
+      const { data: reservation } = await supabase
+        .from('car_reservations')
+        .select('id, car_id, client_id, fleet_owner_id, reservation_fee, total_amount, booking_completion_token')
+        .eq('id', paymentRequest.reservation_id)
+        .maybeSingle();
+
+      await supabase
+        .from('car_reservations')
+        .update({
+          status: 'reserved',
+          payment_status: 'paid',
+          payment_method: 'ncba_stk',
+          payment_provider: 'ncba',
+          payment_reference: paymentRequest.provider_reference_id,
+          transaction_code: paymentRequest.provider_transaction_id,
+        })
+        .eq('id', paymentRequest.reservation_id);
+
+      if (reservation) {
+        try {
+          const { data: existingRevenue } = await supabase
+            .from('reservation_revenue')
+            .select('id')
+            .eq('reservation_id', reservation.id)
+            .eq('transaction_code', paymentRequest.provider_transaction_id)
+            .maybeSingle();
+
+          if (!existingRevenue) {
+            await supabase.from('reservation_revenue').insert({
+              reservation_id: reservation.id,
+              car_id: reservation.car_id,
+              fleet_owner_id: reservation.fleet_owner_id,
+              client_id: reservation.client_id,
+              reservation_fee: reservation.reservation_fee,
+              total_reservation_value: reservation.total_amount,
+              payment_method: 'ncba_stk',
+              transaction_code: paymentRequest.provider_transaction_id,
+              recorded_at: now,
+              status: 'collected',
+            });
+          }
+        } catch (revenueError: any) {
+          if (revenueError?.code !== '42P01' && !revenueError?.message?.includes('relation "reservation_revenue" does not exist')) {
+            console.error('[NCBA Reservation] Revenue insert error:', revenueError);
+          }
+        }
+
+        if (reservation.client_id) {
+          const continuationLink = `/cars/${reservation.car_id}?booking=true&reservationToken=${reservation.booking_completion_token}`;
+          await supabase.from('notifications').insert({
+            user_id: reservation.client_id,
+            title: 'Reservation Confirmed',
+            content: `Your NCBA reservation fee of KES ${Number(paymentRequest.amount).toLocaleString()} has been received. You can now complete the full booking flow.`,
+            type: 'success',
+            is_read: false,
+            link: continuationLink,
+          }).then(() => {}, (err: any) => console.error('[NCBA Reservation] Notification insert error:', err));
+        }
+      }
+    } else if (queryResult.failed) {
+      await supabase
+        .from('reservation_payment_requests')
+        .update({
+          status: 'failed',
+          status_description: queryResult.description || 'Payment failed',
+          raw_query_response: queryResult.raw || null,
+          updated_at: now,
+          failed_at: now,
+        })
+        .eq('id', paymentRequest.id);
+
+      await supabase
+        .from('car_reservations')
+        .update({
+          status: 'pending_payment',
+          payment_status: 'pending',
+          payment_method: 'ncba_stk',
+          payment_provider: 'ncba',
+        })
+        .eq('id', paymentRequest.reservation_id);
+    } else {
+      await supabase
+        .from('reservation_payment_requests')
+        .update({
+          status: 'pending',
+          status_description: queryResult.description || 'Payment pending',
+          raw_query_response: queryResult.raw || null,
+          updated_at: now,
+        })
+        .eq('id', paymentRequest.id);
+    }
+  };
+
+  const checkBookingAvailability = async (carId: string, startDate: string, endDate: string, ignoreReservationId?: string) => {
+    const { data: bookings, error: bookingError } = await supabase
+      .from('bookings')
+      .select('start_date, end_date, status')
+      .eq('car_id', carId)
+      .in('status', ['confirmed', 'on_trip']);
+
+    let reservationQuery = supabase
+      .from('car_reservations')
+      .select('id, start_date, end_date, status')
+      .eq('car_id', carId)
+      .in('status', ['reserved', 'confirmed']);
+
+    if (ignoreReservationId) {
+      reservationQuery = reservationQuery.neq('id', ignoreReservationId);
+    }
+
+    const { data: reservations, error: reservationError } = await reservationQuery;
+
+    if (bookingError || reservationError) {
+      throw bookingError || reservationError;
+    }
+
+    const requestedStart = new Date(startDate);
+    const requestedEnd = new Date(endDate);
+    const hasOverlap = (existingStart: string, existingEnd: string) => {
+      const currentStart = new Date(existingStart);
+      const currentEnd = new Date(existingEnd);
+      return (
+        (requestedStart >= currentStart && requestedStart <= currentEnd) ||
+        (requestedEnd >= currentStart && requestedEnd <= currentEnd) ||
+        (requestedStart <= currentStart && requestedEnd >= currentEnd)
+      );
+    };
+
+    return !(bookings || []).some((item: any) => hasOverlap(item.start_date, item.end_date))
+      && !(reservations || []).some((item: any) => hasOverlap(item.start_date, item.end_date));
+  };
+
+  app.post('/api/reservations', async (req, res) => {
+    try {
+      if (!supabaseServiceRoleKey) {
+        return res.status(500).json({
+          success: false,
+          error: 'SUPABASE_SERVICE_ROLE_KEY is required for public reservation creation.',
+        });
+      }
+
+      const { carId, startDate, endDate, contactName, contactEmail, contactPhone, notes } = req.body;
+
+      if (!carId || !startDate || !endDate || !contactName || !contactEmail || !contactPhone) {
+        return res.status(400).json({ success: false, error: 'Missing required reservation fields.' });
+      }
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
+        return res.status(400).json({ success: false, error: 'Please provide a valid reservation date range.' });
+      }
+
+      const { data: car, error: carError } = await supabase
+        .from('cars')
+        .select('id, fleet_owner_id, daily_rate')
+        .eq('id', carId)
+        .single();
+
+      if (carError || !car) {
+        return res.status(404).json({ success: false, error: 'Car not found.' });
+      }
+
+      if (!car.fleet_owner_id) {
+        return res.status(409).json({ success: false, error: 'This car is not assigned to a fleet owner yet.' });
+      }
+
+      let clientId: string | null = null;
+      const authorizationHeader = req.headers.authorization;
+      const accessToken = authorizationHeader?.startsWith('Bearer ')
+        ? authorizationHeader.slice(7)
+        : null;
+
+      if (accessToken) {
+        const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+        if (authError) {
+          return res.status(401).json({ success: false, error: 'Failed to verify your session.' });
+        }
+        clientId = authData.user?.id || null;
+      }
+
+      const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const { data: feeSetting } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'reservation_fee')
+        .maybeSingle();
+
+      const reservationFee = Number(feeSetting?.value || 500);
+      const totalAmount = reservationFee + (Number(car.daily_rate || 0) * days);
+      const firstTokenPart = globalThis.crypto?.randomUUID?.().replace(/-/g, '') || `${Date.now()}`;
+      const secondTokenPart = globalThis.crypto?.randomUUID?.().replace(/-/g, '') || `${Math.random().toString(36).slice(2)}`;
+      const continuationToken = `${firstTokenPart}${secondTokenPart}`;
+
+      const { data: reservation, error: reservationError } = await supabase
+        .from('car_reservations')
+        .insert({
+          car_id: carId,
+          client_id: clientId,
+          fleet_owner_id: car.fleet_owner_id,
+          start_date: startDate,
+          end_date: endDate,
+          reservation_fee: reservationFee,
+          total_amount: totalAmount,
+          contact_name: contactName,
+          contact_email: contactEmail,
+          contact_phone: contactPhone,
+          notes: notes || null,
+          status: 'pending_payment',
+          payment_status: 'pending',
+          payment_method: 'ncba_stk',
+          payment_provider: 'ncba',
+          payment_reference: null,
+          transaction_code: null,
+          booking_completion_token: continuationToken,
+          linked_booking_id: null,
+          booking_flow_started_at: null,
+          booking_flow_initiated_by: null,
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .select()
+        .single();
+
+      if (reservationError || !reservation) {
+        return res.status(500).json({ success: false, error: reservationError?.message || 'Failed to create reservation.' });
+      }
+
+      return res.status(201).json({ success: true, reservation });
+    } catch (error: any) {
+      console.error('[API] Reservation create error:', error);
+      return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+    }
+  });
+
+  app.post('/api/bookings', async (req, res) => {
+    try {
+      if (!supabaseServiceRoleKey) {
+        return res.status(500).json({
+          success: false,
+          error: 'SUPABASE_SERVICE_ROLE_KEY is required for public booking creation.',
+        });
+      }
+
+      const bookingData = req.body || {};
+      const {
+        carId,
+        startDate,
+        endDate,
+        totalAmount,
+        pickupLocation,
+        dropoffLocation,
+        location,
+        paymentMethod,
+        sourceReservationId,
+        reservationContinuationToken,
+        bookingFlowInitiatedBy,
+      } = bookingData;
+
+      if (!carId || !startDate || !endDate || totalAmount == null) {
+        return res.status(400).json({ success: false, error: 'Missing required booking fields.' });
+      }
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
+        return res.status(400).json({ success: false, error: 'Please provide a valid booking date range.' });
+      }
+
+      let clientId: string | null = null;
+      const authorizationHeader = req.headers.authorization;
+      const accessToken = authorizationHeader?.startsWith('Bearer ')
+        ? authorizationHeader.slice(7)
+        : null;
+
+      if (accessToken) {
+        const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+        if (authError) {
+          return res.status(401).json({ success: false, error: 'Failed to verify your session.' });
+        }
+        clientId = authData.user?.id || null;
+      }
+
+      let sourceReservation: any = null;
+      if (sourceReservationId) {
+        const { data: reservation, error: reservationError } = await supabase
+          .from('car_reservations')
+          .select('id, car_id, fleet_owner_id, client_id, start_date, end_date, status, payment_status, linked_booking_id, booking_completion_token')
+          .eq('id', sourceReservationId)
+          .single();
+
+        if (reservationError || !reservation) {
+          return res.status(404).json({ success: false, error: 'Reservation continuation was not found.' });
+        }
+
+        if (reservation.payment_status !== 'paid' || !['reserved', 'confirmed'].includes(reservation.status)) {
+          return res.status(409).json({ success: false, error: 'Only paid active reservations can be completed into a booking.' });
+        }
+
+        if (reservation.car_id !== carId) {
+          return res.status(409).json({ success: false, error: 'This reservation does not match the selected vehicle.' });
+        }
+
+        if (reservationContinuationToken && reservation.booking_completion_token !== reservationContinuationToken) {
+          return res.status(409).json({ success: false, error: 'The reservation continuation link is no longer valid.' });
+        }
+
+        sourceReservation = reservation;
+      }
+
+      const available = await checkBookingAvailability(carId, startDate, endDate, sourceReservationId || undefined);
+      if (!available) {
+        return res.status(409).json({ success: false, error: 'Selected dates are not available. The car is either booked or reserved for these dates.' });
+      }
+
+      let fleetOwnerId = sourceReservation?.fleet_owner_id || null;
+      if (!fleetOwnerId) {
+        const { data: car, error: carError } = await supabase
+          .from('cars')
+          .select('fleet_owner_id')
+          .eq('id', carId)
+          .single();
+
+        if (carError || !car) {
+          return res.status(404).json({ success: false, error: 'Could not find the selected car. Please try again.' });
+        }
+
+        if (!car.fleet_owner_id) {
+          return res.status(409).json({ success: false, error: 'This car is not assigned to a fleet owner yet.' });
+        }
+
+        fleetOwnerId = car.fleet_owner_id;
+      }
+
+      const total = Number(totalAmount);
+      const platformCommission = Math.round(total * 0.15 * 100) / 100;
+      const payload = {
+        car_id: carId,
+        client_id: clientId || sourceReservation?.client_id || null,
+        fleet_owner_id: fleetOwnerId,
+        start_date: startDate,
+        end_date: endDate,
+        pickup_location: pickupLocation || location,
+        dropoff_location: dropoffLocation || pickupLocation || location,
+        total_amount: total,
+        platform_commission: platformCommission,
+        status: 'pending_payment_verification',
+        payment_status: 'pending',
+        payment_method: paymentMethod || 'ncba_stk',
+        payment_provider: 'ncba',
+        source_reservation_id: sourceReservationId || null,
+        metadata: {
+          reservation_context: sourceReservationId ? {
+            reservation_id: sourceReservationId,
+            continuation_token: reservationContinuationToken || null,
+          } : null,
+          guest_info: !clientId ? {
+            full_name: bookingData.fullName,
+            email: bookingData.email,
+            phone: bookingData.phone,
+            license_number: bookingData.license,
+            id_number: bookingData.idNumber || null,
+          } : null,
+          signature_url: bookingData.signatureUrl,
+          documents: bookingData.documents ?? {
+            facePhotoUrl: bookingData.facePhotoUrl || null,
+            licenseFrontUrl: bookingData.licenseFrontUrl || null,
+            licenseBackUrl: bookingData.licenseBackUrl || null,
+            idFrontUrl: bookingData.idFrontUrl || null,
+            idBackUrl: bookingData.idBackUrl || null,
+          },
+        },
+      };
+
+      if (sourceReservation?.linked_booking_id) {
+        const { data: existingBooking, error: existingBookingError } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('id', sourceReservation.linked_booking_id)
+          .maybeSingle();
+
+        if (!existingBookingError && existingBooking) {
+          if (existingBooking.payment_status === 'paid') {
+            return res.json({ success: true, booking: existingBooking });
+          }
+
+          const { data: updatedBooking, error: updateBookingError } = await supabase
+            .from('bookings')
+            .update(payload)
+            .eq('id', existingBooking.id)
+            .select()
+            .single();
+
+          if (updateBookingError || !updatedBooking) {
+            return res.status(500).json({ success: false, error: updateBookingError?.message || 'Failed to update booking.' });
+          }
+
+          return res.json({ success: true, booking: updatedBooking });
+        }
+      }
+
       const { data: booking, error: bookingError } = await supabase
         .from('bookings')
-        .select('id, status, client_id')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (bookingError || !booking) {
+        return res.status(500).json({ success: false, error: bookingError?.message || 'Failed to create booking.' });
+      }
+
+      if (sourceReservationId) {
+        const { error: reservationUpdateError } = await supabase
+          .from('car_reservations')
+          .update({
+            linked_booking_id: booking.id,
+            booking_flow_started_at: new Date().toISOString(),
+            booking_flow_initiated_by: bookingFlowInitiatedBy || 'client',
+          })
+          .eq('id', sourceReservationId);
+
+        if (reservationUpdateError) {
+          return res.status(500).json({ success: false, error: reservationUpdateError.message || 'Failed to link booking to reservation.' });
+        }
+      }
+
+      return res.status(201).json({ success: true, booking });
+    } catch (error: any) {
+      console.error('[API] Booking create error:', error);
+      return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+    }
+  });
+
+  app.post('/api/ncba/stk-push', async (req, res) => {
+    try {
+      const { phone, bookingId } = req.body;
+
+      if (!phone || !bookingId) {
+        return res.status(400).json({ success: false, error: 'Missing required fields: phone, bookingId' });
+      }
+
+      const { data: booking, error: bookingError } = await supabase
+        .from('bookings')
+        .select('id, status, payment_status, client_id, total_amount')
         .eq('id', bookingId)
         .single();
 
@@ -123,190 +655,140 @@ async function startServer() {
         return res.status(404).json({ success: false, error: 'Booking not found' });
       }
 
-      // Initiate STK Push
-      const result = await mpesaService.initiateSTKPush({ phone, amount, bookingId });
-
-      if (result.success && result.checkoutRequestId) {
-        // Store the checkout request ID in pending_payments for tracking
-        await supabase.from('pending_payments').insert({
-          booking_id: bookingId,
-          client_id: booking.client_id || null,
-          amount: amount,
-          transaction_code: result.checkoutRequestId,
-          status: 'submitted',
-          metadata: {
-            type: 'stk_push',
-            merchant_request_id: result.merchantRequestId,
-            phone: phone,
-          }
-        });
-
-        // Update booking to reflect payment is in progress
-        await supabase
-          .from('bookings')
-          .update({ 
-            status: 'pending_payment_verification',
-            payment_status: 'pending',
-          })
-          .eq('id', bookingId);
+      if (booking.payment_status === 'paid') {
+        return res.status(409).json({ success: false, error: 'This booking is already paid' });
       }
 
-      return res.json(result);
-    } catch (error: any) {
-      console.error('[API] STK Push error:', error);
-      return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
-    }
-  });
+      const publicConfig = ncbaService.getPublicConfig();
+      const accountNo = 'LINKEDUP CARS BOOKING';
+      const result = await ncbaService.initiateSTKPush({
+        phone,
+        amount: Number(booking.total_amount),
+        accountNo,
+      });
 
-  /**
-   * POST /api/mpesa/callback
-   * Receives the payment result from Safaricom.
-   * This is called by Safaricom's servers, NOT by our frontend.
-   */
-  app.post('/api/mpesa/callback', async (req, res) => {
-    try {
-      console.log('[M-Pesa Callback] Received:', JSON.stringify(req.body, null, 2));
-
-      const result = mpesaService.parseCallback(req.body);
-
-      // Find the pending payment by checkout request ID
-      const { data: pendingPayment, error: findError } = await supabase
-        .from('pending_payments')
-        .select('*, bookings(*)')
-        .eq('transaction_code', result.checkoutRequestId)
+      const now = new Date().toISOString();
+      const { data: paymentRequest, error: paymentError } = await supabase
+        .from('payment_requests')
+        .insert({
+          booking_id: booking.id,
+          client_id: booking.client_id || null,
+          provider: 'ncba',
+          channel: 'stk',
+          phone: ncbaService.formatPhone(phone),
+          amount: booking.total_amount,
+          currency: 'KES',
+          paybill_no: publicConfig.paybillNo,
+          account_no: accountNo,
+          network: publicConfig.network,
+          transaction_type: publicConfig.transactionType,
+          provider_transaction_id: result.transactionId || null,
+          provider_reference_id: result.referenceId || null,
+          status: result.success ? 'pending' : 'failed',
+          status_code: result.statusCode || null,
+          status_description: result.statusDescription || result.error || null,
+          raw_initiate_response: result.raw || null,
+          updated_at: now,
+          failed_at: result.success ? null : now,
+        })
+        .select()
         .single();
 
-      if (findError || !pendingPayment) {
-        console.error('[M-Pesa Callback] Could not find pending payment for:', result.checkoutRequestId);
-        // Still respond 200 to Safaricom so they don't retry
-        return res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+      if (paymentError) {
+        return res.status(500).json({ success: false, error: paymentError.message });
       }
 
-      if (result.success) {
-        // Payment successful — update pending_payment
-        await supabase
-          .from('pending_payments')
-          .update({
-            status: 'verified',
-            transaction_code: result.mpesaReceiptNumber || result.checkoutRequestId,
-            verified_at: new Date().toISOString(),
-            metadata: {
-              ...((pendingPayment.metadata as any) || {}),
-              mpesa_receipt: result.mpesaReceiptNumber,
-              mpesa_amount: result.amount,
-              mpesa_phone: result.phone,
-              mpesa_date: result.transactionDate,
-              callback_result_code: result.resultCode,
-              callback_result_desc: result.resultDesc,
-            }
-          })
-          .eq('id', pendingPayment.id);
+      await supabase
+        .from('bookings')
+        .update({
+          status: 'pending_payment_verification',
+          payment_status: 'pending',
+          payment_method: 'ncba_stk',
+          payment_provider: 'ncba',
+          payment_reference: result.referenceId || null,
+          transaction_code: result.transactionId || null,
+        })
+        .eq('id', booking.id);
 
-        // Update booking to confirmed + paid
-        await supabase
-          .from('bookings')
-          .update({
-            status: 'confirmed',
-            payment_status: 'paid',
-            payment_method: 'mpesa',
-          })
-          .eq('id', pendingPayment.booking_id);
-
-        // Create transaction record
-        await supabase.from('transactions').insert({
-          booking_id: pendingPayment.booking_id,
-          user_id: pendingPayment.client_id,
-          amount: result.amount || pendingPayment.amount,
-          type: 'payment_in',
-          status: 'completed',
-          transaction_code: result.mpesaReceiptNumber || result.checkoutRequestId,
-        });
-
-        // Create in-app notification for the client
-        if (pendingPayment.client_id) {
-          await supabase.from('notifications').insert({
-            user_id: pendingPayment.client_id,
-            title: 'Payment Received',
-            content: `Your M-Pesa payment of KES ${Number(result.amount || pendingPayment.amount).toLocaleString()} has been received. Booking confirmed!`,
-            type: 'success',
-            is_read: false,
-            link: `/bookings/${pendingPayment.booking_id}`,
-          });
-        }
-
-        console.log('[M-Pesa Callback] Payment confirmed for booking:', pendingPayment.booking_id);
-      } else {
-        // Payment failed or cancelled
-        await supabase
-          .from('pending_payments')
-          .update({
-            status: 'rejected',
-            metadata: {
-              ...((pendingPayment.metadata as any) || {}),
-              callback_result_code: result.resultCode,
-              callback_result_desc: result.resultDesc,
-            }
-          })
-          .eq('id', pendingPayment.id);
-
-        // Revert booking status
-        await supabase
-          .from('bookings')
-          .update({
-            status: 'pending',
-            payment_status: 'failed',
-          })
-          .eq('id', pendingPayment.booking_id);
-
-        console.log('[M-Pesa Callback] Payment failed for booking:', pendingPayment.booking_id, result.resultDesc);
-      }
-
-      // Always respond 200 to Safaricom
-      return res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+      return res.json({
+        success: result.success,
+        paymentRequestId: paymentRequest.id,
+        transactionId: result.transactionId,
+        referenceId: result.referenceId,
+        statusCode: result.statusCode,
+        statusDescription: result.statusDescription,
+        error: result.error,
+      });
     } catch (error: any) {
-      console.error('[M-Pesa Callback] Error processing:', error);
-      return res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
-    }
-  });
-
-  /**
-   * POST /api/mpesa/query
-   * Query the status of an STK Push transaction.
-   * Body: { checkoutRequestId }
-   */
-  app.post('/api/mpesa/query', async (req, res) => {
-    try {
-      const { checkoutRequestId } = req.body;
-
-      if (!checkoutRequestId) {
-        return res.status(400).json({ success: false, error: 'Missing checkoutRequestId' });
-      }
-
-      const result = await mpesaService.querySTKPushStatus(checkoutRequestId);
-      return res.json(result);
-    } catch (error: any) {
-      console.error('[API] STK Query error:', error);
+      console.error('[API] NCBA STK Push error:', error);
       return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
     }
   });
 
-  /**
-   * GET /api/mpesa/payment-status/:bookingId
-   * Check if booking payment has been confirmed (for frontend polling fallback).
-   */
-  app.get('/api/mpesa/payment-status/:bookingId', async (req, res) => {
+  app.post('/api/ncba/query', async (req, res) => {
+    try {
+      const { paymentRequestId } = req.body;
+
+      if (!paymentRequestId) {
+        return res.status(400).json({ success: false, error: 'Missing paymentRequestId' });
+      }
+
+      const { data: paymentRequest, error: paymentError } = await supabase
+        .from('payment_requests')
+        .select('*')
+        .eq('id', paymentRequestId)
+        .single();
+
+      if (paymentError || !paymentRequest) {
+        return res.status(404).json({ success: false, error: 'Payment request not found' });
+      }
+
+      if (!paymentRequest.provider_transaction_id) {
+        return res.status(400).json({ success: false, error: 'Payment request has no NCBA TransactionID' });
+      }
+
+      if (paymentRequest.status === 'success') {
+        return res.json({ success: true, paid: true, failed: false, status: 'SUCCESS', description: 'Already confirmed' });
+      }
+
+      const result = await ncbaService.querySTKPush(paymentRequest.provider_transaction_id);
+      await finalizeNcbaPayment(paymentRequest, result);
+
+      return res.json({
+        success: result.success,
+        paid: result.paid,
+        failed: result.failed,
+        status: result.status,
+        description: result.description,
+        error: result.error,
+      });
+    } catch (error: any) {
+      console.error('[API] NCBA Query error:', error);
+      return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+    }
+  });
+
+  app.get('/api/ncba/payment-status/:bookingId', async (req, res) => {
     try {
       const { bookingId } = req.params;
 
       const { data: booking, error } = await supabase
         .from('bookings')
-        .select('id, status, payment_status, payment_method')
+        .select('id, status, payment_status, payment_method, payment_provider, payment_reference, transaction_code')
         .eq('id', bookingId)
         .single();
 
       if (error || !booking) {
         return res.status(404).json({ success: false, error: 'Booking not found' });
       }
+
+      const { data: paymentRequest } = await supabase
+        .from('payment_requests')
+        .select('*')
+        .eq('booking_id', bookingId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       return res.json({
         success: true,
@@ -315,9 +797,232 @@ async function startServer() {
         paymentStatus: booking.payment_status,
         paid: booking.payment_status === 'paid',
         confirmed: booking.status === 'confirmed',
+        paymentRequest,
       });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post('/api/ncba/reservations/stk-push', async (req, res) => {
+    try {
+      const { phone, reservationId } = req.body;
+
+      if (!phone || !reservationId) {
+        return res.status(400).json({ success: false, error: 'Missing required fields: phone, reservationId' });
+      }
+
+      const { data: reservation, error: reservationError } = await supabase
+        .from('car_reservations')
+        .select('id, car_id, status, payment_status, client_id, reservation_fee, booking_completion_token')
+        .eq('id', reservationId)
+        .single();
+
+      if (reservationError || !reservation) {
+        return res.status(404).json({ success: false, error: 'Reservation not found' });
+      }
+
+      if (reservation.payment_status === 'paid') {
+        return res.status(409).json({ success: false, error: 'This reservation is already paid' });
+      }
+
+      if (['cancelled', 'expired'].includes(reservation.status)) {
+        return res.status(409).json({ success: false, error: 'This reservation is no longer active' });
+      }
+
+      const publicConfig = ncbaService.getPublicConfig();
+      const accountNo = 'LINKEDUP CARS RESERVATION';
+      const amount = Number(reservation.reservation_fee);
+      const result = await ncbaService.initiateSTKPush({
+        phone,
+        amount,
+        accountNo,
+      });
+
+      const now = new Date().toISOString();
+      const { data: paymentRequest, error: paymentError } = await supabase
+        .from('reservation_payment_requests')
+        .insert({
+          reservation_id: reservation.id,
+          client_id: reservation.client_id || null,
+          provider: 'ncba',
+          channel: 'stk',
+          phone: ncbaService.formatPhone(phone),
+          amount,
+          currency: 'KES',
+          paybill_no: publicConfig.paybillNo,
+          account_no: accountNo,
+          network: publicConfig.network,
+          transaction_type: publicConfig.transactionType,
+          provider_transaction_id: result.transactionId || null,
+          provider_reference_id: result.referenceId || null,
+          status: result.success ? 'pending' : 'failed',
+          status_code: result.statusCode || null,
+          status_description: result.statusDescription || result.error || null,
+          raw_initiate_response: result.raw || null,
+          updated_at: now,
+          failed_at: result.success ? null : now,
+        })
+        .select()
+        .single();
+
+      if (paymentError) {
+        return res.status(500).json({ success: false, error: paymentError.message });
+      }
+
+      await supabase
+        .from('car_reservations')
+        .update({
+          status: 'pending_payment',
+          payment_status: 'pending',
+          payment_method: 'ncba_stk',
+          payment_provider: 'ncba',
+          payment_reference: result.referenceId || null,
+          transaction_code: result.transactionId || null,
+        })
+        .eq('id', reservation.id);
+
+      return res.json({
+        success: result.success,
+        paymentRequestId: paymentRequest.id,
+        transactionId: result.transactionId,
+        referenceId: result.referenceId,
+        statusCode: result.statusCode,
+        statusDescription: result.statusDescription,
+        error: result.error,
+      });
+    } catch (error: any) {
+      console.error('[API] NCBA Reservation STK Push error:', error);
+      return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+    }
+  });
+
+  app.post('/api/ncba/reservations/query', async (req, res) => {
+    try {
+      const { paymentRequestId } = req.body;
+
+      if (!paymentRequestId) {
+        return res.status(400).json({ success: false, error: 'Missing paymentRequestId' });
+      }
+
+      const { data: paymentRequest, error: paymentError } = await supabase
+        .from('reservation_payment_requests')
+        .select('*')
+        .eq('id', paymentRequestId)
+        .single();
+
+      if (paymentError || !paymentRequest) {
+        return res.status(404).json({ success: false, error: 'Reservation payment request not found' });
+      }
+
+      if (!paymentRequest.provider_transaction_id) {
+        return res.status(400).json({ success: false, error: 'Payment request has no NCBA TransactionID' });
+      }
+
+      if (paymentRequest.status === 'success') {
+        return res.json({ success: true, paid: true, failed: false, status: 'SUCCESS', description: 'Already confirmed' });
+      }
+
+      const result = await ncbaService.querySTKPush(paymentRequest.provider_transaction_id);
+      await finalizeReservationNcbaPayment(paymentRequest, result);
+
+      return res.json({
+        success: result.success,
+        paid: result.paid,
+        failed: result.failed,
+        status: result.status,
+        description: result.description,
+        error: result.error,
+      });
+    } catch (error: any) {
+      console.error('[API] NCBA Reservation Query error:', error);
+      return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+    }
+  });
+
+  app.get('/api/ncba/reservations/payment-status/:reservationId', async (req, res) => {
+    try {
+      const { reservationId } = req.params;
+
+      const { data: reservation, error } = await supabase
+        .from('car_reservations')
+        .select('id, car_id, status, payment_status, payment_method, payment_provider, payment_reference, transaction_code, booking_completion_token, linked_booking_id')
+        .eq('id', reservationId)
+        .single();
+
+      if (error || !reservation) {
+        return res.status(404).json({ success: false, error: 'Reservation not found' });
+      }
+
+      const { data: paymentRequest } = await supabase
+        .from('reservation_payment_requests')
+        .select('*')
+        .eq('reservation_id', reservationId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      return res.json({
+        success: true,
+        reservationId: reservation.id,
+        status: reservation.status,
+        paymentStatus: reservation.payment_status,
+        paid: reservation.payment_status === 'paid',
+        reserved: reservation.status === 'reserved' || reservation.status === 'confirmed',
+        linkedBookingId: reservation.linked_booking_id || null,
+        reservationToken: reservation.booking_completion_token || null,
+        paymentRequest,
+      });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.get('/api/reservations/continuation/:token', async (req, res) => {
+    try {
+      const { token } = req.params;
+
+      const { data: reservation, error } = await supabase
+        .from('car_reservations')
+        .select('id, car_id, start_date, end_date, reservation_fee, total_amount, status, payment_status, contact_name, contact_email, contact_phone, linked_booking_id')
+        .eq('booking_completion_token', token)
+        .single();
+
+      if (error || !reservation) {
+        return res.status(404).json({ success: false, error: 'Reservation continuation link not found' });
+      }
+
+      if (reservation.payment_status !== 'paid' || !['reserved', 'confirmed'].includes(reservation.status)) {
+        return res.status(409).json({ success: false, error: 'This reservation is not ready for booking completion' });
+      }
+
+      const estimatedBookingAmount = Math.max(Number(reservation.total_amount || 0) - Number(reservation.reservation_fee || 0), 0);
+
+      return res.json({
+        success: true,
+        reservationId: reservation.id,
+        carId: reservation.car_id,
+        startDate: reservation.start_date,
+        endDate: reservation.end_date,
+        contactName: reservation.contact_name,
+        contactEmail: reservation.contact_email,
+        contactPhone: reservation.contact_phone,
+        estimatedBookingAmount,
+        reservationFee: Number(reservation.reservation_fee || 0),
+        linkedBookingId: reservation.linked_booking_id || null,
+        bookingData: {
+          startDate: reservation.start_date,
+          endDate: reservation.end_date,
+          fullName: reservation.contact_name,
+          email: reservation.contact_email,
+          phone: reservation.contact_phone,
+          sourceReservationId: reservation.id,
+          reservationContinuationToken: token,
+          bookingFlowInitiatedBy: 'client',
+        },
+      });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
     }
   });
 

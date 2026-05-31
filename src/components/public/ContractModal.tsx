@@ -33,8 +33,7 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
   const clientPhone   = guestInfo?.phone          || booking?.client?.phone_number   || 'N/A';
   const licenseNumber = guestInfo?.license_number || booking?.client?.license_number || 'N/A';
 
-  // M-Pesa code stored directly on the booking
-  const mpesaCode = booking?.transaction_code || null;
+  const ncbaTransactionId = booking?.transaction_code || null;
 
   const bookingRef = booking?.id ? booking.id.slice(0, 8).toUpperCase() : 'N/A';
 
@@ -114,7 +113,7 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
       <div><div class="field-label">Total Amount Paid</div><div class="amount">KES ${Number(booking?.total_amount || 0).toLocaleString()}</div></div>
       <div><div class="field-label">Payment Status</div><div class="field-value"><span class="badge">${(booking?.payment_status || 'N/A').toUpperCase()}</span></div></div>
       <div><div class="field-label">Payment Method</div><div class="field-value">${(booking?.payment_method || 'N/A').toUpperCase()}</div></div>
-      ${mpesaCode ? `<div><div class="field-label">M-Pesa Transaction Code</div><div class="field-value">${mpesaCode}</div></div>` : ''}
+      ${ncbaTransactionId ? `<div><div class="field-label">NCBA Transaction ID</div><div class="field-value">${ncbaTransactionId}</div></div>` : ''}
     </div>
   </div>
 
@@ -200,11 +199,10 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
           ))}
         </div>
 
-        {/* M-Pesa code strip */}
-        {mpesaCode && (
+        {ncbaTransactionId && (
           <div className="px-6 py-2 bg-green-500/10 border-b border-green-500/20 flex items-center gap-2 shrink-0">
-            <span className="text-[9px] font-black uppercase tracking-widest text-green-600">M-Pesa Code:</span>
-            <span className="text-xs font-black text-green-600">{mpesaCode}</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-green-600">NCBA Transaction ID:</span>
+            <span className="text-xs font-black text-green-600">{ncbaTransactionId}</span>
           </div>
         )}
 

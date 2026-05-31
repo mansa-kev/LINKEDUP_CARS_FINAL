@@ -14,9 +14,19 @@ interface Step2Props {
   car: Car;
   onNext: (data: any) => void;
   onPrev: () => void;
+  initialData?: any;
 }
 
 type DocType = 'facePhoto' | 'licenseFront' | 'licenseBack' | 'idFront' | 'idBack';
+
+type GloveboxDocuments = {
+  idNumber?: string;
+  facePhotoUrl?: string;
+  licenseFrontUrl?: string;
+  licenseBackUrl?: string;
+  idFrontUrl?: string;
+  idBackUrl?: string;
+};
 
 const DOC_LABELS: Record<DocType, string> = {
   facePhoto: 'Face Photo',
@@ -100,7 +110,7 @@ function DocumentSlot({ type, uploadedUrl, isUploading, onUploadFile, onOpenCame
   );
 }
 
-export function Step2({ car, onNext, onPrev }: Step2Props) {
+export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
   const [uploading, setUploading] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState<DocType | null>(null);
   const [prefilled, setPrefilled] = useState(false);
@@ -128,7 +138,7 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
       ]);
       const profile = profileRes.status === 'fulfilled' ? profileRes.value.data : null;
       const glovebox = gloveboxRes.status === 'fulfilled' ? gloveboxRes.value : null;
-      const docs = glovebox?.documents || {};
+      const docs: GloveboxDocuments = glovebox?.documents || {};
       setFormData(prev => ({
         ...prev,
         fullName:       profile?.full_name    || prev.fullName,
@@ -145,6 +155,28 @@ export function Step2({ car, onNext, onPrev }: Step2Props) {
       if (profile?.full_name) setPrefilled(true);
     })();
   }, []);
+
+  useEffect(() => {
+    if (!initialData) return;
+
+    setFormData(prev => ({
+      ...prev,
+      fullName: initialData.fullName || prev.fullName,
+      email: initialData.email || prev.email,
+      phone: initialData.phone || prev.phone,
+      license: initialData.license || prev.license,
+      idNumber: initialData.idNumber || prev.idNumber,
+      facePhotoUrl: initialData.facePhotoUrl || prev.facePhotoUrl,
+      licenseFrontUrl: initialData.licenseFrontUrl || prev.licenseFrontUrl,
+      licenseBackUrl: initialData.licenseBackUrl || prev.licenseBackUrl,
+      idFrontUrl: initialData.idFrontUrl || prev.idFrontUrl,
+      idBackUrl: initialData.idBackUrl || prev.idBackUrl,
+    }));
+
+    if (initialData.fullName || initialData.email || initialData.phone) {
+      setPrefilled(true);
+    }
+  }, [initialData]);
 
   const uploadFile = useCallback(async (file: File, type: DocType) => {
     setUploading(type);

@@ -222,7 +222,7 @@ export function AdminImageManager() {
     e.preventDefault();
     setDragOver(null);
 
-    const files = Array.from(e.dataTransfer.files);
+    const files = Array.from(e.dataTransfer.files) as File[];
     const imageFile = files.find(file => file.type.startsWith('image/'));
     
     if (imageFile) {
@@ -268,19 +268,20 @@ export function AdminImageManager() {
           {imageSections
             .filter(section => section.category === 'cta')
             .map(section => (
-              <ImageCard
-                key={section.id}
-                section={section}
-                currentImage={images[section.key]}
-                onUpload={handleImageUpload}
-                onDelete={handleDeleteImage}
-                onPreview={setPreviewImage}
-                uploading={uploading === section.id}
-                dragOver={dragOver === section.id}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-              />
+              <React.Fragment key={section.id}>
+                <ImageCard
+                  section={section}
+                  currentImage={images[section.key]}
+                  onUpload={handleImageUpload}
+                  onDelete={handleDeleteImage}
+                  onPreview={setPreviewImage}
+                  uploading={uploading === section.id}
+                  dragOver={dragOver === section.id}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                />
+              </React.Fragment>
             ))}
         </div>
       </div>
@@ -295,19 +296,20 @@ export function AdminImageManager() {
           {imageSections
             .filter(section => section.category === 'about')
             .map(section => (
-              <ImageCard
-                key={section.id}
-                section={section}
-                currentImage={images[section.key]}
-                onUpload={handleImageUpload}
-                onDelete={handleDeleteImage}
-                onPreview={setPreviewImage}
-                uploading={uploading === section.id}
-                dragOver={dragOver === section.id}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-              />
+              <React.Fragment key={section.id}>
+                <ImageCard
+                  section={section}
+                  currentImage={images[section.key]}
+                  onUpload={handleImageUpload}
+                  onDelete={handleDeleteImage}
+                  onPreview={setPreviewImage}
+                  uploading={uploading === section.id}
+                  dragOver={dragOver === section.id}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                />
+              </React.Fragment>
             ))}
         </div>
       </div>
@@ -342,8 +344,8 @@ export function AdminImageManager() {
 interface ImageCardProps {
   section: ImageSection;
   currentImage: string | undefined;
-  onUpload: (section: ImageSection, file: File) => void;
-  onDelete: (section: ImageSection) => void;
+  onUpload: (section: ImageSection, file: File) => Promise<void>;
+  onDelete: (section: ImageSection) => Promise<void>;
   onPreview: (url: string) => void;
   uploading: boolean;
   dragOver: boolean;

@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { reservationService } from '../../services/reservationService';
+import { reservationPaymentService } from '../../services/reservationPaymentService';
 import { supabase } from '../../lib/supabase';
-import { 
-  Search, 
-  Filter, 
-  MoreHorizontal, 
-  Eye, 
-  CheckCircle2, 
-  XCircle, 
-  Calendar, 
-  User, 
+import {
+  Search,
+  Filter,
+  MoreHorizontal,
+  Eye,
+  CheckCircle2,
+  XCircle,
+  Calendar,
+  User,
   Car,
   ChevronRight,
   ArrowUpDown,
@@ -33,7 +34,7 @@ import { toast } from 'sonner';
 
 // --- Types ---
 
-type ReservationStatus = 'reserved' | 'confirmed' | 'cancelled' | 'expired';
+type ReservationStatus = 'pending_payment' | 'reserved' | 'confirmed' | 'cancelled' | 'expired';
 
 interface Reservation {
   id: string;
@@ -46,12 +47,18 @@ interface Reservation {
   total_amount: number;
   status: ReservationStatus;
   payment_status: 'pending' | 'paid' | 'refunded' | 'failed';
+  payment_method?: string | null;
+  payment_provider?: string | null;
+  transaction_code?: string | null;
   contact_name: string;
   contact_email: string;
   contact_phone: string;
   notes?: string;
   expires_at: string;
   created_at: string;
+  linked_booking_id?: string | null;
+  booking_completion_token?: string | null;
+  latest_payment_request?: any;
   cars?: any;
   user_profiles?: any;
 }
@@ -60,6 +67,7 @@ interface Reservation {
 
 const StatusBadge = ({ status }: { status: ReservationStatus }) => {
   const styles: Record<ReservationStatus, string> = {
+    pending_payment: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
     reserved: 'bg-warning/10 text-warning border-warning/20',
     confirmed: 'bg-success/10 text-success border-success/20',
     cancelled: 'bg-error/10 text-error border-error/20',
@@ -96,12 +104,14 @@ export function AdminReservations() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ReservationStatus | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Filters
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [filterClient, setFilterClient] = useState('');
   const [filterCar, setFilterCar] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [syncingReservationId, setSyncingReservationId] = useState<string | null>(null);
+  const [preparingBookingId, setPreparingBookingId] = useState<string | null>(null);
 
   // Modal State
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
@@ -140,6 +150,22 @@ export function AdminReservations() {
     fetchReservations();
   }, [page]);
 
+  const canSyncPayment = (reservation: Reservation) => {
+    return reservation.payment_status !== 'paid' && Boolean(reservation.latest_payment_request?.id);
+  };
+
+  const canContinueToBooking = (reservation: Reservation) => {
+    return reservation.payment_status === 'paid' && ['reserved', 'confirmed'].includes(reservation.status);
+  };
+
+  const canConfirmReservation = (reservation: Reservation) => {
+    return reservation.status === 'reserved';
+  };
+
+  const canCancelReservation = (reservation: Reservation) => {
+    return ['pending_payment', 'reserved', 'confirmed'].includes(reservation.status);
+  };
+
   const handleUpdateStatus = async (id: string, status: ReservationStatus) => {
     try {
       // Get the reservation details first to get the car_id
@@ -154,7 +180,7 @@ export function AdminReservations() {
       // Update reservation status
       const { error } = await supabase
         .from('car_reservations')
-        .update({ 
+        .update({
           status,
           updated_at: new Date().toISOString()
         })
@@ -166,7 +192,7 @@ export function AdminReservations() {
       if (status === 'cancelled' || status === 'expired') {
         const { error: carUpdateError } = await supabase
           .from('cars')
-          .update({ 
+          .update({
             status: 'available',
             updated_at: new Date().toISOString()
           })
@@ -211,7 +237,7 @@ export function AdminReservations() {
       // Unfreeze the car when reservation is deleted
       const { error: carUpdateError } = await supabase
         .from('cars')
-        .update({ 
+        .update({
           status: 'available',
           updated_at: new Date().toISOString()
         })
@@ -246,59 +272,65 @@ export function AdminReservations() {
     }
   };
 
-  const handleConvertToBooking = async (reservation: Reservation) => {
+  const handleSyncPayment = async (reservation: Reservation) => {
     try {
-      // Convert reservation to booking
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { error: bookingError } = await supabase
-        .from('bookings')
-        .insert({
-          client_id: reservation.client_id,
-          car_id: reservation.car_id,
-          fleet_owner_id: reservation.fleet_owner_id,
-          start_date: reservation.start_date,
-          end_date: reservation.end_date,
-          total_amount: reservation.total_amount,
-          payment_status: 'pending',
-          status: 'pending',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          created_by: user?.id
-        });
+      setSyncingReservationId(reservation.id);
 
-      if (bookingError) throw bookingError;
+      const status = await reservationPaymentService.getPaymentStatus(reservation.id);
+      const paymentRequest = reservation.latest_payment_request || status.paymentRequest;
 
-      // Update reservation status to converted
-      const { error: updateError } = await supabase
-        .from('car_reservations')
-        .update({ 
-          status: 'converted',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', reservation.id);
-
-      if (updateError) throw updateError;
-
-      // Insert notification
-      const { error: notificationError } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: reservation.client_id,
-          type: 'reservation_converted',
-          message: `Your reservation #${reservation.id} has been converted to a booking!`,
-          created_at: new Date().toISOString()
-        });
-
-      if (notificationError) {
-        console.warn('Notification insertion failed:', notificationError);
+      if (status.paid) {
+        toast.success('Reservation payment is already confirmed.');
+        await fetchReservations();
+        return;
       }
 
-      toast.success('Reservation converted to booking successfully!');
+      if (!paymentRequest?.id) {
+        throw new Error('No reservation payment request was found for this reservation.');
+      }
+
+      const result = await reservationPaymentService.querySTKStatus(paymentRequest.id);
+
+      if (result.paid) {
+        toast.success('Reservation payment synced successfully.');
+      } else if (result.failed) {
+        toast.error(result.description || result.error || 'Reservation payment failed.');
+      } else {
+        toast.message(result.description || 'Reservation payment is still pending.');
+      }
+
       fetchReservations();
     } catch (error) {
-      console.error('Failed to convert reservation to booking:', error);
-      toast.error('Failed to convert reservation to booking');
+      console.error('Failed to sync reservation payment:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to sync reservation payment');
+    } finally {
+      setSyncingReservationId(null);
+    }
+  };
+
+  const handleConvertToBooking = async (reservation: Reservation) => {
+    try {
+      setPreparingBookingId(reservation.id);
+
+      const result = await reservationService.prepareBookingContinuation(reservation.id, 'admin', true);
+
+      if (!result?.link) {
+        throw new Error('Booking continuation link could not be prepared');
+      }
+
+      try {
+        await navigator.clipboard.writeText(result.link);
+      } catch {
+      }
+
+      window.open(result.link, '_blank', 'noopener,noreferrer');
+      toast.success('Booking continuation is ready. The link was copied and opened in a new tab.');
+      fetchReservations();
+    } catch (error) {
+      console.error('Failed to prepare booking continuation:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to prepare booking continuation');
+    } finally {
+      setPreparingBookingId(null);
     }
   };
 
@@ -306,15 +338,15 @@ export function AdminReservations() {
     const matchesTab = activeTab === 'all' || r.status === activeTab;
     const clientName = r.user_profiles?.full_name || r.contact_name || 'Unknown';
     const carModel = `${r.cars?.make} ${r.cars?.model}` || 'Unknown Car';
-    
-    const matchesSearch = clientName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+
+    const matchesSearch = clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           r.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           carModel.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           r.contact_email.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesClientFilter = filterClient === '' || clientName.toLowerCase().includes(filterClient.toLowerCase());
     const matchesCarFilter = filterCar === '' || carModel.toLowerCase().includes(filterCar.toLowerCase());
-    
+
     let matchesDate = true;
     if (dateRange.start && dateRange.end) {
       const rStart = new Date(r.start_date);
@@ -340,13 +372,13 @@ export function AdminReservations() {
       {/* Header & Search */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-          {['all', 'reserved', 'confirmed', 'cancelled', 'expired'].map((tab) => (
+          {['all', 'pending_payment', 'reserved', 'confirmed', 'cancelled', 'expired'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
               className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                activeTab === tab 
-                  ? 'bg-warning text-white shadow-lg shadow-warning/20' 
+                activeTab === tab
+                  ? 'bg-warning text-white shadow-lg shadow-warning/20'
                   : 'bg-card text-muted-foreground hover:bg-muted'
               }`}
             >
@@ -358,15 +390,15 @@ export function AdminReservations() {
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search reservations..." 
+            <input
+              type="text"
+              placeholder="Search reservations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 pr-4 py-2 bg-card border border-border rounded-xl text-sm w-full md:w-64 focus:ring-2 focus:ring-warning/20 transition-all outline-none"
             />
           </div>
-          <button 
+          <button
             onClick={() => setShowFilters(!showFilters)}
             className={`p-2 rounded-xl border transition-colors ${showFilters ? 'bg-warning/10 border-warning text-warning' : 'bg-card border-border text-muted-foreground hover:bg-muted'}`}
           >
@@ -381,15 +413,15 @@ export function AdminReservations() {
           <div>
             <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Date Range</label>
             <div className="flex items-center gap-2">
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={dateRange.start}
                 onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
                 className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-warning/50"
               />
               <span className="text-muted-foreground">-</span>
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={dateRange.end}
                 onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
                 className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-warning/50"
@@ -398,8 +430,8 @@ export function AdminReservations() {
           </div>
           <div>
             <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Client Name</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Filter by client..."
               value={filterClient}
               onChange={(e) => setFilterClient(e.target.value)}
@@ -408,8 +440,8 @@ export function AdminReservations() {
           </div>
           <div>
             <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Car Model</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Filter by car..."
               value={filterCar}
               onChange={(e) => setFilterCar(e.target.value)}
@@ -486,39 +518,58 @@ export function AdminReservations() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1 md:gap-2 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
-                        <button 
+                        <button
                           onClick={() => setSelectedReservation(reservation)}
-                          className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-warning transition-colors" 
+                          className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-warning transition-colors"
                           title="View Details"
                         >
                           <Eye size={18} />
                         </button>
-                        {reservation.status === 'reserved' && (
+                        {canContinueToBooking(reservation) && (
                           <>
-                            <button 
+                            <button
                               onClick={() => handleConvertToBooking(reservation)}
-                              className="p-2 hover:bg-success/10 rounded-lg text-muted-foreground hover:text-success transition-colors" 
-                              title="Convert to Booking"
+                              className="p-2 hover:bg-success/10 rounded-lg text-muted-foreground hover:text-success transition-colors"
+                              title="Continue to Booking"
                             >
-                              <RefreshCw size={18} />
+                              {preparingBookingId === reservation.id ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
                             </button>
-                            <button 
+                          </>
+                        )}
+                        {canSyncPayment(reservation) && (
+                          <>
+                            <button
+                              onClick={() => handleSyncPayment(reservation)}
+                              className="p-2 hover:bg-primary/10 rounded-lg text-muted-foreground hover:text-primary transition-colors"
+                              title="Sync Payment"
+                            >
+                              {syncingReservationId === reservation.id ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+                            </button>
+                          </>
+                        )}
+                        {canConfirmReservation(reservation) && (
+                          <>
+                            <button
                               onClick={() => handleUpdateStatus(reservation.id, 'confirmed')}
-                              className="p-2 hover:bg-success/10 rounded-lg text-muted-foreground hover:text-success transition-colors" 
+                              className="p-2 hover:bg-success/10 rounded-lg text-muted-foreground hover:text-success transition-colors"
                               title="Confirm"
                             >
                               <CheckCircle2 size={18} />
                             </button>
-                            <button 
+                          </>
+                        )}
+                        {canCancelReservation(reservation) && (
+                          <>
+                            <button
                               onClick={() => handleUpdateStatus(reservation.id, 'cancelled')}
-                              className="p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors" 
+                              className="p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors"
                               title="Cancel"
                             >
                               <XCircle size={18} />
                             </button>
-                            <button 
+                            <button
                               onClick={() => handleDeleteReservation(reservation.id)}
-                              className="p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors" 
+                              className="p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors"
                               title="Delete Reservation"
                             >
                               <Trash2 size={18} />
@@ -541,7 +592,7 @@ export function AdminReservations() {
           {filteredReservations.map((reservation) => (
             <div key={reservation.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
               {/* Summary Row */}
-              <div 
+              <div
                 className="flex justify-between items-center px-4 py-3 bg-card border border-border rounded-xl cursor-pointer select-none hover:bg-muted/30 transition-colors"
                 onClick={() => setExpandedRowId(expandedRowId === reservation.id ? null : reservation.id)}
               >
@@ -554,11 +605,11 @@ export function AdminReservations() {
                     <p className="text-xs text-muted-foreground">ID: {reservation.id.split('-')[0]}...</p>
                   </div>
                 </div>
-                <ChevronRight 
-                  size={20} 
+                <ChevronRight
+                  size={20}
                   className={`text-muted-foreground transition-transform duration-200 ${
                     expandedRowId === reservation.id ? 'rotate-90' : ''
-                  }`} 
+                  }`}
                 />
               </div>
 
@@ -607,37 +658,56 @@ export function AdminReservations() {
 
                   {/* Action Buttons */}
                   <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
-                    <button 
+                    <button
                       onClick={() => setSelectedReservation(reservation)}
                       className="px-3 py-1.5 bg-warning text-black rounded-lg text-xs font-bold hover:bg-warning/90 transition-colors flex items-center gap-2"
                     >
                       <Eye size={12} />
                       View Details
                     </button>
-                    {reservation.status === 'reserved' && (
+                    {canContinueToBooking(reservation) && (
                       <>
-                        <button 
+                        <button
                           onClick={() => handleConvertToBooking(reservation)}
                           className="px-3 py-1.5 bg-success text-white rounded-lg text-xs font-bold hover:bg-success/90 transition-colors flex items-center gap-2"
                         >
-                          <RefreshCw size={12} />
-                          Convert to Booking
+                          {preparingBookingId === reservation.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                          Continue to Booking
                         </button>
-                        <button 
+                      </>
+                    )}
+                    {canSyncPayment(reservation) && (
+                      <>
+                        <button
+                          onClick={() => handleSyncPayment(reservation)}
+                          className="px-3 py-1.5 bg-primary text-black rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-2"
+                        >
+                          {syncingReservationId === reservation.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                          Sync Payment
+                        </button>
+                      </>
+                    )}
+                    {canConfirmReservation(reservation) && (
+                      <>
+                        <button
                           onClick={() => handleUpdateStatus(reservation.id, 'confirmed')}
                           className="px-3 py-1.5 bg-success text-white rounded-lg text-xs font-bold hover:bg-success/90 transition-colors flex items-center gap-2"
                         >
                           <CheckCircle2 size={12} />
                           Confirm Reservation
                         </button>
-                        <button 
+                      </>
+                    )}
+                    {canCancelReservation(reservation) && (
+                      <>
+                        <button
                           onClick={() => handleUpdateStatus(reservation.id, 'cancelled')}
                           className="px-3 py-1.5 bg-error text-white rounded-lg text-xs font-bold hover:bg-error/90 transition-colors flex items-center gap-2"
                         >
                           <XCircle size={12} />
                           Cancel Reservation
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleDeleteReservation(reservation.id)}
                           className="px-3 py-1.5 bg-error/90 text-white rounded-lg text-xs font-bold hover:bg-error transition-colors flex items-center gap-2"
                         >
@@ -666,7 +736,7 @@ export function AdminReservations() {
           Showing {reservations.length} of {totalCount} entries
         </span>
         <div className="flex gap-2">
-          <button 
+          <button
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
             className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50 hover:bg-muted transition-colors"
@@ -676,7 +746,7 @@ export function AdminReservations() {
           <div className="flex items-center gap-1">
             <span className="text-xs font-bold px-2">Page {page}</span>
           </div>
-            <button 
+            <button
               onClick={() => setPage(p => p + 1)}
               disabled={reservations.length < pageSize}
               className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50 hover:bg-muted transition-colors"
@@ -695,17 +765,17 @@ export function AdminReservations() {
                 <h2 className="text-xl font-bold">Reservation Details</h2>
                 <p className="text-sm text-muted-foreground mt-1">ID: {selectedReservation.id}</p>
               </div>
-              <button 
+              <button
                 onClick={() => setSelectedReservation(null)}
                 className="p-2 hover:bg-muted rounded-full transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
+
                 {/* Left Column */}
                 <div className="space-y-8">
                   {/* Reservation Summary */}
@@ -760,9 +830,27 @@ export function AdminReservations() {
                         <PaymentStatusBadge status={selectedReservation.payment_status} />
                       </div>
                       <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Provider</span>
+                        <span className="text-sm font-mono">{selectedReservation.payment_provider || 'ncba'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Method</span>
                         <span className="text-sm font-mono">{selectedReservation.payment_method || 'Not specified'}</span>
                       </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Reference</span>
+                        <span className="text-sm font-mono">{selectedReservation.transaction_code || selectedReservation.latest_payment_request?.provider_transaction_id || 'Pending'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Request Status</span>
+                        <span className="text-sm font-medium">{selectedReservation.latest_payment_request?.status || 'No request'}</span>
+                      </div>
+                      {selectedReservation.latest_payment_request?.status_description && (
+                        <div className="pt-2 border-t border-border">
+                          <p className="text-xs text-muted-foreground mb-1">Gateway Message</p>
+                          <p className="text-sm">{selectedReservation.latest_payment_request.status_description}</p>
+                        </div>
+                      )}
                     </div>
                   </section>
                 </div>
@@ -813,22 +901,40 @@ export function AdminReservations() {
                           {new Date(selectedReservation.expires_at).toLocaleDateString()}
                         </span>
                       </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Linked Booking</span>
+                        <span className="text-sm font-medium">{selectedReservation.linked_booking_id ? selectedReservation.linked_booking_id.split('-')[0] : 'Not started'}</span>
+                      </div>
                     </div>
                   </section>
                 </div>
               </div>
             </div>
-            
+
             <div className="p-6 border-t border-border bg-muted/10 flex flex-wrap gap-3 justify-end">
-              {selectedReservation.status === 'reserved' && (
+              {canContinueToBooking(selectedReservation) && (
                 <>
-                  <button 
+                  <button
                     onClick={() => handleConvertToBooking(selectedReservation)}
                     className="px-4 py-2 rounded-lg font-bold border border-warning text-warning hover:bg-warning/10 transition-colors flex items-center gap-2"
                   >
-                    <RefreshCw size={16} /> Convert to Booking
+                    {preparingBookingId === selectedReservation.id ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Continue to Booking
                   </button>
-                  <button 
+                </>
+              )}
+              {canSyncPayment(selectedReservation) && (
+                <>
+                  <button
+                    onClick={() => handleSyncPayment(selectedReservation)}
+                    className="px-4 py-2 rounded-lg font-bold border border-primary text-primary hover:bg-primary/10 transition-colors flex items-center gap-2"
+                  >
+                    {syncingReservationId === selectedReservation.id ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Sync Payment
+                  </button>
+                </>
+              )}
+              {canConfirmReservation(selectedReservation) && (
+                <>
+                  <button
                     onClick={() => {
                       handleUpdateStatus(selectedReservation.id, 'confirmed');
                       setSelectedReservation(null);
@@ -837,7 +943,11 @@ export function AdminReservations() {
                   >
                     <CheckCircle2 size={16} /> Confirm Reservation
                   </button>
-                  <button 
+                </>
+              )}
+              {canCancelReservation(selectedReservation) && (
+                <>
+                  <button
                     onClick={() => {
                       handleUpdateStatus(selectedReservation.id, 'cancelled');
                       setSelectedReservation(null);

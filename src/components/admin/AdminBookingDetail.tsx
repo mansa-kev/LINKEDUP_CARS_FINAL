@@ -20,6 +20,10 @@ interface Booking {
   total_amount: number;
   status: BookingStatus;
   payment_status: 'paid' | 'pending' | 'failed';
+  payment_method?: string;
+  payment_provider?: string;
+  payment_reference?: string;
+  transaction_code?: string;
   document_status?: string;
   admin_notes?: string;
   pickup_location?: string;
@@ -88,7 +92,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
     if (mode === 'approval') {
       return `Dear ${clientName},\n\nGreat news! Your car rental booking has been fully reviewed and confirmed.\n\n✅ Payment Verified — KES ${Number(booking.total_amount).toLocaleString()}\n✅ Documents Approved\n✅ Vehicle Ready — ${carFull}\n\nPickup Location: ${booking.pickup_location || 'Contact us for details'}\nPickup Date: ${booking.start_date || 'N/A'}\nReturn Date: ${booking.end_date || 'N/A'}\n\nPlease bring your original driving licence and ID on pickup day.\n\nThank you for choosing LinkedUp Cars!\n\nThe LinkedUp Cars Team`;
     } else if (mode === 'payment_rejected') {
-      return `Dear ${clientName},\n\nOur team has reviewed your payment submission for Booking #${bookingRef}.\n\nUnfortunately, we were unable to verify the M-Pesa transaction${transactionCode ? ` (Code: ${transactionCode})` : ''}.\n\nNext Steps:\n1. Confirm that the transaction code is correct\n2. Ensure the full amount of KES ${Number(booking.total_amount).toLocaleString()} was sent to our M-Pesa paybill\n3. Resubmit your payment details via your booking confirmation page\n\nPlease contact us if you need assistance.\n\nThe LinkedUp Cars Team`;
+      return `Dear ${clientName},\n\nYour NCBA STK Push payment attempt for Booking #${bookingRef} was not completed successfully.\n\nNext Steps:\n1. Return to your booking payment screen\n2. Retry the NCBA STK Push using the correct phone number\n3. Enter your mobile money PIN when prompted\n\nYour booking remains pending payment verification until NCBA confirms successful payment.\n\nPlease contact us if you need assistance.\n\nThe LinkedUp Cars Team`;
     } else {
       return `Dear ${clientName},\n\nOur team has reviewed your submitted documents for Booking #${bookingRef}.\n\nUnfortunately, we were unable to approve your documents at this time.\n\nReason: ${docRejectionReason || 'Documents require correction'}\n\nNext Steps:\n1. Log into your client portal at linkedupcars.com\n2. Navigate to My Bookings\n3. Click "Resubmit Documents" to upload corrected copies\n\n✅ IMPORTANT: Your payment has been verified — you do NOT need to pay again.\n\nPlease contact us if you need help.\n\nThe LinkedUp Cars Team`;
     }
@@ -395,14 +399,13 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
               <div className="p-4 md:p-6 space-y-4">
                 <BookingStrip />
 
-                    {/* M-Pesa code card */}
-                    <SectionCard icon={<CreditCard size={13} />} title="M-Pesa Payment">
+                    <SectionCard icon={<CreditCard size={13} />} title="NCBA STK Payment">
                       <div className="mb-4">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1.5">Transaction Code</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1.5">NCBA Transaction ID</p>
                         {transactionCode ? (
                           <p className="text-4xl font-mono font-black text-warning tracking-widest">{transactionCode}</p>
                         ) : (
-                          <p className="text-sm text-muted-foreground italic">No transaction code submitted yet</p>
+                          <p className="text-sm text-muted-foreground italic">No NCBA transaction ID recorded yet</p>
                         )}
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-border">
@@ -443,28 +446,8 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
                         <div className="flex items-start gap-2">
                           <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={15} />
                           <p className="text-xs text-amber-600 font-bold leading-relaxed">
-                            {transactionCode
-                              ? <>Cross-check that M-Pesa code <span className="font-mono bg-amber-500/20 px-1 rounded">{transactionCode}</span> corresponds to a real transaction of <span className="font-mono">KES {Number(booking.total_amount).toLocaleString()}</span> before confirming.</>
-                              : <>No M-Pesa code on file. Confirm only if you have verified this payment of <span className="font-mono">KES {Number(booking.total_amount).toLocaleString()}</span> through other means.</>
-                            }
+                            Payment must be confirmed by NCBA STK Push. Do not manually approve this booking. Use the NCBA Payment Requests tab to sync the latest status, or ask the client to retry STK Push from their booking flow.
                           </p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() => handleVerifyPayment('verified')}
-                            disabled={isVerifying}
-                            className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-xl text-sm font-black hover:bg-green-700 transition-colors disabled:opacity-50"
-                          >
-                            {isVerifying ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                            Confirm Payment
-                          </button>
-                          <button
-                            onClick={() => handleVerifyPayment('rejected')}
-                            disabled={isVerifying}
-                            className="flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white rounded-xl text-sm font-black hover:bg-red-700 transition-colors disabled:opacity-50"
-                          >
-                            <XCircle size={14} /> Reject Payment
-                          </button>
                         </div>
                       </div>
                     )}
@@ -550,7 +533,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
                       <p className="text-2xl font-black text-primary mt-0.5">KES {Number(booking.total_amount).toLocaleString()}</p>
                     </div>
                     <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Transaction Code</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">NCBA Transaction ID</p>
                       <p className="text-lg font-mono font-black text-foreground mt-0.5">{transactionCode || 'N/A'}</p>
                     </div>
                     <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-xl">
@@ -646,7 +629,7 @@ export function AdminBookingDetail({ booking: initialBooking, onClose, onRefresh
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {communicateMode === 'approval' && 'Booking status will be set to Confirmed once you send this message.'}
-                      {communicateMode === 'payment_rejected' && 'Client will be asked to verify and resubmit a valid M-Pesa code.'}
+                      {communicateMode === 'payment_rejected' && 'Client will be asked to retry NCBA STK Push.'}
                       {communicateMode === 'docs_rejected' && 'Client must resubmit corrected documents. Payment remains valid.'}
                     </p>
                   </div>

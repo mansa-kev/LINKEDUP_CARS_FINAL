@@ -9,6 +9,7 @@ import { promotionService, Promotion } from '../../../services/promotionService'
 interface Step1Props {
   car: Car;
   onNext: (data: any) => void;
+  initialData?: any;
 }
 
 interface AvailableDriver {
@@ -19,7 +20,7 @@ interface AvailableDriver {
   avatar_url?: string;
 }
 
-export function Step1({ car, onNext }: Step1Props) {
+export function Step1({ car, onNext, initialData }: Step1Props) {
   const navigate = useNavigate();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -66,6 +67,18 @@ export function Step1({ car, onNext }: Step1Props) {
       setSelectedDriver(null);
     }
   }, [needsChauffeur]);
+
+  useEffect(() => {
+    if (!initialData) return;
+
+    setStartDate(initialData.startDate || '');
+    setEndDate(initialData.endDate || '');
+    setPickupLocation(initialData.pickupLocation || initialData.location || '');
+    setDropoffLocation(initialData.dropoffLocation || '');
+    setSameAsPickup(!initialData.dropoffLocation || initialData.dropoffLocation === initialData.pickupLocation || initialData.dropoffLocation === initialData.location);
+    setNeedsChauffeur(Boolean(initialData.needsChauffeur));
+    setSelectedDriver(initialData.driverId || null);
+  }, [initialData]);
 
   const fetchAvailableDrivers = async () => {
     setLoadingDrivers(true);

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { BookingData } from '../types';
+
+type BookingSessionData = Record<string, any>;
 
 interface BookingSession {
-  bookingData: Partial<BookingData>;
+  bookingData: Partial<BookingSessionData>;
   currentStep: number;
   timestamp: number;
 }
@@ -33,7 +34,7 @@ export function useBookingSession() {
     }
   }, []);
 
-  const saveSession = (bookingData: Partial<BookingData>, currentStep: number) => {
+  const saveSession = (bookingData: Partial<BookingSessionData>, currentStep: number) => {
     const newSession: BookingSession = {
       bookingData,
       currentStep,

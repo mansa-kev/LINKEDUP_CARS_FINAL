@@ -102,7 +102,7 @@ export function BrowseAndBook() {
         startDate: pickupDate,
         endDate: returnDate,
         totalAmount,
-        paymentMethod: 'mpesa',
+        paymentMethod: 'ncba_stk',
         pickupLocation,
         dropoffLocation: pickupLocation,
         needsChauffeur: false,
