@@ -12,10 +12,9 @@ const AdminThemeContext = createContext<AdminThemeContextType | undefined>(undef
 
 export function AdminThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    // Default to light for admin portal
-    const saved = localStorage.getItem('admin-theme') as Theme;
-    if (saved) return saved;
-    return 'light'; // Default to light for admin portal
+    const saved = localStorage.getItem('admin-theme') as Theme | null;
+    if (saved === 'light' || saved === 'dark') return saved;
+    return 'dark';
   });
 
   useEffect(() => {
