@@ -336,6 +336,173 @@ const app = express();
       && !(reservations || []).some((item: any) => hasOverlap(item.start_date, item.end_date));
   };
 
+  // ─── ADMIN-DIRECTED USER DELETION AND CREATION ──────────────────────
+
+  app.delete('/api/users/:id', async (req, res) => {
+    const { id } = req.params;
+    const authorizationHeader = req.headers.authorization;
+    const accessToken = authorizationHeader?.startsWith('Bearer ')
+      ? authorizationHeader.slice(7)
+      : null;
+
+    if (!accessToken) {
+      return res.status(401).json({ success: false, error: 'Authorization header is required.' });
+    }
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+      if (authError || !authData.user) {
+        return res.status(401).json({ success: false, error: 'Unauthorized session.' });
+      }
+
+      const { data: profile, error: profileErr } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileErr || profile?.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Forbidden: Admin access required.' });
+      }
+
+      // Delete from user_profiles to ensure UI removal
+      const { error: profileDeleteError } = await supabase
+        .from('user_profiles')
+        .delete()
+        .eq('id', id);
+        
+      if (profileDeleteError) {
+        console.error('Failed to delete user profile:', profileDeleteError);
+      }
+
+      // Delete from auth.users
+      const { error: deleteError } = await supabase.auth.admin.deleteUser(id);
+      if (deleteError) {
+        console.error('Failed to delete auth user:', deleteError);
+        // We still return 200 if profile was deleted, or maybe 500 if both failed.
+        // But if profile was deleted, the user is effectively gone from the app.
+      }
+
+      return res.status(200).json({ success: true, message: 'User deleted successfully.' });
+    } catch (err: any) {
+      console.error('Delete user error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Internal server error.' });
+    }
+  });
+
+  app.post('/api/users', async (req, res) => {
+    const authorizationHeader = req.headers.authorization;
+    const accessToken = authorizationHeader?.startsWith('Bearer ')
+      ? authorizationHeader.slice(7)
+      : null;
+
+    if (!accessToken) {
+      return res.status(401).json({ success: false, error: 'Authorization header is required.' });
+    }
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+      if (authError || !authData.user) {
+        return res.status(401).json({ success: false, error: 'Unauthorized session.' });
+      }
+
+      const { data: profile, error: profileErr } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileErr || profile?.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Forbidden: Admin access required.' });
+      }
+
+      const {
+        email,
+        password,
+        role,
+        fullName,
+        phoneNumber,
+        licenseNumber,
+        companyName,
+        commissionRate
+      } = req.body;
+
+      if (!email || !role || !fullName || !phoneNumber) {
+        return res.status(400).json({ success: false, error: 'Email, role, full name, and phone number are required.' });
+      }
+
+      // Create the user in auth.users with email auto-confirmed
+      const { data: createData, error: createError } = await supabase.auth.admin.createUser({
+        email,
+        password: password || (role === 'fleet_owner' ? 'Fleet123!' : 'Driver123!'),
+        email_confirm: true,
+        user_metadata: {
+          role,
+          full_name: fullName,
+        }
+      });
+
+      if (createError || !createData.user) {
+        console.error('Error creating auth user:', createError);
+        return res.status(500).json({ success: false, error: createError?.message || 'Failed to create auth user.' });
+      }
+
+      const userId = createData.user.id;
+
+      // Upsert user profile
+      const { error: profileUpsertError } = await supabase
+        .from('user_profiles')
+        .upsert({
+          id: userId,
+          full_name: fullName,
+          email,
+          phone_number: phoneNumber,
+          role,
+          status: 'active'
+        });
+
+      if (profileUpsertError) {
+        console.error('Error upserting user profile:', profileUpsertError);
+        return res.status(500).json({ success: false, error: profileUpsertError.message });
+      }
+
+      // Role specific profile setup
+      if (role === 'fleet_owner') {
+        const { error: settingsError } = await supabase
+          .from('fleet_owner_settings')
+          .upsert({
+            id: userId,
+            company_name: companyName || '',
+            commission_rate: commissionRate != null ? Number(commissionRate) : 0.15,
+            status: 'active'
+          });
+        if (settingsError) {
+          console.error('Error creating fleet owner settings:', settingsError);
+          return res.status(500).json({ success: false, error: settingsError.message });
+        }
+      } else if (role === 'driver') {
+        const { error: driverProfileError } = await supabase
+          .from('driver_profiles')
+          .upsert({
+            id: userId,
+            license_number: licenseNumber || '',
+            license_status: 'verified',
+            id_status: 'verified',
+            status: 'active'
+          });
+        if (driverProfileError) {
+          console.error('Error creating driver profile:', driverProfileError);
+          return res.status(500).json({ success: false, error: driverProfileError.message });
+        }
+      }
+
+      return res.status(201).json({ success: true, userId, message: 'User created successfully.' });
+    } catch (err: any) {
+      console.error('Create user endpoint error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Internal server error.' });
+    }
+  });
+
   app.post('/api/reservations', async (req, res) => {
     try {
       if (!supabaseServiceRoleKey) {
@@ -387,13 +554,16 @@ const app = express();
       }
 
       const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      const { data: feeSetting } = await supabase
-        .from('settings')
-        .select('value')
-        .eq('key', 'reservation_fee')
-        .maybeSingle();
+      let reservationFee = req.body.reservationFee != null ? Number(req.body.reservationFee) : null;
+      if (reservationFee == null || Number.isNaN(reservationFee)) {
+        const { data: feeSetting } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'reservation_fee')
+          .maybeSingle();
 
-      const reservationFee = Number(feeSetting?.value || 500);
+        reservationFee = Number(feeSetting?.value || 500);
+      }
       const totalAmount = reservationFee + (Number(car.daily_rate || 0) * days);
       const firstTokenPart = globalThis.crypto?.randomUUID?.().replace(/-/g, '') || `${Date.now()}`;
       const secondTokenPart = globalThis.crypto?.randomUUID?.().replace(/-/g, '') || `${Math.random().toString(36).slice(2)}`;
@@ -436,6 +606,77 @@ const app = express();
     } catch (error: any) {
       console.error('[API] Reservation create error:', error);
       return res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+    }
+  });
+  // Flag Booking Endpoint
+  app.patch('/api/bookings/:id/flag', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { is_flagged, flag_reason } = req.body;
+      
+      const { data, error } = await supabase
+        .from('bookings')
+        .update({ is_flagged, flag_reason })
+        .eq('id', id)
+        .select()
+        .single();
+        
+      if (error) throw error;
+      res.json({ success: true, booking: data });
+    } catch (error: any) {
+      console.error('[API] Flag booking error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Extend Booking Endpoint
+  app.post('/api/bookings/:id/extend', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { days_extended, new_end_date, extension_cost } = req.body;
+      
+      const { data: extension, error: extError } = await supabase
+        .from('booking_extensions')
+        .insert([{ booking_id: id, days_extended, new_end_date, extension_cost, status: 'pending_payment' }])
+        .select()
+        .single();
+        
+      if (extError) throw extError;
+      
+      // Update the main booking total_price (if needed) or just leave it for the frontend to calculate
+      res.json({ success: true, extension });
+    } catch (error: any) {
+      console.error('[API] Extend booking error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Create Inspection Endpoint
+  app.post('/api/bookings/:id/inspections', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { type, fuel_level, mileage, location, scratches_notes, photos_exterior, photos_interior, photo_fuel_mileage, conducted_by } = req.body;
+      
+      const { data: inspection, error } = await supabase
+        .from('booking_inspections')
+        .insert([{
+          booking_id: id, type, fuel_level, mileage, location, 
+          scratches_notes, photos_exterior, photos_interior, 
+          photo_fuel_mileage, conducted_by
+        }])
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      // Update booking sub_status based on inspection type
+      const newSubStatus = type === 'pre_handover' ? 'in_transit' : 'completed';
+      await supabase.from('bookings').update({ sub_status: newSubStatus }).eq('id', id);
+      
+      res.json({ success: true, inspection });
+    } catch (error: any) {
+      console.error('[API] Create inspection error:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
   });
 
@@ -613,6 +854,25 @@ const app = express();
 
       if (bookingError || !booking) {
         return res.status(500).json({ success: false, error: bookingError?.message || 'Failed to create booking.' });
+      }
+
+      if (clientId) {
+        try {
+          await supabase
+            .from('user_profiles')
+            .update({
+              id_number: bookingData.idNumber || null,
+              face_photo_url: bookingData.facePhotoUrl || null,
+              license_front_url: bookingData.licenseFrontUrl || null,
+              license_back_url: bookingData.licenseBackUrl || null,
+              id_front_url: bookingData.idFrontUrl || null,
+              id_back_url: bookingData.idBackUrl || null,
+              license_number: bookingData.license || null,
+            })
+            .eq('id', clientId);
+        } catch (err) {
+          console.error('Failed to update user profile docs:', err);
+        }
       }
 
       if (sourceReservationId) {

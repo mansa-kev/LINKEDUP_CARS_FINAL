@@ -74,7 +74,7 @@ export const clientService = {
   },
 
   getGloveboxData: async (clientId: string) => {
-    const [bookingsRes, paymentsRes] = await Promise.all([
+    const [bookingsRes, paymentsRes, profileRes] = await Promise.all([
       supabase
         .from('bookings')
         .select('id, document_status, admin_notes, metadata, start_date, end_date, cars(make, model)')
@@ -85,15 +85,21 @@ export const clientService = {
         .select('*, bookings(id, start_date, end_date, cars(make, model))')
         .eq('user_id', clientId)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', clientId)
+        .maybeSingle()
     ]);
 
     const bookings = bookingsRes.data || [];
     const payments = paymentsRes.data || [];
+    const profile = profileRes.data || {};
 
     // Most recent booking that has documents
     const docBooking = bookings.find((b: any) => b.metadata?.documents);
     const docs = docBooking?.metadata?.documents || {};
-    const idNumber = docBooking?.metadata?.guest_info?.idNumber || docBooking?.metadata?.idNumber || null;
+    const idNumber = profile.id_number || docBooking?.metadata?.guest_info?.id_number || docBooking?.metadata?.guest_info?.idNumber || docBooking?.metadata?.idNumber || null;
 
     // Contracts vault: bookings that have a contract or signature URL
     const contracts = bookings
@@ -110,11 +116,11 @@ export const clientService = {
     return {
       docBooking,
       documents: {
-        facePhotoUrl:    docs.facePhotoUrl    || null,
-        licenseFrontUrl: docs.licenseFrontUrl || null,
-        licenseBackUrl:  docs.licenseBackUrl  || null,
-        idFrontUrl:      docs.idFrontUrl      || null,
-        idBackUrl:       docs.idBackUrl       || null,
+        facePhotoUrl:    profile.face_photo_url    || docs.facePhotoUrl    || null,
+        licenseFrontUrl: profile.license_front_url || docs.licenseFrontUrl || null,
+        licenseBackUrl:  profile.license_back_url  || docs.licenseBackUrl  || null,
+        idFrontUrl:      profile.id_front_url      || docs.idFrontUrl      || null,
+        idBackUrl:       profile.id_back_url       || docs.idBackUrl       || null,
         idNumber,
         status:     docBooking?.document_status || null,
         bookingId:  docBooking?.id || null,

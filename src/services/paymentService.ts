@@ -1,6 +1,7 @@
 interface StkPushParams {
   phone: string;
   bookingId: string;
+  amount?: number;
 }
 
 interface StkPushResult {

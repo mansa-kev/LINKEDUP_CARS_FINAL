@@ -22,9 +22,10 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<PaymentPhase>('ready');
   const [phone, setPhone] = useState(bookingData.phone || '');
-  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [bookingId, setBookingId] = useState<string | null>(() => sessionStorage.getItem(`pending_booking_${car.id}`));
   const [paymentRequestId, setPaymentRequestId] = useState<string | null>(null);
   const [lastMessage, setLastMessage] = useState('');
+  const [editableAmount, setEditableAmount] = useState<number>(bookingData.totalAmount || 0);
 
   const isBusy = phase === 'creating_booking' || phase === 'sending_stk' || phase === 'waiting';
 
@@ -47,6 +48,18 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
         }
       })
       .subscribe();
+
+    // Check status immediately in case it was paid while offline/refreshing
+    (async () => {
+      const status = await paymentService.getPaymentStatus(bookingId);
+      if (status.paid && status.confirmed) {
+        setPhase('paid');
+        toast.success('Payment confirmed! Booking confirmed.');
+        onComplete?.();
+        navigate(`/booking-confirmation/${bookingId}`);
+      }
+    })();
+
     return () => { supabase.removeChannel(channel); };
   }, [bookingId, navigate, onComplete]);
 
@@ -56,6 +69,7 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
     setPhase('creating_booking');
     const booking = await bookingService.createBooking({
       ...bookingData,
+      totalAmount: editableAmount,
       carId: car.id,
       paymentMethod: 'ncba_stk',
     });
@@ -63,9 +77,39 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
     if (!booking?.id) throw new Error('Failed to create booking');
 
     setBookingId(booking.id);
+    sessionStorage.setItem(`pending_booking_${car.id}`, booking.id);
 
     if (bookingData.contractId) {
       await enhancedContractService.releasePaymentHold(bookingData.contractId).catch(() => {});
+    }
+
+    if (bookingData.signatureData) {
+      try {
+        await enhancedContractService.saveSignedContract(
+          booking.id,
+          bookingData.signatureData,
+          {
+            booking_id: booking.id,
+            client_name: bookingData.fullName,
+            client_email: bookingData.email,
+            client_phone: bookingData.phone,
+            car_make: car.make,
+            car_model: car.model,
+            license_plate: car.license_plate,
+            pickup_date: bookingData.startDate,
+            dropoff_date: bookingData.endDate,
+            daily_rate: car.daily_rate,
+            total_amount: bookingData.totalAmount,
+            security_deposit: car.security_deposit || 0,
+            po_box: bookingData.poBox,
+            id_number: bookingData.idNumber,
+            color: car.color
+          },
+          bookingData.contractPdfBase64
+        );
+      } catch (err) {
+        console.error('Failed to save signed contract:', err);
+      }
     }
 
     return booking.id;
@@ -91,7 +135,7 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
       const id = await getOrCreateBooking();
 
       setPhase('sending_stk');
-      const result = await paymentService.initiateSTKPush({ phone: cleanPhone, bookingId: id });
+      const result = await paymentService.initiateSTKPush({ phone: cleanPhone, bookingId: id, amount: editableAmount });
 
       if (result.paymentRequestId) {
         setPaymentRequestId(result.paymentRequestId);
@@ -165,9 +209,15 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <div className="p-3 bg-card/50 rounded-[14px] border border-border">
-            <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Amount</p>
-            <p className="text-sm sm:text-lg font-black text-foreground">KES {bookingData.totalAmount?.toLocaleString()}</p>
+          <div className="p-3 bg-card/50 rounded-[14px] border border-border space-y-1">
+            <label className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Amount (Editable)</label>
+            <input
+              type="number"
+              value={editableAmount}
+              onChange={(e) => setEditableAmount(Number(e.target.value))}
+              disabled={isBusy}
+              className="w-full bg-transparent text-sm sm:text-lg font-black text-foreground border-none outline-none focus:ring-0 p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
           </div>
           <div className="p-3 bg-card/50 rounded-[14px] border border-border">
             <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Vehicle</p>
@@ -219,7 +269,7 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
         )}
         <div className="flex justify-between items-end pt-2 border-t border-border">
           <span className="text-[10px] sm:text-xs text-muted-foreground font-bold uppercase tracking-widest">Total Amount</span>
-          <span className="text-sm sm:text-base font-black text-foreground">KES {bookingData.totalAmount?.toLocaleString()}</span>
+          <span className="text-sm sm:text-base font-black text-foreground">KES {editableAmount?.toLocaleString()}</span>
         </div>
       </div>
 

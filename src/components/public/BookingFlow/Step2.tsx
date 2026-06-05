@@ -114,18 +114,31 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
   const [uploading, setUploading] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState<DocType | null>(null);
   const [prefilled, setPrefilled] = useState(false);
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    license: '',
-    idNumber: '',
-    facePhotoUrl: '',
-    licenseFrontUrl: '',
-    licenseBackUrl: '',
-    idFrontUrl: '',
-    idBackUrl: ''
+  const [formData, setFormData] = useState(() => {
+    const saved = sessionStorage.getItem(`step2_data_${car.id}`);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      fullName: '',
+      email: '',
+      phone: '',
+      license: '',
+      idNumber: '',
+      poBox: '',
+      facePhotoUrl: '',
+      licenseFrontUrl: '',
+      licenseBackUrl: '',
+      idFrontUrl: '',
+      idBackUrl: ''
+    };
   });
+
+  useEffect(() => {
+    sessionStorage.setItem(`step2_data_${car.id}`, JSON.stringify(formData));
+  }, [formData, car.id]);
 
   // Pre-fill from profile + glovebox for logged-in users
   useEffect(() => {
@@ -133,11 +146,17 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const [profileRes, gloveboxRes] = await Promise.allSettled([
-        supabase.from('user_profiles').select('full_name, email, phone_number, license_number').eq('id', user.id).single(),
+        supabase.from('user_profiles').select('full_name, email, phone_number, license_number, id_number, role').eq('id', user.id).single(),
         clientService.getGloveboxData(user.id),
       ]);
       const profile = profileRes.status === 'fulfilled' ? profileRes.value.data : null;
       const glovebox = gloveboxRes.status === 'fulfilled' ? gloveboxRes.value : null;
+
+      // Skip autofilling profile info if the user is an admin or fleet owner testing the flow
+      if (profile?.role === 'admin' || profile?.role === 'fleet_owner') {
+        return;
+      }
+
       const docs: GloveboxDocuments = glovebox?.documents || {};
       setFormData(prev => ({
         ...prev,
@@ -145,7 +164,8 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
         email:          profile?.email        || prev.email,
         phone:          profile?.phone_number || prev.phone,
         license:        profile?.license_number || prev.license,
-        idNumber:       docs.idNumber         || prev.idNumber,
+        idNumber:       profile?.id_number    || docs.idNumber         || prev.idNumber,
+        poBox:          prev.poBox,
         facePhotoUrl:   docs.facePhotoUrl     || prev.facePhotoUrl,
         licenseFrontUrl:docs.licenseFrontUrl  || prev.licenseFrontUrl,
         licenseBackUrl: docs.licenseBackUrl   || prev.licenseBackUrl,
@@ -166,6 +186,7 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
       phone: initialData.phone || prev.phone,
       license: initialData.license || prev.license,
       idNumber: initialData.idNumber || prev.idNumber,
+      poBox: initialData.poBox || prev.poBox,
       facePhotoUrl: initialData.facePhotoUrl || prev.facePhotoUrl,
       licenseFrontUrl: initialData.licenseFrontUrl || prev.licenseFrontUrl,
       licenseBackUrl: initialData.licenseBackUrl || prev.licenseBackUrl,
@@ -211,6 +232,7 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
       toast.error(`Please upload: ${missing.map(t => DOC_LABELS[t]).join(', ')}`);
       return;
     }
+    sessionStorage.removeItem('temp_step2_data');
     onNext({ ...formData, _fromGlovebox: prefilled });
   };
 
@@ -242,7 +264,7 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-primary transition-colors" size={18} />
               <input
                 type="text" placeholder="Full Name" required
-                value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+                value={formData.fullName || ''} onChange={(e) => setFormData({...formData, fullName: e.target.value})}
                 className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
               />
             </div>
@@ -250,7 +272,7 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-primary transition-colors" size={18} />
               <input
                 type="email" placeholder="Email Address" required
-                value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})}
+                value={formData.email || ''} onChange={(e) => setFormData({...formData, email: e.target.value})}
                 className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
               />
             </div>
@@ -261,7 +283,7 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
               <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-primary transition-colors" size={18} />
               <input
                 type="tel" placeholder="Phone Number" required
-                value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})}
                 className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
               />
             </div>
@@ -269,7 +291,7 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
               <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-primary transition-colors" size={18} />
               <input
                 type="text" placeholder="Driver's License No." required
-                value={formData.license} onChange={(e) => setFormData({...formData, license: e.target.value})}
+                value={formData.license || ''} onChange={(e) => setFormData({...formData, license: e.target.value})}
                 className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
               />
             </div>
@@ -279,7 +301,16 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
             <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-primary transition-colors" size={18} />
             <input
               type="text" placeholder="National ID / Passport Number" required
-              value={formData.idNumber} onChange={(e) => setFormData({...formData, idNumber: e.target.value})}
+              value={formData.idNumber || ''} onChange={(e) => setFormData({...formData, idNumber: e.target.value})}
+              className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
+            />
+          </div>
+
+          <div className="group relative">
+            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-primary transition-colors" size={18} />
+            <input
+              type="text" placeholder="P.O. Box (Optional)"
+              value={formData.poBox || ''} onChange={(e) => setFormData({...formData, poBox: e.target.value})}
               className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
             />
           </div>

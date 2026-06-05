@@ -22,6 +22,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 import { promotionService, Promotion } from '../../services/promotionService';
+import { BookingFlow } from '../public/BookingFlow/BookingFlow';
 
 type BookingStep = 'browse' | 'details' | 'dates' | 'confirm';
 
@@ -131,180 +132,14 @@ export function BrowseAndBook() {
   // ─── Booking Flow (dates + confirm) ────────────────────────────────────────
   if (bookingStep !== 'browse' && selectedCar) {
     return (
-      <div className="space-y-6 max-w-2xl mx-auto">
-        <button onClick={handleBack} className="text-sm font-bold text-muted-foreground hover:text-foreground flex items-center gap-2">
-          <ArrowRight size={16} className="rotate-180" /> Back
+      <div className="space-y-6 max-w-4xl mx-auto">
+        <button 
+          onClick={() => { setBookingStep('browse'); setSelectedCar(null); }} 
+          className="text-sm font-bold text-muted-foreground hover:text-foreground flex items-center gap-2 mb-2"
+        >
+          <ArrowRight size={16} className="rotate-180" /> Back to Catalog
         </button>
-
-        {/* Selected Car Summary */}
-        <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-4">
-          <div className="w-20 h-14 rounded-xl overflow-hidden bg-muted shrink-0">
-            <img
-              src={selectedCar.primary_image_url || `https://picsum.photos/seed/${selectedCar.id}/200/150`}
-              alt=""
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm truncate">{selectedCar.make} {selectedCar.model} ({selectedCar.year})</p>
-            <p className="text-xs text-muted-foreground">KES {selectedCar.daily_rate?.toLocaleString()}/day</p>
-          </div>
-          <button onClick={() => { setBookingStep('browse'); setSelectedCar(null); }} className="p-1 text-muted-foreground hover:text-foreground">
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Step: Dates */}
-        {bookingStep === 'dates' && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-            <h2 className="text-xl font-bold">Select Dates & Location</h2>
-
-            {/* Auto-filled info */}
-            {profile && (
-              <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl flex items-center gap-3">
-                <CheckCircle2 className="text-primary shrink-0" size={18} />
-                <p className="text-sm text-primary font-medium">
-                  Booking as <strong>{profile.full_name}</strong> ({profile.email})
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pickup Location</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <input
-                    type="text"
-                    value={pickupLocation}
-                    onChange={(e) => setPickupLocation(e.target.value)}
-                    placeholder="e.g. Nairobi, Westlands, JKIA..."
-                    className="w-full pl-10 pr-4 py-3 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pickup Date</label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                    <input
-                      type="date"
-                      value={pickupDate}
-                      onChange={(e) => setPickupDate(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
-                      className="w-full pl-10 pr-4 py-3 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Return Date</label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                    <input
-                      type="date"
-                      value={returnDate}
-                      onChange={(e) => setReturnDate(e.target.value)}
-                      min={pickupDate || new Date().toISOString().split('T')[0]}
-                      className="w-full pl-10 pr-4 py-3 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {totalDays > 0 && (
-              <div className="p-4 bg-muted rounded-xl space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">{totalDays} day{totalDays !== 1 ? 's' : ''} x KES {selectedCar.daily_rate?.toLocaleString()}</span>
-                  <span className={`font-bold ${discountSavings > 0 ? 'text-sm line-through text-muted-foreground' : 'text-lg'}`}>KES {originalAmount.toLocaleString()}</span>
-                </div>
-                {discountSavings > 0 && activePromo && (
-                  <>
-                    <div className="flex justify-between items-center text-green-500">
-                      <span className="text-xs font-bold">{activePromo.title} (-{activePromo.discount_type === 'percentage' ? `${activePromo.discount_value}%` : `KES ${activePromo.discount_value}`})</span>
-                      <span className="text-xs font-bold">- KES {discountSavings.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center pt-2 border-t border-border">
-                      <span className="text-sm font-bold">You Pay</span>
-                      <span className="font-bold text-lg text-primary">KES {totalAmount.toLocaleString()}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            <button
-              onClick={() => setBookingStep('confirm')}
-              disabled={!pickupDate || !returnDate || !pickupLocation}
-              className="w-full py-4 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              Review & Confirm <ArrowRight size={18} />
-            </button>
-          </motion.div>
-        )}
-
-        {/* Step: Confirm */}
-        {bookingStep === 'confirm' && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-            <h2 className="text-xl font-bold">Confirm Booking</h2>
-
-            <div className="bg-card rounded-2xl border border-border divide-y divide-border overflow-hidden">
-              <div className="p-4 flex justify-between">
-                <span className="text-sm text-muted-foreground">Vehicle</span>
-                <span className="text-sm font-bold">{selectedCar.make} {selectedCar.model}</span>
-              </div>
-              <div className="p-4 flex justify-between">
-                <span className="text-sm text-muted-foreground">Dates</span>
-                <span className="text-sm font-bold">{pickupDate} → {returnDate}</span>
-              </div>
-              <div className="p-4 flex justify-between">
-                <span className="text-sm text-muted-foreground">Duration</span>
-                <span className="text-sm font-bold">{totalDays} day{totalDays !== 1 ? 's' : ''}</span>
-              </div>
-              <div className="p-4 flex justify-between">
-                <span className="text-sm text-muted-foreground">Pickup Location</span>
-                <span className="text-sm font-bold">{pickupLocation}</span>
-              </div>
-              <div className="p-4 flex justify-between">
-                <span className="text-sm text-muted-foreground">Name</span>
-                <span className="text-sm font-bold">{profile?.full_name}</span>
-              </div>
-              <div className="p-4 flex justify-between">
-                <span className="text-sm text-muted-foreground">Email</span>
-                <span className="text-sm font-bold">{profile?.email}</span>
-              </div>
-              {discountSavings > 0 && activePromo && (
-                <div className="p-4 flex justify-between text-green-500">
-                  <span className="text-sm font-bold">{activePromo.title}</span>
-                  <span className="text-sm font-bold">- KES {discountSavings.toLocaleString()}</span>
-                </div>
-              )}
-              <div className="p-4 flex justify-between bg-primary/5">
-                <span className="text-sm font-bold">Total</span>
-                <span className="text-lg font-black text-primary">KES {totalAmount.toLocaleString()}</span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleConfirmBooking}
-              disabled={bookingLoading}
-              className="w-full py-4 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20"
-            >
-              {bookingLoading ? (
-                <><Loader2 className="animate-spin" size={18} /> Creating Booking...</>
-              ) : (
-                <>Confirm & Book <CheckCircle2 size={18} /></>
-              )}
-            </button>
-
-            <p className="text-xs text-center text-muted-foreground">
-              You'll receive payment instructions after confirmation
-            </p>
-          </motion.div>
-        )}
+        <BookingFlow car={selectedCar} />
       </div>
     );
   }

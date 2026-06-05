@@ -241,6 +241,61 @@ export const adminService = {
     return { data, count };
   },
 
+  createConciergeBooking: async (bookingData: any) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          ...bookingData,
+          bookingFlowInitiatedBy: 'admin_concierge'
+        }),
+      });
+
+      const rawResponse = await response.text();
+      const result = rawResponse ? JSON.parse(rawResponse) : null;
+
+      if (!response.ok || result?.error || !result?.booking) {
+        throw new Error(result?.error || rawResponse || 'Failed to create concierge booking');
+      }
+
+      // If it's a bank transfer, we might need to manually update payment_status in a subsequent call, 
+      // but the API endpoint handles the initial insert.
+      return result.booking;
+    } catch (error) {
+      return handleSupabaseErrorWrapper(error, 'createConciergeBooking');
+    }
+  },
+
+  confirmBankTransferPayment: async (bookingId: string, reference: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .update({
+          status: 'confirmed',
+          payment_status: 'paid',
+          payment_method: 'bank_transfer',
+          payment_provider: 'bank_transfer',
+          payment_reference: reference,
+          transaction_code: reference,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bookingId)
+        .select();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      return handleSupabaseErrorWrapper(error, 'confirmBankTransferPayment');
+    }
+  },
+
   updateBookingStatus: async (id: string, status: string) => {
     const { data, error } = await supabase
       .from('bookings')
@@ -301,11 +356,12 @@ export const adminService = {
 
   addCar: async (car: any) => {
     // Handle empty date fields - convert empty strings to null
-    // Remove fleet_owner from car data to avoid sending it to database
-    const { fleet_owner, ...cleanCar } = car;
+    // Extract fleet_owner (frontend field) and remap to fleet_owner_id (DB column)
+    const { fleet_owner, fleet_owner_details, ...cleanCar } = car;
     
     const processedCar = {
       ...cleanCar,
+      fleet_owner_id: fleet_owner || null,
       next_service_date: cleanCar.next_service_date || null,
       last_maintenance_date: cleanCar.last_maintenance_date || null
     };
@@ -319,13 +375,13 @@ export const adminService = {
   },
 
   updateCar: async (id: string, updates: any) => {
-    // Remove fleet_owner from updates to avoid sending it to database
-    // since database expects fleet_owner column, not fleet_owner_id
-    const { fleet_owner, ...cleanUpdates } = updates;
+    // Extract fleet_owner (frontend field) and remap to fleet_owner_id (DB column)
+    const { fleet_owner, fleet_owner_details, ...cleanUpdates } = updates;
     
-    // Handle empty date fields
+    // Handle empty date fields and map fleet_owner to fleet_owner_id
     const processedUpdates = {
       ...cleanUpdates,
+      fleet_owner_id: fleet_owner || null,
       next_service_date: cleanUpdates.next_service_date || null,
       last_maintenance_date: cleanUpdates.last_maintenance_date || null
     };
@@ -378,11 +434,25 @@ export const adminService = {
   },
 
   deleteUser: async (id: string) => {
-    const { error } = await supabase
-      .from('user_profiles')
-      .delete()
-      .eq('id', id);
-    if (error) return handleSupabaseErrorWrapper(error, 'deleteUser');
+    const session = (await supabase.auth.getSession()).data.session;
+    const response = await fetch(`/api/users/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${session?.access_token || ''}`
+      }
+    });
+    if (!response.ok) {
+      let err;
+      try {
+        err = await response.json();
+      } catch (e) {
+        const text = await response.text();
+        console.error('Delete user failed with non-JSON response:', response.status, text);
+        throw new Error(`Server returned ${response.status}: ${text}`);
+      }
+      console.error('Delete user API error:', err);
+      throw new Error(err.error || 'Failed to delete user');
+    }
     return true;
   },
 
@@ -516,88 +586,31 @@ export const adminService = {
   },
 
   createFleetOwnerAccount: async (data: any) => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-    
-    // Use a secondary client to avoid logging out the current admin
-    const { createClient } = await import('@supabase/supabase-js');
-    const adminAuthClient = createClient(supabaseUrl || '', supabaseAnonKey || '', {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false
-      }
-    });
-
-    const fleetUrl = import.meta.env.VITE_FLEET_URL || 'https://fleet.linkedupcarsrentals.com';
-
-    const { data: authData, error: authError } = await adminAuthClient.auth.signUp({
-      email: data.email,
-      password: data.password || 'Fleet123!',
-      options: {
-        emailRedirectTo: `${fleetUrl}/login`,
-        data: {
-          full_name: data.contact_name,
-          role: 'fleet_owner',
-        },
+    const session = (await supabase.auth.getSession()).data.session;
+    const response = await fetch('/api/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token || ''}`
       },
+      body: JSON.stringify({
+        email: data.email,
+        password: data.password || 'Fleet123!',
+        role: 'fleet_owner',
+        fullName: data.contact_name,
+        phoneNumber: data.phone_number,
+        companyName: data.company_name,
+        commissionRate: data.commission_rate
+      })
     });
 
-    if (authError) return handleSupabaseErrorWrapper(authError, 'createFleetOwnerAccount_Auth');
-
-    const userId = authData.user?.id;
-    if (!userId) throw new Error('Failed to create user account');
-
-    // Auto-confirm the fleet owner's email so they can log in immediately
-    // (admin-created accounts should not require email confirmation)
-    if (serviceRoleKey) {
-      try {
-        await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${serviceRoleKey}`,
-            'apikey': serviceRoleKey,
-          },
-          body: JSON.stringify({ email_confirm: true }),
-        });
-      } catch (confirmErr) {
-        logger.warn('Could not auto-confirm fleet owner email — user must confirm manually:', confirmErr);
-      }
-    } else {
-      logger.warn('VITE_SUPABASE_SERVICE_ROLE_KEY not set — fleet owner must confirm email before logging in');
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to create fleet owner account');
     }
 
-    // Wait for the handle_new_user trigger to auto-create the user_profiles row
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // UPDATE the profile row (trigger created it; admin UPDATE policy already exists)
-    // Fall back to INSERT if trigger didn't fire (covered by "Admins can insert profiles" policy)
-    const { error: profileError } = await supabase
-      .from('user_profiles')
-      .upsert({
-        id: userId,
-        full_name: data.contact_name,
-        email: data.email,
-        phone_number: data.phone_number,
-        role: 'fleet_owner',
-        status: 'active'
-      }, { onConflict: 'id' });
-
-    if (profileError) return handleSupabaseErrorWrapper(profileError, 'createFleetOwnerAccount_Profile');
-
-    // Insert fleet_owner_settings (ignore if already exists)
-    const { error: settingsError } = await supabase
-      .from('fleet_owner_settings')
-      .upsert({
-        id: userId,
-        company_name: data.company_name,
-        commission_rate: data.commission_rate,
-        status: 'active'
-      }, { onConflict: 'id' });
-
-    if (settingsError) return handleSupabaseErrorWrapper(settingsError, 'createFleetOwnerAccount_Settings');
+    const resData = await response.json();
+    const userId = resData.userId;
 
     // Send welcome email
     try {
@@ -622,7 +635,7 @@ export const adminService = {
       });
     }
 
-    return authData.user;
+    return { id: userId, email: data.email };
   },
 
   addFleetOwner: async (owner: any) => {
@@ -686,6 +699,20 @@ export const adminService = {
       .upsert({ id, ...settings })
       .select();
     if (error) return handleSupabaseErrorWrapper(error, 'updateFleetOwnerSettings');
+
+    // Sync status/role with user_profiles if settings status is changed
+    if (settings.status === 'active') {
+      await supabase
+        .from('user_profiles')
+        .update({ role: 'fleet_owner', status: 'active' })
+        .eq('id', id);
+    } else if (settings.status === 'suspended') {
+      await supabase
+        .from('user_profiles')
+        .update({ status: 'suspended' })
+        .eq('id', id);
+    }
+
     return data;
   },
 
@@ -1003,7 +1030,16 @@ export const adminService = {
       .from('user_profiles')
       .select(`
         *,
-        driver_profiles (*)
+        driver_profiles (*),
+        bookings:bookings!bookings_driver_id_fkey (
+          id,
+          status,
+          needs_chauffeur,
+          start_date,
+          end_date,
+          total_amount,
+          cars (make, model, license_plate)
+        )
       `)
       .eq('role', 'driver');
     if (error) return handleSupabaseErrorWrapper(error, 'getDrivers');
@@ -1011,30 +1047,29 @@ export const adminService = {
   },
 
   addDriver: async (driver: any) => {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .insert([{
-        full_name: driver.full_name,
+    const session = (await supabase.auth.getSession()).data.session;
+    const response = await fetch('/api/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token || ''}`
+      },
+      body: JSON.stringify({
         email: driver.email,
-        phone_number: driver.phone_number,
-        role: 'driver'
-      }])
-      .select();
-    if (error) return handleSupabaseErrorWrapper(error, 'addDriver_Profile');
+        role: 'driver',
+        fullName: driver.full_name,
+        phoneNumber: driver.phone_number,
+        licenseNumber: driver.license_number
+      })
+    });
 
-    const userId = data[0].id;
-    const { error: profileError } = await supabase
-      .from('driver_profiles')
-      .insert([{
-        id: userId,
-        license_number: driver.license_number,
-        license_status: 'pending',
-        id_status: 'pending',
-        status: 'pending_verification'
-      }]);
-    if (profileError) return handleSupabaseErrorWrapper(profileError, 'addDriver_ProfileDetails');
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to add driver');
+    }
 
-    return data;
+    const resData = await response.json();
+    return [{ id: resData.userId, ...driver }];
   },
 
   updateDriverStatus: async (id: string, status: string) => {
@@ -1048,12 +1083,32 @@ export const adminService = {
   },
 
   updateFleetOwnerStatus: async (id: string, status: string) => {
+    // 1. Upsert fleet_owner_settings status (to support users who don't have settings row yet)
     const { data, error } = await supabase
       .from('fleet_owner_settings')
-      .update({ status })
-      .eq('id', id)
+      .upsert({ id, status })
       .select();
     if (error) return handleSupabaseErrorWrapper(error, 'updateFleetOwnerStatus');
+
+    // 2. Sync user_profiles.role so ProtectedRoute grants portal access
+    if (status === 'active') {
+      const { error: roleError } = await supabase
+        .from('user_profiles')
+        .update({ role: 'fleet_owner', status: 'active' })
+        .eq('id', id);
+      if (roleError) {
+        logger.error('[updateFleetOwnerStatus] Failed to sync user_profiles role:', roleError);
+      }
+    } else if (status === 'suspended') {
+      const { error: roleError } = await supabase
+        .from('user_profiles')
+        .update({ status: 'suspended' })
+        .eq('id', id);
+      if (roleError) {
+        logger.error('[updateFleetOwnerStatus] Failed to sync user_profiles status:', roleError);
+      }
+    }
+
     return data;
   },
 
@@ -1094,7 +1149,7 @@ export const adminService = {
           *,
           fleet_owner:user_profiles (*)
         `)
-        .eq('status', 'unavailable'); // Assuming unavailable means pending verification for new cars
+        .or('status.eq.unavailable,is_approved.eq.false');
       if (cError) throw cError;
 
       return {
@@ -1265,6 +1320,26 @@ export const adminService = {
       .insert([sanitizedContent])
       .select();
     if (error) return handleSupabaseErrorWrapper(error, 'createHeroContent');
+    return data;
+  },
+
+  // --- App Settings ---
+  getAppSettings: async (keys?: string[]) => {
+    let query = supabase.from('app_settings').select('*');
+    if (keys && keys.length > 0) {
+      query = query.in('key', keys);
+    }
+    const { data, error } = await query;
+    if (error) return handleSupabaseErrorWrapper(error, 'getAppSettings');
+    return data;
+  },
+
+  updateAppSetting: async (key: string, value: string, description?: string) => {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .upsert({ key, value, description }, { onConflict: 'key' })
+      .select();
+    if (error) return handleSupabaseErrorWrapper(error, 'updateAppSetting');
     return data;
   },
 
@@ -1557,29 +1632,41 @@ export const adminService = {
       });
       
       // First delete related records
-      // 1. Delete pending payments
-      const { error: pendingError } = await serviceClient
-        .from('pending_payments')
+      // 1. Delete booking inspections
+      const { error: inspError } = await serviceClient
+        .from('booking_inspections')
         .delete()
         .eq('booking_id', bookingId);
       
-      if (pendingError) {
-        logger.error('Error deleting pending payments:', pendingError);
-        throw pendingError;
+      if (inspError) {
+        logger.warn('Error deleting booking inspections (may not exist):', inspError);
+      } else {
+        logger.log('Booking inspections deleted');
       }
-      logger.log('Pending payments deleted');
 
-      // 2. Delete transactions
+      // 2. Delete booking extensions
+      const { error: extError } = await serviceClient
+        .from('booking_extensions')
+        .delete()
+        .eq('booking_id', bookingId);
+      
+      if (extError) {
+        logger.warn('Error deleting booking extensions (may not exist):', extError);
+      } else {
+        logger.log('Booking extensions deleted');
+      }
+
+      // 3. Delete transactions
       const { error: txError } = await serviceClient
         .from('transactions')
         .delete()
         .eq('booking_id', bookingId);
       
       if (txError) {
-        logger.error('Error deleting transactions:', txError);
-        throw txError;
+        logger.warn('Error deleting transactions (may not exist):', txError);
+      } else {
+        logger.log('Transactions deleted');
       }
-      logger.log('Transactions deleted');
 
       // 3. Delete the booking
       const { error: bookingError } = await serviceClient

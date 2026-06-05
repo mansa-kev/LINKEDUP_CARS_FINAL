@@ -18,7 +18,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Loader2
+  Loader2,
+  PenTool
 } from 'lucide-react';
 import { Logo } from '../shared/Logo';
 import { PortalHeader } from '../PortalHeader';
@@ -35,6 +36,7 @@ const MaintenanceLogs = React.lazy(() => import('./MaintenanceLogs').then(m => (
 const DamageReports = React.lazy(() => import('./DamageReports').then(m => ({ default: m.default })));
 const FinancialCenter = React.lazy(() => import('./FinancialCenter').then(m => ({ default: m.FinancialCenter })));
 const FleetSettings = React.lazy(() => import('./FleetSettings').then(m => ({ default: m.FleetSettings })));
+const FleetConciergeBooking = React.lazy(() => import('./FleetConciergeBooking').then(m => ({ default: m.FleetConciergeBooking })));
 
 const navGroups = [
   {
@@ -61,6 +63,7 @@ const navGroups = [
   {
     category: 'Operations & Communication',
     items: [
+      { name: 'Field Booking', path: '/fleet/concierge-booking', icon: PenTool },
       { name: 'My Inbox', path: '/fleet/inbox', icon: Inbox },
       { name: 'Booking Requests', path: '/fleet/booking-requests', icon: CalendarCheck },
       { name: 'Digital Vault', path: '/fleet/vault', icon: FileText },
@@ -246,6 +249,7 @@ export function FleetLayout() {
               <Route path="expenses" element={<ExpenseTracker />} />
               <Route path="inbox" element={<MyInbox />} />
               <Route path="booking-requests" element={<BookingRequests />} />
+              <Route path="concierge-booking" element={<FleetConciergeBooking />} />
               <Route path="vault" element={<DigitalVault />} />
               <Route path="growth" element={<GrowthAndInsights />} />
               <Route path="settings" element={<FleetSettings />} />

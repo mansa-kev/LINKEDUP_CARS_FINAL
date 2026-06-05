@@ -26,6 +26,33 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
       try {
         const contract = await enhancedContractService.getMasterContract();
         if (contract) {
+          const pdfUrl = contract.pdf_url || contract.contract_url || contract.template_url;
+          if (pdfUrl && pdfUrl.includes('.html')) {
+            contract.preview_url = pdfUrl;
+          } else {
+            try {
+              const previewUrl = await enhancedContractService.previewDynamicContract({
+                booking_id: 'PREVIEW',
+                client_name: bookingData.fullName || '',
+                client_email: bookingData.email || '',
+                client_phone: bookingData.phone || '',
+                car_make: car.make,
+                car_model: car.model,
+                license_plate: car.license_plate || '',
+                pickup_date: bookingData.startDate || '',
+                dropoff_date: bookingData.endDate || '',
+                daily_rate: car.daily_rate || 0,
+                total_amount: bookingData.totalAmount || 0,
+                security_deposit: car.security_deposit || 0,
+                po_box: bookingData.poBox || '',
+                id_number: bookingData.idNumber || '',
+                color: car.color || ''
+              });
+              contract.preview_url = previewUrl;
+            } catch (err) {
+              console.error('Failed to generate preview:', err);
+            }
+          }
           setContract(contract);
         }
       } catch (error) {
@@ -35,7 +62,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
       }
     }
     fetchContract();
-  }, []);
+  }, [bookingData, car]);
 
   const clear = () => {
     if (sigPad.current) {
@@ -59,6 +86,46 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
 
       const signatureData = sigPad.current.toDataURL();
 
+      let pdfBase64 = null;
+      const contractElement = document.getElementById('contract-html-container');
+      
+      if (contractElement) {
+        // We import html2pdf dynamically to avoid SSR/Vite issues
+        try {
+          const html2pdf = (await import('html2pdf.js')).default;
+          
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = contractElement.innerHTML;
+          wrapper.style.padding = '20px';
+          wrapper.style.fontFamily = 'sans-serif';
+          wrapper.style.color = 'black';
+          wrapper.style.background = 'white';
+          
+          const sigImg = document.createElement('img');
+          sigImg.src = signatureData;
+          sigImg.style.width = '200px';
+          sigImg.style.marginTop = '20px';
+          
+          wrapper.appendChild(document.createElement('br'));
+          const sigText = document.createElement('p');
+          sigText.innerHTML = '<strong>Client Signature:</strong>';
+          wrapper.appendChild(sigText);
+          wrapper.appendChild(sigImg);
+          
+          const opt = {
+            margin: 10,
+            filename: 'contract.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          };
+          
+          pdfBase64 = await html2pdf().from(wrapper).set(opt).outputPdf('datauristring');
+        } catch (err) {
+          console.error("Failed to generate PDF snapshot on client", err);
+        }
+      }
+
       toast.success('Contract accepted successfully');
 
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -68,6 +135,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
         contractAccepted: true,
         signatureUrl: signatureData,
         signatureData: signatureData,
+        contractPdfBase64: pdfBase64,
         contractId: contract?.id || 'temp-' + Date.now()
       });
 

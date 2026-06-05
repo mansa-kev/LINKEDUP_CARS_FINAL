@@ -26,7 +26,6 @@ export function Step1({ car, onNext, initialData }: Step1Props) {
   const [endDate, setEndDate] = useState('');
   const [pickupLocation, setPickupLocation] = useState('');
   const [dropoffLocation, setDropoffLocation] = useState('');
-  const [sameAsPickup, setSameAsPickup] = useState(true);
   const [needsChauffeur, setNeedsChauffeur] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
   const [drivers, setDrivers] = useState<AvailableDriver[]>([]);
@@ -75,7 +74,6 @@ export function Step1({ car, onNext, initialData }: Step1Props) {
     setEndDate(initialData.endDate || '');
     setPickupLocation(initialData.pickupLocation || initialData.location || '');
     setDropoffLocation(initialData.dropoffLocation || '');
-    setSameAsPickup(!initialData.dropoffLocation || initialData.dropoffLocation === initialData.pickupLocation || initialData.dropoffLocation === initialData.location);
     setNeedsChauffeur(Boolean(initialData.needsChauffeur));
     setSelectedDriver(initialData.driverId || null);
   }, [initialData]);
@@ -126,7 +124,7 @@ export function Step1({ car, onNext, initialData }: Step1Props) {
       endDate,
       location: pickupLocation,
       pickupLocation,
-      dropoffLocation: sameAsPickup ? pickupLocation : dropoffLocation,
+      dropoffLocation,
       needsChauffeur,
       driverId: needsChauffeur ? selectedDriver : null,
       totalAmount: activePromo ? discountedTotal : total,
@@ -169,37 +167,19 @@ export function Step1({ car, onNext, initialData }: Step1Props) {
         </div>
 
         {/* Drop-off Location */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Drop-off Location</label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={sameAsPickup}
-                onChange={(e) => setSameAsPickup(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-8 h-4 bg-white/10 rounded-full peer-checked:bg-primary/60 transition-colors relative">
-                <div className="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full peer-checked:translate-x-4 transition-transform" />
-              </div>
-              <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">Same as pickup</span>
-            </label>
+        <div className="group">
+          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-2 block">Drop-off Location</label>
+          <div className="relative">
+            <MapPin className="absolute left-4 md:left-5 top-1/2 -translate-y-1/2 text-primary/50 group-focus-within:text-primary transition-colors" size={18} />
+            <input
+              type="text"
+              required
+              value={dropoffLocation}
+              onChange={(e) => setDropoffLocation(e.target.value)}
+              placeholder="Enter drop-off location (e.g. Nairobi CBD, Westlands, JKIA...)"
+              className="w-full pl-12 md:pl-14 pr-4 md:pr-6 py-4 md:py-5 bg-white/5 border border-white/10 rounded-[20px] md:rounded-[24px] text-sm font-bold text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-white/10 placeholder:text-white/30"
+            />
           </div>
-          {!sameAsPickup && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="group">
-              <div className="relative">
-                <MapPin className="absolute left-4 md:left-5 top-1/2 -translate-y-1/2 text-primary/50 group-focus-within:text-primary transition-colors" size={18} />
-                <input
-                  type="text"
-                  required={!sameAsPickup}
-                  value={dropoffLocation}
-                  onChange={(e) => setDropoffLocation(e.target.value)}
-                  placeholder="Enter drop-off location..."
-                  className="w-full pl-12 md:pl-14 pr-4 md:pr-6 py-4 md:py-5 bg-white/5 border border-white/10 rounded-[20px] md:rounded-[24px] text-sm font-bold text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-white/10 placeholder:text-white/30"
-                />
-              </div>
-            </motion.div>
-          )}
         </div>
 
         {/* Date Grid */}

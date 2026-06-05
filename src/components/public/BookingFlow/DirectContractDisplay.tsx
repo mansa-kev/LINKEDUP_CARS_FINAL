@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { Loader2 } from 'lucide-react';
+import { adminService } from '../../../services/adminService';
 
 interface DirectContractDisplayProps {
   contract: any;
@@ -16,8 +18,8 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
     );
   }
 
-  // Get the PDF URL - support both pdf_url and contract_url
-  const pdfUrl = contract.pdf_url || contract.contract_url;
+  // Get the PDF URL - support preview_url, pdf_url and contract_url
+  const pdfUrl = contract.preview_url || contract.pdf_url || contract.contract_url;
 
   // Format the date professionally
   const formatDate = (date: string) => {
@@ -50,6 +52,51 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
                      0;
     return typeof totalCost === 'number' ? totalCost : parseFloat(totalCost) || 0;
   };
+
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  const [loadingHtml, setLoadingHtml] = useState(false);
+
+  useEffect(() => {
+    if (pdfUrl && pdfUrl.includes('.html')) {
+      setLoadingHtml(true);
+      
+      Promise.all([
+        fetch(pdfUrl).then(res => res.text()),
+        adminService.getAppSettings()
+      ])
+      .then(([text, settingsData]) => {
+        let settings = {};
+        if (settingsData) {
+          settingsData.forEach(item => {
+            settings[item.key] = item.value;
+          });
+        }
+        
+        let replaced = text;
+        replaced = replaced.replace(/\{\{clientName\}\}/g, getClientName());
+        replaced = replaced.replace(/\{\{idNumber\}\}/g, bookingData?.idNumber || '_____________');
+        replaced = replaced.replace(/\{\{clientPhone\}\}/g, bookingData?.phone || '_____________');
+        replaced = replaced.replace(/\{\{clientPoBox\}\}/g, bookingData?.poBox || '_____________');
+        replaced = replaced.replace(/\{\{carMake\}\}/g, car?.make || '');
+        replaced = replaced.replace(/\{\{carModel\}\}/g, car?.model || '');
+        replaced = replaced.replace(/\{\{licensePlate\}\}/g, car?.license_plate || '');
+        replaced = replaced.replace(/\{\{color\}\}/g, car?.color || '_____________');
+        replaced = replaced.replace(/\{\{startDate\}\}/g, formatDate(bookingData?.startDate));
+        replaced = replaced.replace(/\{\{endDate\}\}/g, formatDate(bookingData?.endDate));
+        replaced = replaced.replace(/\{\{totalAmount\}\}/g, getTotalCost().toLocaleString());
+        replaced = replaced.replace(/\{\{dailyRate\}\}/g, car?.daily_rate?.toLocaleString() || '');
+        
+        // Inject company settings
+        replaced = replaced.replace(/\{\{companyPoBox\}\}/g, settings['company_po_box'] || '_____________');
+        replaced = replaced.replace(/\{\{companySignatureUrl\}\}/g, settings['company_signature_url'] || '');
+        replaced = replaced.replace(/\{\{logoUrl\}\}/g, window.location.origin + '/logo.png');
+        
+        setHtmlContent(replaced);
+      })
+      .catch(err => console.error('Failed to load HTML contract', err))
+      .finally(() => setLoadingHtml(false));
+    }
+  }, [pdfUrl, bookingData, car]);
 
   return (
     <div className="bg-gradient-to-br from-card to-muted rounded-xl overflow-hidden shadow-xl border border-border">
@@ -84,11 +131,23 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
       {/* Optimized PDF Display - Mobile Full Screen */}
       <div className="p-2 sm:p-6 bg-card">
         <div className="bg-background rounded-lg shadow-lg overflow-hidden border border-border">
-          {pdfUrl ? (
+          {pdfUrl && pdfUrl.includes('.html') ? (
+            loadingHtml ? (
+              <div className="w-full h-96 flex items-center justify-center">
+                <Loader2 className="animate-spin text-primary" size={32} />
+              </div>
+            ) : (
+              <div 
+                id="contract-html-container"
+                className="p-8 sm:p-12 prose prose-sm sm:prose-base max-w-none bg-white text-black min-h-[500px]"
+                dangerouslySetInnerHTML={{ __html: htmlContent || '' }}
+              />
+            )
+          ) : pdfUrl ? (
             <div className="relative">
               {/* Mobile-optimized iframe - full screen on mobile */}
               <iframe
-                src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&t=${Date.now()}`}
                 className="w-full border-0"
                 style={{ 
                   height: '70vh',

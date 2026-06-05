@@ -267,8 +267,14 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               ))}
               <LoginButton className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                Login / Sign Up
+                Client / Fleet Login
               </LoginButton>
+              <a 
+                href={loginUrl.replace('/login', '/driver/login')} 
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                Driver Portal Login
+              </a>
             </div>
           </div>
         </div>

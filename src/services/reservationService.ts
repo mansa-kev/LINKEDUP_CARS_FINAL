@@ -114,8 +114,8 @@ export const reservationService = {
         .select(`
           *,
           cars!inner(*),
-          user_profiles:user_profiles(full_name, email, phone_number),
-          fleet_owner:user_profiles!inner(full_name, email)
+          client:user_profiles!client_id(full_name, email, phone_number),
+          fleet_owner:user_profiles!fleet_owner_id(full_name, email)
         `, { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, to);

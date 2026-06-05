@@ -309,11 +309,17 @@ export const adminService = {
   },
 
   deleteUser: async (id: string) => {
-    const { error } = await supabase
-      .from('user_profiles')
-      .delete()
-      .eq('id', id);
-    if (error) return handleSupabaseError(error, 'deleteUser');
+    const session = (await supabase.auth.getSession()).data.session;
+    const response = await fetch(`/api/users/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${session?.access_token || ''}`
+      }
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to delete user');
+    }
     return true;
   },
 
@@ -421,69 +427,56 @@ export const adminService = {
   },
 
   createFleetOwnerAccount: async (data: any) => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    
-    // Use a secondary client to avoid logging out the current admin
-    const { createClient } = await import('@supabase/supabase-js');
-    const adminAuthClient = createClient(supabaseUrl || '', supabaseAnonKey || '', {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false
-      }
-    });
-
-    const { data: authData, error: authError } = await adminAuthClient.auth.signUp({
-      email: data.email,
-      password: data.password,
-    });
-
-    if (authError) return handleSupabaseError(authError, 'createFleetOwnerAccount_Auth');
-
-    const userId = authData.user?.id;
-    if (!userId) throw new Error('Failed to create user account');
-
-    // Wait a moment for the trigger to create the user_profile
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Update user profile
-    const { error: profileError } = await supabase
-      .from('user_profiles')
-      .update({
-        full_name: data.contact_name,
-        phone_number: data.phone_number,
-        role: 'fleet_owner'
+    const session = (await supabase.auth.getSession()).data.session;
+    const response = await fetch('/api/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token || ''}`
+      },
+      body: JSON.stringify({
+        email: data.email,
+        password: data.password || 'Fleet123!',
+        role: 'fleet_owner',
+        fullName: data.contact_name,
+        phoneNumber: data.phone_number,
+        companyName: data.company_name,
+        commissionRate: data.commission_rate
       })
-      .eq('id', userId);
+    });
 
-    if (profileError) return handleSupabaseError(profileError, 'createFleetOwnerAccount_Profile');
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to create fleet owner account');
+    }
 
-    // Create fleet owner settings
-    const { error: settingsError } = await supabase
-      .from('fleet_owner_settings')
-      .insert({
-        id: userId,
-        company_name: data.company_name,
-        commission_rate: data.commission_rate,
-        status: data.status || 'pending_verification'
+    const resData = await response.json();
+    const userId = resData.userId;
+
+    // Send welcome email
+    try {
+      const { sendTemplatedEmail } = await import('./emailProvider');
+      await sendTemplatedEmail(data.email, 'fleet_owner_welcome', {
+        name: data.contact_name,
+        email: data.email,
       });
+    } catch (emailErr) {
+      logger.error('Failed to send fleet owner welcome email:', emailErr);
+    }
 
-    if (settingsError) return handleSupabaseError(settingsError, 'createFleetOwnerAccount_Settings');
-
-    // Send automated email via Inbox module (messages table)
+    // In-app welcome message
     const { data: adminUser } = await supabase.auth.getUser();
     if (adminUser.user) {
       await supabase.from('messages').insert({
         sender_id: adminUser.user.id,
         receiver_id: userId,
         subject: 'Welcome to LinkedUp Rentals - Fleet Owner Account',
-        content: `Hello ${data.contact_name},\n\nYour Fleet Owner account has been created.\n\nLogin Email: ${data.email}\nTemporary Password: ${data.password}\n\nPlease log in at app.linkedup.rentals and complete your onboarding checklist.`,
+        content: `Hello ${data.contact_name},\n\nYour Fleet Owner account has been created.\n\nLogin Email: ${data.email}\nTemporary Password: ${data.password || 'Fleet123!'}\n\nPlease log in at app.linkedup.rentals and complete your onboarding checklist.`,
         status: 'unread'
       });
     }
 
-    return authData.user;
+    return { id: userId, email: data.email };
   },
 
   addFleetOwner: async (owner: any) => {
@@ -526,6 +519,20 @@ export const adminService = {
       .upsert({ id, ...settings })
       .select();
     if (error) return handleSupabaseError(error, 'updateFleetOwnerSettings');
+
+    // Sync status/role with user_profiles if settings status is changed
+    if (settings.status === 'active') {
+      await supabase
+        .from('user_profiles')
+        .update({ role: 'fleet_owner', status: 'active' })
+        .eq('id', id);
+    } else if (settings.status === 'suspended') {
+      await supabase
+        .from('user_profiles')
+        .update({ status: 'suspended' })
+        .eq('id', id);
+    }
+
     return data;
   },
 
@@ -824,7 +831,16 @@ export const adminService = {
       .from('user_profiles')
       .select(`
         *,
-        driver_profiles (*)
+        driver_profiles (*),
+        bookings:bookings!bookings_driver_id_fkey (
+          id,
+          status,
+          needs_chauffeur,
+          start_date,
+          end_date,
+          total_amount,
+          cars (make, model, license_plate)
+        )
       `)
       .eq('role', 'driver');
     if (error) return handleSupabaseError(error, 'getDrivers');
@@ -832,30 +848,29 @@ export const adminService = {
   },
 
   addDriver: async (driver: any) => {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .insert([{
-        full_name: driver.full_name,
+    const session = (await supabase.auth.getSession()).data.session;
+    const response = await fetch('/api/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token || ''}`
+      },
+      body: JSON.stringify({
         email: driver.email,
-        phone_number: driver.phone_number,
-        role: 'driver'
-      }])
-      .select();
-    if (error) return handleSupabaseError(error, 'addDriver_Profile');
+        role: 'driver',
+        fullName: driver.full_name,
+        phoneNumber: driver.phone_number,
+        licenseNumber: driver.license_number
+      })
+    });
 
-    const userId = data[0].id;
-    const { error: profileError } = await supabase
-      .from('driver_profiles')
-      .insert([{
-        id: userId,
-        license_number: driver.license_number,
-        license_status: 'pending',
-        id_status: 'pending',
-        status: 'pending_verification'
-      }]);
-    if (profileError) return handleSupabaseError(profileError, 'addDriver_ProfileDetails');
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to add driver');
+    }
 
-    return data;
+    const resData = await response.json();
+    return [{ id: resData.userId, ...driver }];
   },
 
   updateDriverStatus: async (id: string, status: string) => {
@@ -869,12 +884,26 @@ export const adminService = {
   },
 
   updateFleetOwnerStatus: async (id: string, status: string) => {
+    // 1. Upsert fleet_owner_settings status (to support users who don't have settings row yet)
     const { data, error } = await supabase
       .from('fleet_owner_settings')
-      .update({ status })
-      .eq('id', id)
+      .upsert({ id, status })
       .select();
     if (error) return handleSupabaseError(error, 'updateFleetOwnerStatus');
+
+    // 2. Sync user_profiles.role so ProtectedRoute grants portal access
+    if (status === 'active') {
+      await supabase
+        .from('user_profiles')
+        .update({ role: 'fleet_owner', status: 'active' })
+        .eq('id', id);
+    } else if (status === 'suspended') {
+      await supabase
+        .from('user_profiles')
+        .update({ status: 'suspended' })
+        .eq('id', id);
+    }
+
     return data;
   },
 
@@ -915,7 +944,7 @@ export const adminService = {
           *,
           fleet_owner:user_profiles (*)
         `)
-        .eq('status', 'unavailable'); // Assuming unavailable means pending verification for new cars
+        .or('status.eq.unavailable,is_approved.eq.false');
       if (cError) throw cError;
 
       return {

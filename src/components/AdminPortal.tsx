@@ -32,7 +32,8 @@ import {
   CreditCard,
   Loader2,
   Star,
-  PenLine
+  PenLine,
+  DollarSign
 } from 'lucide-react';
 
 import { PortalHeader } from './PortalHeader';
@@ -42,12 +43,15 @@ import { LogoLoader } from './shared/LogoLoader';
 // Lazy load admin components
 const AdminDashboard = React.lazy(() => import('./admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const AdminBookings = React.lazy(() => import('./admin/AdminBookings').then(m => ({ default: m.AdminBookings })));
+const AdminBookingCommandCenter = React.lazy(() => import('./admin/AdminBookingCommandCenter').then(m => ({ default: m.AdminBookingCommandCenter })));
 const AdminCars = React.lazy(() => import('./admin/AdminCars').then(m => ({ default: m.AdminCars })));
 const AdminUsers = React.lazy(() => import('./admin/AdminUsers').then(m => ({ default: m.AdminUsers })));
 const AdminDrivers = React.lazy(() => import('./admin/AdminDrivers').then(m => ({ default: m.AdminDrivers })));
 const AdminFleetOwners = React.lazy(() => import('./admin/AdminFleetOwners').then(m => ({ default: m.AdminFleetOwners })));
 const AdminVerification = React.lazy(() => import('./admin/AdminVerification').then(m => ({ default: m.AdminVerification })));
 const AdminFinancials = React.lazy(() => import('./admin/AdminFinancials').then(m => ({ default: m.AdminFinancials })));
+const AdminTaxes = React.lazy(() => import('./admin/AdminTaxes').then(m => ({ default: m.AdminTaxes })));
+const AdminExpenses = React.lazy(() => import('./admin/AdminExpenses').then(m => ({ default: m.AdminExpenses })));
 const AdminCarEarnings = React.lazy(() => import('./admin/AdminCarEarnings').then(m => ({ default: m.AdminCarEarnings })));
 const AdminPricing = React.lazy(() => import('./admin/AdminPricing').then(m => ({ default: m.AdminPricing })));
 const AdminReports = React.lazy(() => import('./admin/AdminReports').then(m => ({ default: m.AdminReports })));
@@ -64,6 +68,7 @@ const AdminOutsourcedCars = React.lazy(() => import('./admin/AdminOutsourcedCars
 const AdminPromotions = React.lazy(() => import('./admin/AdminPromotions').then(m => ({ default: m.AdminPromotions })));
 const AdminReservations = React.lazy(() => import('./admin/AdminReservations').then(m => ({ default: m.AdminReservations })));
 const AdminBlog = React.lazy(() => import('./admin/AdminBlog').then(m => ({ default: m.AdminBlog })));
+const AdminConciergeBooking = React.lazy(() => import('./admin/AdminConciergeBooking').then(m => ({ default: m.AdminConciergeBooking })));
 
 type ModuleCategory = {
   title: string;
@@ -103,6 +108,8 @@ const MODULE_CATEGORIES: ModuleCategory[] = [
     title: 'Financials & Reporting',
     items: [
       { id: 'financials', label: 'Financials', icon: Wallet },
+      { id: 'taxes', label: 'Tax Compliance', icon: FileText },
+      { id: 'expenses', label: 'Expense Ledger', icon: DollarSign },
       { id: 'car-earnings', label: 'Car Earnings', icon: TrendingUp },
       { id: 'pricing', label: 'Pricing & Promotions', icon: Tag },
       { id: 'reports', label: 'Reports', icon: BarChart3 },
@@ -135,12 +142,11 @@ export function AdminPortal() {
   const setIsDarkMode = (isDark: boolean) => setTheme(isDark ? 'dark' : 'light');
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [expandedGroup, setExpandedGroup] = useState<string | null>(() => {
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(() => {
     const activeModule = location.pathname.split('/')[2] || 'dashboard';
     const active = MODULE_CATEGORIES.find(g => g.items.some(i => i.id === activeModule));
-    return active?.title ?? 'Dashboard';
+    return active ? [active.title] : ['Dashboard'];
   });
 
   useEffect(() => {
@@ -158,7 +164,11 @@ export function AdminPortal() {
   }, [location.pathname, isMobile]);
 
   const toggleGroup = useCallback((category: string) => {
-    setExpandedGroup(prev => prev === category ? null : category);
+    setExpandedGroups(prev => 
+      prev.includes(category) 
+        ? prev.filter(g => g !== category)
+        : [...prev, category]
+    );
   }, []);
 
   const activeModule = location.pathname.split('/')[2] || 'dashboard';
@@ -166,33 +176,27 @@ export function AdminPortal() {
   const sidebarContent = (
     <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
       {MODULE_CATEGORIES.map((category) => {
-        const isExpanded = expandedGroup === category.title;
+        const isExpanded = expandedGroups.includes(category.title);
         const hasActive = category.items.some(i => i.id === activeModule);
 
         return (
           <div key={category.title} className="mb-1">
-            {(!isCollapsed || isMobile) ? (
-              <button
-                onClick={() => toggleGroup(category.title)}
-                className={`w-full flex items-center justify-between px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                  hasActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <span>{category.title}</span>
-                {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              </button>
-            ) : (
-              <div className="px-3 py-2">
-                <div className="w-full h-px bg-border" />
-              </div>
-            )}
+            <button
+              onClick={() => toggleGroup(category.title)}
+              className={`w-full flex items-center justify-between px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                hasActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span>{category.title}</span>
+              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
 
             <AnimatePresence initial={false}>
-              {(isExpanded || isCollapsed) && (
+              {isExpanded && (
                 <motion.div
-                  initial={isCollapsed ? false : { height: 0, opacity: 0 }}
+                  initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
-                  exit={isCollapsed ? undefined : { height: 0, opacity: 0 }}
+                  exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.2, ease: 'easeInOut' }}
                   className="overflow-hidden"
                 >
@@ -213,14 +217,7 @@ export function AdminPortal() {
                             <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full" />
                           )}
                           <item.icon size={18} className={isActive ? 'text-primary' : ''} />
-                          {(!isCollapsed || isMobile) && (
-                            <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
-                          )}
-                          {isCollapsed && !isMobile && (
-                            <div className="absolute left-full ml-4 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
-                              {item.label}
-                            </div>
-                          )}
+                          <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
                         </Link>
                       );
                     })}
@@ -235,23 +232,34 @@ export function AdminPortal() {
   );
 
   return (
-    <div className="min-h-screen bg-background flex text-foreground transition-colors duration-300">
-      {/* Desktop Sidebar */}
-      <aside className={`hidden md:flex bg-card border-r border-border flex-col flex-shrink-0 sticky top-0 h-screen transition-all duration-300 ${
-        isCollapsed ? 'w-20' : 'w-64'
-      }`}>
-        <div className="min-h-16 md:min-h-20 flex items-center px-6 border-b border-border">
-          {!isCollapsed && <Logo size="lg" showText={false} />}
-          {isCollapsed && <Logo size="md" showText={false} />}
-        </div>
-        {sidebarContent}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="h-12 border-t border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
-        >
-          {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-        </button>
-      </aside>
+    <div className="min-h-screen bg-background flex flex-col text-foreground transition-colors duration-300">
+      {/* Top Header */}
+      <PortalHeader
+        isDarkMode={isDarkMode}
+        setIsDarkMode={setIsDarkMode}
+        portalType="admin"
+        leftContent={
+          <div className="flex items-center gap-2 md:gap-4">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+              aria-label="Toggle sidebar"
+            >
+              <Menu size={20} />
+            </button>
+            <Logo size="lg" showText={!isMobile} />
+          </div>
+        }
+      />
+
+      {/* Main Layout Area */}
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Desktop Sidebar */}
+        <aside className={`hidden md:flex bg-card border-r border-border flex-col flex-shrink-0 h-full transition-all duration-300 ${
+          sidebarOpen ? 'w-64' : 'w-0 overflow-hidden opacity-0'
+        }`}>
+          {sidebarContent}
+        </aside>
 
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
@@ -287,31 +295,16 @@ export function AdminPortal() {
         )}
       </AnimatePresence>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile Header with Hamburger */}
-        <div className="flex items-center md:hidden">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="p-4 text-muted-foreground hover:text-foreground"
-            aria-label="Open sidebar"
-          >
-            <Menu size={24} />
-          </button>
-        </div>
-
-        <PortalHeader
-          isDarkMode={isDarkMode}
-          setIsDarkMode={setIsDarkMode}
-          portalType="admin"
-        />
-
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto bg-muted/20">
+        <main className="flex-1 p-4 md:p-8">
           <div className="max-w-[1600px] mx-auto">
             <Suspense fallback={<LogoLoader />}>
               <Routes>
                 <Route index element={<AdminDashboard />} />
                 <Route path="bookings" element={<AdminBookings />} />
+                <Route path="bookings/:id" element={<AdminBookingCommandCenter />} />
+                <Route path="concierge-booking" element={<AdminConciergeBooking />} />
                 <Route path="reservations" element={<AdminReservations />} />
                 <Route path="cars" element={<AdminCars />} />
                 <Route path="outsourced" element={<AdminOutsourcedCars />} />
@@ -320,6 +313,8 @@ export function AdminPortal() {
                 <Route path="fleet-owners" element={<AdminFleetOwners />} />
                 <Route path="verification" element={<AdminVerification />} />
                 <Route path="financials" element={<AdminFinancials />} />
+                <Route path="taxes" element={<AdminTaxes />} />
+                <Route path="expenses" element={<AdminExpenses />} />
                 <Route path="car-earnings" element={<AdminCarEarnings />} />
                 <Route path="pricing" element={<AdminPromotions />} />
                 <Route path="reports" element={<AdminReports />} />
@@ -338,6 +333,7 @@ export function AdminPortal() {
             </Suspense>
           </div>
         </main>
+      </div>
       </div>
     </div>
   );

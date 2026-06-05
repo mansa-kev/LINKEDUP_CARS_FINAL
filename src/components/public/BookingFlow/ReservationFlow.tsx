@@ -150,7 +150,10 @@ export function ReservationFlow({ car, onClose }: ReservationFlowProps) {
       throw new Error('Selected dates are no longer available. Please choose different dates.');
     }
 
-    const reservation = await reservationService.createReservation(formData);
+    const reservation = await reservationService.createReservation({
+      ...formData,
+      reservationFee
+    } as any);
 
     if (!reservation?.id) {
       throw new Error('Failed to create reservation');
@@ -476,9 +479,15 @@ export function ReservationFlow({ car, onClose }: ReservationFlowProps) {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <div className="p-3 bg-card/50 rounded-[14px] border border-border">
-                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Reservation Fee Due Now</p>
-                <p className="text-sm sm:text-lg font-black text-warning">KES {reservationFee.toLocaleString()}</p>
+              <div className="p-3 bg-card/50 rounded-[14px] border border-border space-y-1">
+                <label className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Reservation Fee (Editable)</label>
+                <input
+                  type="number"
+                  value={reservationFee}
+                  onChange={(e) => setReservationFee(Number(e.target.value))}
+                  disabled={isBusy}
+                  className="w-full bg-transparent text-sm sm:text-lg font-black text-warning border-none outline-none focus:ring-0 p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
               </div>
               <div className="p-3 bg-card/50 rounded-[14px] border border-border">
                 <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Full Booking Due Later</p>

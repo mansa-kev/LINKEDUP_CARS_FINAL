@@ -16,7 +16,9 @@ import {
   History,
   AlertCircle,
   X,
-  FileDown
+  FileDown,
+  Building2,
+  Save
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
@@ -35,6 +37,27 @@ export function AdminContractManager() {
     pdf_url: '',
     is_active: false
   });
+  const [htmlContent, setHtmlContent] = useState('');
+
+  const [companySettings, setCompanySettings] = useState({
+    company_po_box: '',
+    company_signature_url: ''
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [uploadingSig, setUploadingSig] = useState(false);
+
+  const fetchSettings = async () => {
+    try {
+      const data = await adminService.getAppSettings(['company_po_box', 'company_signature_url']);
+      if (data) {
+        const settings: any = {};
+        data.forEach(item => settings[item.key] = item.value);
+        setCompanySettings(prev => ({ ...prev, ...settings }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch app settings:', error);
+    }
+  };
 
   const fetchContracts = async () => {
     setLoading(true);
@@ -50,19 +73,21 @@ export function AdminContractManager() {
 
   useEffect(() => {
     fetchContracts();
+    fetchSettings();
   }, []);
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+  // HTML content will be uploaded upon saving
+  const onDropSig = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
 
-    setUploading(true);
+    setUploadingSig(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `contract-v${formData.version || Date.now()}.${fileExt}`;
-      const filePath = `contracts/${fileName}`;
+      const fileName = `company-sig-${Date.now()}.${fileExt}`;
+      const filePath = `settings/${fileName}`;
 
-      const { error: uploadError, data } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('public_assets')
         .upload(filePath, file);
 
@@ -72,31 +97,62 @@ export function AdminContractManager() {
         .from('public_assets')
         .getPublicUrl(filePath);
 
-      setFormData(prev => ({ ...prev, pdf_url: publicUrl }));
+      setCompanySettings(prev => ({ ...prev, company_signature_url: publicUrl }));
     } catch (error: any) {
-      console.error('Upload error:', error);
-      const message = error.message || 'Failed to upload PDF';
-      toast.error(`Upload error: ${message}`);
+      console.error('Upload signature error:', error);
+      toast.error('Failed to upload signature');
     } finally {
-      setUploading(false);
+      setUploadingSig(false);
     }
-  }, [formData.version]);
+  }, []);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
-    onDrop,
-    accept: { 'application/pdf': ['.pdf'] },
+  const { getRootProps: getSigProps, getInputProps: getSigInputProps, isDragActive: isSigDragActive } = useDropzone({ 
+    onDrop: onDropSig,
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg'] },
     maxFiles: 1,
     multiple: false
   } as any);
 
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    const promise = (async () => {
+      await adminService.updateAppSetting('company_po_box', companySettings.company_po_box, 'Company P.O. Box for contracts');
+      await adminService.updateAppSetting('company_signature_url', companySettings.company_signature_url, 'Company Signature Image URL');
+    })();
+
+    toast.promise(promise, {
+      loading: 'Saving company details...',
+      success: 'Company details saved successfully',
+      error: 'Failed to save company details'
+    });
+    
+    promise.finally(() => setSavingSettings(false));
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.pdf_url) {
-      toast.error('Please upload a PDF first');
+    if (!htmlContent.trim()) {
+      toast.error('Please enter the contract HTML template');
       return;
     }
 
+    setUploading(true);
     const promise = (async () => {
+      // 1. Upload HTML as a file to storage
+      const fileName = `contract-v${formData.version || Date.now()}.html`;
+      const filePath = `contracts/${fileName}`;
+      const file = new Blob([htmlContent], { type: 'text/html' });
+
+      const { error: uploadError } = await supabase.storage
+        .from('public_assets')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('public_assets')
+        .getPublicUrl(filePath);
+
       // If activating this contract, deactivate others
       if (formData.is_active) {
         await supabase
@@ -107,11 +163,13 @@ export function AdminContractManager() {
 
       await adminService.createContract({
         ...formData,
+        pdf_url: publicUrl,
         uploaded_by: (await supabase.auth.getUser()).data.user?.id
       });
       
       setIsAdding(false);
       setFormData({ version: '', pdf_url: '', is_active: false });
+      setHtmlContent('');
       fetchContracts();
     })();
 
@@ -120,6 +178,8 @@ export function AdminContractManager() {
       success: 'Contract version saved successfully',
       error: 'Failed to save contract'
     });
+    
+    promise.finally(() => setUploading(false));
   };
 
   const handleDelete = async (id: string) => {
@@ -199,48 +259,25 @@ export function AdminContractManager() {
 
           <form onSubmit={handleCreate} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-6">
-              <div 
-                {...getRootProps()} 
-                className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all cursor-pointer ${
-                  isDragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-                }`}
-              >
-                <input {...getInputProps()} />
-                {uploading ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="animate-spin text-primary" size={32} />
-                    <p className="text-sm font-bold">Uploading PDF...</p>
-                  </div>
-                ) : formData.pdf_url ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="p-4 bg-success/10 text-success rounded-2xl">
-                      <FileText size={32} />
-                    </div>
-                    <div>
-                      <p className="font-bold text-success">PDF Uploaded Successfully</p>
-                      <p className="text-xs text-muted-foreground mt-1">Click to replace</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="p-4 bg-primary/10 text-primary rounded-2xl">
-                      <Upload size={32} />
-                    </div>
-                    <div>
-                      <p className="font-bold">Drag & drop Master Contract PDF</p>
-                      <p className="text-xs text-muted-foreground mt-1">Only PDF files are accepted</p>
-                    </div>
-                  </div>
-                )}
+              <div className="flex flex-col space-y-4">
+                <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Contract HTML Template</label>
+                <textarea 
+                  value={htmlContent}
+                  onChange={(e) => setHtmlContent(e.target.value)}
+                  placeholder="Enter HTML for the contract. Example: <h1>Rental Agreement</h1><p>Client: {{clientName}}</p>"
+                  className="w-full h-64 px-4 py-3 bg-muted border-none rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-primary/20"
+                />
               </div>
 
               <div className="bg-muted/30 p-4 rounded-xl border border-border flex gap-3">
                 <AlertCircle className="text-primary shrink-0" size={20} />
                 <div className="space-y-1">
-                  <p className="text-xs font-bold">Dynamic Data Overlay</p>
+                  <p className="text-xs font-bold">Dynamic Data Injection</p>
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    The system will automatically overlay dynamic data (Client Name, Car Model, Dates) 
-                    using placeholders like <code className="bg-muted px-1 rounded">{"{{CLIENT_NAME}}"}</code> in your PDF.
+                    Use placeholders like <code className="bg-muted px-1 rounded">{"{{clientName}}"}</code>, 
+                    <code className="bg-muted px-1 rounded">{"{{carMake}}"}</code>, 
+                    <code className="bg-muted px-1 rounded">{"{{startDate}}"}</code> 
+                    in your HTML. The system will automatically replace them when the client views it.
                   </p>
                 </div>
               </div>
@@ -283,7 +320,7 @@ export function AdminContractManager() {
               <div className="flex items-center gap-3 pt-4">
                 <button 
                   type="submit" 
-                  disabled={uploading || !formData.pdf_url || !formData.version}
+                  disabled={uploading || !htmlContent.trim() || !formData.version}
                   className="flex-1 py-3 bg-primary text-white rounded-xl font-bold hover:scale-[1.02] transition-transform shadow-lg shadow-primary/20 disabled:opacity-50"
                 >
                   Save Contract Version
@@ -364,14 +401,13 @@ export function AdminContractManager() {
                       >
                         <Eye size={18} />
                       </button>
-                      <a 
-                        href={contract.pdf_url} 
-                        download 
+                      <button 
+                        onClick={() => window.open(contract.pdf_url, '_blank')}
                         className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors"
-                        title="Download"
+                        title="Download / View Template"
                       >
                         <FileDown size={18} />
-                      </a>
+                      </button>
                       <button 
                         onClick={() => handleDelete(contract.id)}
                         className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-error transition-colors"
@@ -392,6 +428,73 @@ export function AdminContractManager() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Company Settings for Contracts */}
+      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden mt-8">
+        <div className="p-6 border-b border-border flex items-center justify-between gap-4 bg-muted/30">
+          <div className="flex items-center gap-3">
+            <Building2 className="text-primary" size={20} />
+            <h3 className="font-bold text-lg">Company Details for Contracts</h3>
+          </div>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Company P.O. Box</label>
+              <input 
+                type="text"
+                value={companySettings.company_po_box}
+                onChange={e => setCompanySettings({...companySettings, company_po_box: e.target.value})}
+                placeholder="e.g. 12345-00100 Nairobi"
+                className="w-full px-4 py-3 bg-muted border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              />
+              <p className="text-[10px] text-muted-foreground">This will be auto-filled into the master contract.</p>
+            </div>
+            <button 
+              onClick={handleSaveSettings}
+              disabled={savingSettings}
+              className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold hover:scale-[1.02] transition-transform disabled:opacity-50"
+            >
+              <Save size={18} />
+              Save Company Details
+            </button>
+          </div>
+          
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Company Signature</label>
+            <div 
+              {...getSigProps()} 
+              className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer flex flex-col items-center justify-center min-h-[150px] ${
+                isSigDragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+              }`}
+            >
+              <input {...getSigInputProps()} />
+              {uploadingSig ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="animate-spin text-primary" size={24} />
+                  <p className="text-xs font-bold">Uploading...</p>
+                </div>
+              ) : companySettings.company_signature_url ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <img 
+                    src={companySettings.company_signature_url} 
+                    alt="Company Signature" 
+                    className="max-h-20 object-contain mix-blend-multiply dark:mix-blend-normal dark:bg-white/10 rounded"
+                  />
+                  <p className="text-xs text-primary font-bold">Click to replace signature</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <Upload size={24} className="text-muted-foreground" />
+                  <p className="text-sm font-bold">Upload Signature Image</p>
+                  <p className="text-[10px] text-muted-foreground">PNG or JPG with transparent/white background</p>
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground">This signature will be embedded onto the generated contract PDF automatically.</p>
+          </div>
         </div>
       </div>
 

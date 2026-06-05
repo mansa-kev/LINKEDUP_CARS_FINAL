@@ -124,18 +124,26 @@ export function AdminDrivers() {
     });
   };
 
-  const filteredDrivers = drivers.map(d => ({
-    id: d.id,
-    name: d.full_name || 'No Name',
-    email: d.email || 'No Email',
-    phone: d.phone_number || 'No Phone',
-    status: d.driver_profiles?.status || 'pending_verification',
-    licenseStatus: d.driver_profiles?.license_status || 'pending',
-    idStatus: d.driver_profiles?.id_status || 'pending',
-    joinedDate: new Date(d.created_at).toLocaleDateString(),
-    rating: d.driver_profiles?.rating || 0,
-    totalTrips: d.driver_profiles?.total_trips || 0
-  })).filter(d => {
+  const filteredDrivers = drivers.map(d => {
+    const driverBookings = d.bookings || [];
+    const chauffeurTripsCount = driverBookings.filter((b: any) => b.needs_chauffeur).length;
+    const deliveriesCount = driverBookings.filter((b: any) => !b.needs_chauffeur).length;
+    return {
+      id: d.id,
+      name: d.full_name || 'No Name',
+      email: d.email || 'No Email',
+      phone: d.phone_number || 'No Phone',
+      status: d.driver_profiles?.status || 'pending_verification',
+      licenseStatus: d.driver_profiles?.license_status || 'pending',
+      idStatus: d.driver_profiles?.id_status || 'pending',
+      joinedDate: new Date(d.created_at).toLocaleDateString(),
+      rating: d.driver_profiles?.rating || 0,
+      totalTrips: driverBookings.length,
+      chauffeurTripsCount,
+      deliveriesCount,
+      bookings: driverBookings
+    };
+  }).filter(d => {
     const matchesSearch = d.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           d.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           d.id.toLowerCase().includes(searchQuery.toLowerCase());
@@ -228,10 +236,11 @@ export function AdminDrivers() {
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <div className="flex items-center gap-1">
-                          <span className="text-sm font-bold text-foreground">{driver.rating}</span>
-                          <span className="text-xs text-warning">â</span>
+                          <span className="text-sm font-bold text-foreground">{(Number(driver.rating) || 0).toFixed(1)}</span>
+                          <span className="text-xs text-warning">★</span>
                         </div>
-                        <span className="text-xs text-muted-foreground font-medium">{driver.totalTrips} Trips</span>
+                        <span className="text-xs text-muted-foreground font-bold">{driver.totalTrips} Total Trips</span>
+                        <span className="text-[10px] text-muted-foreground/80 font-medium">({driver.chauffeurTripsCount} Chauf / {driver.deliveriesCount} Del)</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -444,7 +453,7 @@ export function AdminDrivers() {
                 toast.promise(promise, {
                   loading: 'Adding driver...',
                   success: 'Driver added successfully',
-                  error: 'Failed to add driver'
+                  error: (err: any) => err.message || 'Failed to add driver'
                 });
                 await promise;
                 setIsAddModalOpen(false);
@@ -467,25 +476,140 @@ export function AdminDrivers() {
       )}
       {/* Driver Profile Modal */}
       {selectedDriver && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-2xl border border-border shadow-xl w-full max-w-2xl p-6">
-            <div className="flex justify-between items-start mb-6">
-              <h3 className="font-bold text-xl">Driver Profile: {selectedDriver.name}</h3>
-              <button onClick={() => setSelectedDriver(null)} className="text-muted-foreground hover:text-foreground">Close</button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card rounded-3xl border border-border shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-border bg-muted/20 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-3">
+                  <h3 className="font-black text-lg text-foreground">{selectedDriver.name}</h3>
+                  <StatusBadge status={selectedDriver.status} />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 uppercase font-bold tracking-wider text-primary">Driver Account Details & Tasks Log</p>
+              </div>
+              <button 
+                onClick={() => setSelectedDriver(null)} 
+                className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg transition-colors font-bold"
+              >
+                Close
+              </button>
             </div>
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <h4 className="font-bold text-sm text-muted-foreground uppercase">Personal Details</h4>
-                <p><strong>Email:</strong> {selectedDriver.email}</p>
-                <p><strong>Phone:</strong> {selectedDriver.phone}</p>
-                <p><strong>Joined:</strong> {selectedDriver.joinedDate}</p>
+            
+            {/* Modal Scroll Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Personal & Verification */}
+                <div className="space-y-4 bg-muted/10 p-4 rounded-2xl border border-border">
+                  <h4 className="font-black text-xs text-muted-foreground uppercase tracking-widest pb-2 border-b border-border/50">Driver Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <p className="text-muted-foreground flex justify-between"><span className="font-bold">Email:</span> <span className="text-foreground break-all">{selectedDriver.email}</span></p>
+                    <p className="text-muted-foreground flex justify-between"><span className="font-bold">Phone:</span> <span className="text-foreground">{selectedDriver.phone}</span></p>
+                    <p className="text-muted-foreground flex justify-between"><span className="font-bold">Joined:</span> <span className="text-foreground">{selectedDriver.joinedDate}</span></p>
+                    <div className="pt-2 flex flex-col gap-2">
+                      <div className="flex justify-between items-center text-xs font-bold text-muted-foreground">
+                        <span>Licence Verification:</span>
+                        <VerificationIcon status={selectedDriver.licenseStatus} />
+                      </div>
+                      <div className="flex justify-between items-center text-xs font-bold text-muted-foreground">
+                        <span>National ID Verification:</span>
+                        <VerificationIcon status={selectedDriver.idStatus} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ledger & Stats */}
+                <div className="space-y-4 bg-muted/10 p-4 rounded-2xl border border-border flex flex-col justify-between">
+                  <div>
+                    <h4 className="font-black text-xs text-muted-foreground uppercase tracking-widest pb-2 border-b border-border/50">Performance Ledger</h4>
+                    <div className="space-y-2 text-sm mt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-muted-foreground">Customer Rating:</span>
+                        <span className="flex items-center gap-1 font-black text-foreground">
+                          {Number(selectedDriver.rating || 0).toFixed(1)} <span className="text-warning text-xs">★</span>
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-muted-foreground">Total Managed Tasks:</span>
+                        <span className="font-black text-foreground">{selectedDriver.totalTrips}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-3">
+                    <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 text-center">
+                      <p className="text-[10px] font-black uppercase text-purple-400 tracking-wider">Chauffeur Jobs</p>
+                      <p className="text-xl font-black text-purple-400 mt-1">{selectedDriver.chauffeurTripsCount}</p>
+                    </div>
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-center">
+                      <p className="text-[10px] font-black uppercase text-blue-400 tracking-wider">Deliveries</p>
+                      <p className="text-xl font-black text-blue-400 mt-1">{selectedDriver.deliveriesCount}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-4">
-                <h4 className="font-bold text-sm text-muted-foreground uppercase">Performance</h4>
-                <p><strong>Rating:</strong> {selectedDriver.rating} ★</p>
-                <p><strong>Total Trips:</strong> {selectedDriver.totalTrips}</p>
-                <p><strong>Status:</strong> {selectedDriver.status}</p>
+
+              {/* Task History List */}
+              <div className="space-y-3">
+                <h4 className="font-black text-xs text-muted-foreground uppercase tracking-widest">Job History Ledger</h4>
+                {selectedDriver.bookings.length === 0 ? (
+                  <div className="text-center py-8 bg-muted/20 border border-border border-dashed rounded-2xl">
+                    <p className="text-xs text-muted-foreground font-medium">No tasks logged in this driver's history ledger.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                    {selectedDriver.bookings.map((booking: any) => {
+                      const start = new Date(booking.start_date).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' });
+                      const end = new Date(booking.end_date).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: '2-digit' });
+                      return (
+                        <div key={booking.id} className="p-3 bg-muted/5 border border-border rounded-xl flex items-center justify-between text-xs hover:bg-muted/10 transition-colors">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-foreground">{booking.cars?.make} {booking.cars?.model}</span>
+                              <span className="font-mono text-[10px] text-muted-foreground font-medium">({booking.cars?.license_plate})</span>
+                            </div>
+                            <p className="text-muted-foreground font-medium">{start} - {end}</p>
+                          </div>
+                          
+                          <div className="text-right space-y-1">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                                booking.needs_chauffeur 
+                                  ? 'bg-purple-500/15 text-purple-400 border border-purple-500/20' 
+                                  : 'bg-blue-500/15 text-blue-400 border border-blue-500/20'
+                              }`}>
+                                {booking.needs_chauffeur ? 'Chauffeur' : 'Delivery'}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                                booking.status === 'completed'
+                                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                                  : booking.status === 'on_trip'
+                                  ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20'
+                                  : 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                              }`}>
+                                {booking.status}
+                              </span>
+                            </div>
+                            {booking.total_amount && (
+                              <p className="font-bold text-foreground">KES {Number(booking.total_amount).toLocaleString()}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-border bg-muted/15 flex justify-end">
+              <button 
+                onClick={() => setSelectedDriver(null)} 
+                className="px-5 py-2.5 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-black text-xs uppercase tracking-wider rounded-xl transition-colors"
+              >
+                Close Profile
+              </button>
             </div>
           </div>
         </div>

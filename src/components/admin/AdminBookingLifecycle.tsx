@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { X, Car, MapPin, Clock, CheckCircle2, User, Loader2, Send, AlertTriangle, Gauge, ChevronDown, ChevronUp } from 'lucide-react';
+import { 
+  X, Car, MapPin, Clock, CheckCircle2, User, Loader2, Send, 
+  AlertTriangle, Gauge, ChevronDown, ChevronUp, Upload, Image as ImageIcon, Camera 
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '../../utils/logger';
 
@@ -16,19 +19,10 @@ const PICKUP_CHECKS = [
   'Client ID verified',
   'Contract signed',
   'Deposit collected',
-  'Fuel level checked',
-  'No exterior damage',
-  'Interior clean',
   'Keys handed over',
-  'Odometer recorded',
 ];
 const RETURN_CHECKS = [
-  'Exterior inspected',
-  'Interior inspected',
   'Keys returned',
-  'Fuel level noted',
-  'Any damage documented',
-  'Odometer recorded',
 ];
 
 function fmtDur(ms: number) {
@@ -44,7 +38,7 @@ function fmt(dt: string | null | undefined) {
 
 // ── Reusable sub-components ───────────────────────────────────────────────
 const SCard = ({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) => (
-  <div className="bg-muted/20 rounded-xl border border-border overflow-hidden">
+  <div className="bg-muted/20 rounded-xl border border-border overflow-hidden mb-4">
     <div className="px-4 py-2.5 border-b border-border bg-muted/30 flex items-center gap-2">
       <span className="text-primary">{icon}</span>
       <p className="text-xs font-black uppercase tracking-widest text-foreground">{title}</p>
@@ -60,13 +54,12 @@ const F = ({ l, v }: { l: string; v: string }) => (
   </div>
 );
 
-// ── Collapsed history card shown after a stage is done ────────────────────
 function HistoryCard({ emoji, title, color, children, defaultOpen = false }: {
   emoji: string; title: string; color: string; children: React.ReactNode; defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={`rounded-xl border overflow-hidden ${color}`}>
+    <div className={`rounded-xl border overflow-hidden mb-4 ${color}`}>
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
@@ -91,72 +84,49 @@ export function AdminBookingLifecycle({ booking: init, onClose, onRefresh }: Pro
   };
 
   const [stage, setStage] = useState<Stage>(getStage(init));
+  const [saving, setSaving] = useState(false);
 
-  // Pickup form state
+  // Common Inspection State
+  const [odo, setOdo] = useState('');
+  const [fuel, setFuel] = useState('full');
+  const [loc, setLoc] = useState('');
+  const [notes, setNotes] = useState('');
+  
+  // Photos State
+  const [exteriorPhotos, setExteriorPhotos] = useState<string[]>([]);
+  const [interiorPhotos, setInteriorPhotos] = useState<string[]>([]);
+  const [dashPhoto, setDashPhoto] = useState<string>('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Checklists
   const [pickupChecks, setPickupChecks] = useState<Record<string, boolean>>(
     Object.fromEntries(PICKUP_CHECKS.map(i => [i, false]))
   );
-  const [pickupLoc, setPickupLoc] = useState(init.actual_pickup_location || init.pickup_location || '');
-  const [pickupDt, setPickupDt] = useState(new Date().toISOString().slice(0, 16));
-  const [pickupOdo, setPickupOdo] = useState(init.pickup_odometer ? String(init.pickup_odometer) : '');
-
-  // Return form state
   const [returnChecks, setReturnChecks] = useState<Record<string, boolean>>(
     Object.fromEntries(RETURN_CHECKS.map(i => [i, false]))
   );
-  const [returnDt, setReturnDt] = useState(new Date().toISOString().slice(0, 16));
-  const [returnLoc, setReturnLoc] = useState(init.dropoff_location || '');
-  const [returnOdo, setReturnOdo] = useState(init.return_odometer ? String(init.return_odometer) : '');
-  const [returnCond, setReturnCond] = useState('good');
-  const [fuelLevel, setFuelLevel] = useState('full');
-  const [returnNotes, setReturnNotes] = useState('');
 
-  // Shared
-  const [saving, setSaving] = useState(false);
-  const [showReminder, setShowReminder] = useState(false);
-  const [reminderMsg, setReminderMsg] = useState('');
+  // Time & Alerts
   const [now, setNow] = useState(new Date());
   const alertedRef = useRef<{ warn24: boolean; warn2: boolean }>({ warn24: false, warn2: false });
+  const [showReminder, setShowReminder] = useState(false);
+  const [reminderMsg, setReminderMsg] = useState('');
 
-  // Live clock — every 30 seconds
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(id);
   }, []);
 
-  // Auto-alert when return is due
+  // Pre-fill location based on stage
   useEffect(() => {
-    if (stage !== 'in_transit') return;
-    const h24 = 86400000, h2 = 7200000;
-    if (!alertedRef.current.warn24 && remainMs > 0 && remainMs <= h24) {
-      alertedRef.current.warn24 = true;
-      toast.warning(`⏰ Return due in ${fmtDur(remainMs)} — ${clientName} · ${carLine}`);
-      if (booking.client_id) {
-        void supabase.from('notifications').insert({
-          user_id: booking.client_id, type: 'booking_update',
-          title: '⏰ Return Reminder',
-          content: `Your ${carLine} is due back in ${fmtDur(remainMs)}. Please return on time.`,
-          is_read: false,
-        });
-      }
-    }
-    if (!alertedRef.current.warn2 && remainMs > 0 && remainMs <= h2) {
-      alertedRef.current.warn2 = true;
-      toast.error(`🚨 2 hours until return — ${clientName} · ${carLine}`);
-    }
-  }, [now]);
-
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { onRefresh(); onClose(); } };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, []);
+    if (stage === 'pickup' && !loc) setLoc(init.actual_pickup_location || init.pickup_location || '');
+    if (stage === 'return_form' && !loc) setLoc(init.dropoff_location || '');
+  }, [stage]);
 
   // Derived
-  const meta = booking.metadata || {}, gi = meta.guest_info || {};
-  const clientName  = booking.client?.full_name  || gi.full_name  || 'Client';
-  const clientEmail = booking.client?.email       || gi.email      || '';
-  const clientPhone = booking.client?.phone_number || gi.phone     || '';
+  const clientName  = booking.client?.full_name  || booking.metadata?.guest_info?.full_name  || 'Client';
+  const clientEmail = booking.client?.email      || booking.metadata?.guest_info?.email      || '';
+  const clientPhone = booking.client?.phone_number || booking.metadata?.guest_info?.phone     || '';
   const waPhone = clientPhone.replace(/\D/g, '').replace(/^0/, '254');
   const carLine = `${booking.cars?.make || ''} ${booking.cars?.model || ''}`.trim() || 'Vehicle';
   const plate   = booking.cars?.license_plate || '';
@@ -173,253 +143,269 @@ export function AdminBookingLifecycle({ booking: init, onClose, onRefresh }: Pro
   const isWarn    = !isOverdue && remainMs < 86400000;
   const rentalDays = Math.max(1, Math.ceil(totalMs / 86400000));
 
-  const retDtObj  = new Date(returnDt);
-  const otMs      = Math.max(0, retDtObj.getTime() - endDate.getTime());
+  const otMs      = Math.max(0, now.getTime() - endDate.getTime());
   const otHrs     = parseFloat((otMs / 3600000).toFixed(2));
   const otRate    = booking.cars?.overtime_rate || (booking.cars?.daily_rate ? booking.cars.daily_rate / 24 : 0);
   const otCharge  = parseFloat((otHrs * otRate).toFixed(2));
 
-  const kmDriven  = (returnOdo && pickupOdo)
-    ? Math.max(0, parseInt(returnOdo, 10) - parseInt(pickupOdo, 10))
-    : null;
+  // --- Handlers ---
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: any, multi = false) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setUploadingImage(true);
+    try {
+      const urls: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const ext = file.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${ext}`;
+        const filePath = `${booking.id}/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('booking_inspections')
+          .upload(filePath, file);
 
-  const allPickup = Object.values(pickupChecks).every(Boolean);
+        if (uploadError) throw uploadError;
+        
+        const { data } = supabase.storage
+          .from('booking_inspections')
+          .getPublicUrl(filePath);
+          
+        urls.push(data.publicUrl);
+      }
+      
+      if (multi) {
+        setter((prev: string[]) => [...prev, ...urls]);
+      } else {
+        setter(urls[0]);
+      }
+      toast.success('Image(s) uploaded');
+    } catch (err: any) {
+      logger.error('Upload error:', err);
+      toast.error('Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
-  // ── Handlers ────────────────────────────────────────────────────────────
+  const removePhoto = (setter: any, index: number) => {
+    setter((prev: string[]) => prev.filter((_, i) => i !== index));
+  };
+
+  const submitInspection = async (type: 'pre_handover' | 'post_return') => {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from('booking_inspections').insert({
+      booking_id: booking.id,
+      type,
+      fuel_level: fuel,
+      mileage: parseInt(odo, 10) || null,
+      location: loc,
+      scratches_notes: notes,
+      photos_exterior: exteriorPhotos,
+      photos_interior: interiorPhotos,
+      photo_fuel_mileage: dashPhoto,
+      conducted_by: user?.id
+    });
+    if (error) throw error;
+  };
+
   const handleLogPickup = async () => {
+    const allPickup = Object.values(pickupChecks).every(Boolean);
     if (!allPickup) { toast.error('Complete the entire checklist first'); return; }
+    if (!odo) { toast.error('Odometer reading is required'); return; }
+    if (!dashPhoto) { toast.error('Dashboard photo is required'); return; }
+    
     setSaving(true);
     try {
+      await submitInspection('pre_handover');
+
       const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase.from('bookings').update({
         status: 'on_trip',
-        pickup_confirmed_at: new Date(pickupDt).toISOString(),
+        sub_status: 'in_transit',
+        pickup_confirmed_at: new Date().toISOString(),
         pickup_confirmed_by: user?.id,
-        actual_pickup_location: pickupLoc,
-        ...(pickupOdo ? { pickup_odometer: parseInt(pickupOdo, 10) } : {}),
+        actual_pickup_location: loc,
+        pickup_odometer: parseInt(odo, 10),
       }).eq('id', booking.id);
-      if (error) { toast.error(`Failed to log pickup: ${error.message}`); return; }
-      if (booking.client_id) {
-        void supabase.from('notifications').insert({
-          user_id: booking.client_id, type: 'booking_update',
-          title: 'Your rental has started 🚗',
-          content: `Your ${carLine} rental (#${ref}) has started. Enjoy your drive!`,
-          is_read: false, link: `/booking-confirmation/${booking.id}`,
-        });
-      }
+      
+      if (error) throw error;
+      
       toast.success('Pickup logged — now In Transit');
-      setBooking((p: any) => ({
-        ...p, status: 'on_trip',
-        pickup_confirmed_at: new Date(pickupDt).toISOString(),
-        actual_pickup_location: pickupLoc,
-        pickup_odometer: pickupOdo ? parseInt(pickupOdo, 10) : null,
-      }));
       setStage('in_transit');
       onRefresh();
-    } catch (e) { logger.error('Pickup error:', e); toast.error('Failed to log pickup'); }
-    finally { setSaving(false); }
+    } catch (e) { 
+      logger.error('Pickup error:', e); 
+      toast.error('Failed to log pickup'); 
+    } finally { 
+      setSaving(false); 
+    }
+  };
+
+  const handleLogReturn = async () => {
+    const allReturn = Object.values(returnChecks).every(Boolean);
+    if (!allReturn) { toast.error('Complete the entire checklist first'); return; }
+    if (!odo) { toast.error('Odometer reading is required'); return; }
+    
+    setSaving(true);
+    try {
+      await submitInspection('post_return');
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from('bookings').update({
+        status: 'completed',
+        sub_status: 'completed',
+        return_confirmed_at: new Date().toISOString(),
+        return_confirmed_by: user?.id,
+        return_notes: notes,
+        overtime_hours: otHrs,
+        overtime_charge: otCharge,
+        return_odometer: parseInt(odo, 10),
+      }).eq('id', booking.id);
+      
+      if (error) throw error;
+      
+      toast.success('Return logged — booking completed!');
+      setStage('completed');
+      onRefresh();
+    } catch (e) { 
+      logger.error('Return error:', e); 
+      toast.error('Failed to log return'); 
+    } finally { 
+      setSaving(false); 
+    }
   };
 
   const handleSendReminder = async () => {
     setSaving(true);
     try {
       if (clientEmail) void supabase.functions.invoke('send-email', { body: { to: clientEmail, subject: `Return Reminder — Booking #${ref}`, message: reminderMsg } });
-      if (booking.client_id) void supabase.from('notifications').insert({ user_id: booking.client_id, type: 'booking_update', title: 'Return Reminder', content: reminderMsg.slice(0, 200), is_read: false });
       toast.success('Reminder sent!');
       setShowReminder(false);
     } catch { toast.error('Failed to send reminder'); }
     finally { setSaving(false); }
   };
 
-  const handleLogReturn = async () => {
-    setSaving(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('bookings').update({
-        status: 'completed',
-        return_confirmed_at: new Date(returnDt).toISOString(),
-        return_confirmed_by: user?.id,
-        return_condition: returnCond,
-        return_notes: `Fuel:${fuelLevel}.${returnNotes ? ' ' + returnNotes : ''}`.trim(),
-        overtime_hours: otHrs,
-        overtime_charge: otCharge,
-        ...(returnOdo ? { return_odometer: parseInt(returnOdo, 10) } : {}),
-      }).eq('id', booking.id);
-      if (error) { toast.error(`Failed to log return: ${error.message}`); return; }
-      if (booking.client_id) {
-        void supabase.from('notifications').insert({
-          user_id: booking.client_id, type: 'booking_update', title: 'Return Confirmed ✅',
-          content: `Your ${carLine} return is confirmed. Rental #${ref} complete.${otCharge > 0 ? ` Overtime: KES ${otCharge.toLocaleString()}.` : ''}`,
-          is_read: false,
-        });
-      }
-      toast.success('Return logged — booking completed!');
-      setBooking((p: any) => ({
-        ...p, status: 'completed',
-        return_confirmed_at: new Date(returnDt).toISOString(),
-        return_condition: returnCond,
-        overtime_hours: otHrs, overtime_charge: otCharge,
-        return_odometer: returnOdo ? parseInt(returnOdo, 10) : null,
-      }));
-      setStage('completed');
-      onRefresh();
-    } catch (e) { logger.error('Return error:', e); toast.error('Failed to log return'); }
-    finally { setSaving(false); }
-  };
+  const PhotoUploadSection = ({ label, images, setter, multi }: any) => (
+    <div className="mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <label className="text-xs text-muted-foreground uppercase tracking-wide">{label}</label>
+        <label className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 transition-colors">
+          <Camera size={12} /> {multi ? 'Add Photos' : 'Add Photo'}
+          <input type="file" multiple={multi} accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, setter, multi)} disabled={uploadingImage} />
+        </label>
+      </div>
+      
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+        {(!multi && images) ? (
+          <div className="relative w-24 h-24 shrink-0 rounded-xl border border-border overflow-hidden">
+            <img src={images} alt={label} className="w-full h-full object-cover" />
+            <button onClick={() => setter('')} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"><X size={10} /></button>
+          </div>
+        ) : multi && images.map((img: string, i: number) => (
+          <div key={i} className="relative w-24 h-24 shrink-0 rounded-xl border border-border overflow-hidden">
+            <img src={img} alt={`${label} ${i}`} className="w-full h-full object-cover" />
+            <button onClick={() => removePhoto(setter, i)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"><X size={10} /></button>
+          </div>
+        ))}
+        {((!multi && !images) || (multi && images.length === 0)) && (
+          <div className="w-full h-24 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center text-muted-foreground bg-muted/20">
+            <ImageIcon size={20} className="mb-1 opacity-50" />
+            <span className="text-[10px]">No photos</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
-  const openReminder = () => {
-    const msg = isOverdue
-      ? `Dear ${clientName},\n\nYour ${carLine} rental (#${ref}) was due back ${fmtDur(Math.abs(remainMs))} ago.\n\nPlease return immediately or contact us.\n\nOvertime charges apply: KES ${otRate.toLocaleString()}/hr.\n\nLinkedUp Cars Team`
-      : `Dear ${clientName},\n\nFriendly reminder — your ${carLine} rental (#${ref}) is due in ${fmtDur(remainMs)}.\n\nReturn by: ${endDate.toLocaleDateString()}\nReturn to: ${booking.dropoff_location || 'Contact us'}\n\nSafe travels!\nLinkedUp Cars Team`;
-    setReminderMsg(msg);
-    setShowReminder(true);
-  };
+  const InspectionForm = ({ type }: { type: 'pickup' | 'return' }) => (
+    <>
+      <SCard title={`${type === 'pickup' ? 'Pre-Handover' : 'Post-Return'} Checklist`} icon={<CheckCircle2 size={14} />}>
+        <div className="space-y-2 mb-4">
+          {(type === 'pickup' ? PICKUP_CHECKS : RETURN_CHECKS).map(item => {
+            const checks = type === 'pickup' ? pickupChecks : returnChecks;
+            const setChecks = type === 'pickup' ? setPickupChecks : setReturnChecks;
+            return (
+              <label key={item} className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={checks[item] || false} onChange={e => setChecks(p => ({ ...p, [item]: e.target.checked }))} className="w-4 h-4 accent-primary" />
+                <span className={`text-sm ${checks[item] ? 'text-success line-through' : 'text-foreground'}`}>{item}</span>
+              </label>
+            );
+          })}
+        </div>
+      </SCard>
 
-  // ── Stage progress indicator ─────────────────────────────────────────────
-  const stageOrder: Stage[] = ['pickup', 'in_transit', 'return_form', 'completed'];
-  const stageLabels: Record<Stage, string> = { pickup: 'Pickup', in_transit: 'In Transit', return_form: 'Return', completed: 'Completed' };
-  const currentIdx = stageOrder.indexOf(stage);
+      <SCard title="Vital Readings" icon={<Gauge size={14} />}>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Odometer (km)</label>
+            <input type="number" value={odo} onChange={e => setOdo(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="e.g. 45230" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Fuel Level</label>
+            <select value={fuel} onChange={e => setFuel(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20">
+              <option value="full">Full (1/1)</option>
+              <option value="3/4">3/4</option>
+              <option value="1/2">Half (1/2)</option>
+              <option value="1/4">1/4</option>
+              <option value="empty">Empty</option>
+            </select>
+          </div>
+        </div>
+        <div className="mb-2">
+          <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Current Location</label>
+          <input value={loc} onChange={e => setLoc(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20" placeholder="e.g. Airport Terminal 2" />
+        </div>
+      </SCard>
 
-  // ── Pickup history summary (shown when stage > pickup) ───────────────────
-  const pickupDone = stage === 'in_transit' || stage === 'return_form' || stage === 'completed';
-  const transitDone = stage === 'return_form' || stage === 'completed';
+      <SCard title="Visual Inspection" icon={<Camera size={14} />}>
+        <PhotoUploadSection label="Dashboard (Odo/Fuel)" images={dashPhoto} setter={setDashPhoto} multi={false} />
+        <PhotoUploadSection label="Exterior Photos" images={exteriorPhotos} setter={setExteriorPhotos} multi={true} />
+        <PhotoUploadSection label="Interior Photos" images={interiorPhotos} setter={setInteriorPhotos} multi={true} />
+        
+        <div>
+          <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Damage / Condition Notes</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm resize-none focus:ring-2 focus:ring-primary/20" placeholder="Note any scratches, dents, or interior issues..." />
+        </div>
+      </SCard>
+    </>
+  );
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 md:p-4 bg-background/80 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget) { onRefresh(); onClose(); } }}
-    >
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 md:p-4 bg-background/80 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-card border border-border rounded-xl md:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-
-        {/* ── Header ─────────────────────────────────────────────────────── */}
+        
+        {/* Header */}
         <div className="flex items-center gap-3 px-4 md:px-6 py-4 border-b border-border shrink-0">
           <div className="flex-1 min-w-0">
-            <h2 className="text-base font-black text-foreground">Car Lifecycle</h2>
+            <h2 className="text-base font-black text-foreground">Action Needed: {stage === 'pickup' ? 'Pre-Handover' : stage === 'return_form' ? 'Post-Return' : stage === 'in_transit' ? 'In Transit' : 'Completed'}</h2>
             <p className="text-xs text-muted-foreground">#{ref} · {carLine}{plate ? ` · ${plate}` : ''}</p>
           </div>
-          {/* Stage breadcrumb */}
-          <div className="hidden md:flex items-center gap-1 text-xs">
-            {stageOrder.filter(s => s !== 'return_form').map((s, i, arr) => {
-              const idx = stageOrder.indexOf(s);
-              const done = currentIdx > idx;
-              const active = stage === s || (s === 'in_transit' && stage === 'return_form');
-              return (
-                <React.Fragment key={s}>
-                  <span className={`px-2 py-0.5 rounded-full font-bold border ${active ? 'bg-primary text-primary-foreground border-primary' : done ? 'bg-success/10 text-success border-success/20' : 'bg-muted/30 text-muted-foreground border-border'}`}>
-                    {done ? '✓ ' : ''}{stageLabels[s]}
-                  </span>
-                  {i < arr.length - 1 && <span className="text-border">›</span>}
-                </React.Fragment>
-              );
-            })}
-          </div>
-          <button onClick={() => { onRefresh(); onClose(); }} className="p-2 hover:bg-muted text-muted-foreground rounded-xl ml-2"><X size={16} /></button>
+          <button onClick={onClose} className="p-2 hover:bg-muted text-muted-foreground rounded-xl"><X size={16} /></button>
         </div>
 
-        {/* ── Scrollable body ─────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-
-          {/* ══ PICKUP HISTORY CARD (sticks once done) ══ */}
-          {pickupDone && (
-            <HistoryCard
-              emoji="🔑"
-              title={`Pickup — ${fmt(booking.pickup_confirmed_at)}`}
-              color="bg-orange-500/5 border-orange-500/20 text-orange-500"
-              defaultOpen={false}
-            >
-              <div className="grid grid-cols-2 gap-3 pt-3">
-                <F l="Location" v={booking.actual_pickup_location || booking.pickup_location || '—'} />
-                <F l="Time" v={fmt(booking.pickup_confirmed_at)} />
-                <F l="Odometer Out" v={booking.pickup_odometer ? `${Number(booking.pickup_odometer).toLocaleString()} km` : '—'} />
-                <F l="Client" v={clientName} />
-              </div>
-              <div className="flex flex-wrap gap-1 mt-3">
-                {PICKUP_CHECKS.map(c => (
-                  <span key={c} className="text-[10px] px-2 py-0.5 bg-orange-500/10 text-orange-500 rounded-full">{c}</span>
-                ))}
-              </div>
-            </HistoryCard>
-          )}
-
-          {/* ══ IN-TRANSIT HISTORY CARD (sticks once return is logged) ══ */}
-          {transitDone && (
-            <HistoryCard
-              emoji="🚗"
-              title={`In Transit — ${fmtDur(endDate.getTime() - startDate.getTime())} rental`}
-              color="bg-blue-500/5 border-blue-500/20 text-blue-500"
-              defaultOpen={false}
-            >
-              <div className="grid grid-cols-2 gap-3 pt-3">
-                <F l="Started" v={fmt(booking.pickup_confirmed_at)} />
-                <F l="Returned" v={fmt(booking.return_confirmed_at)} />
-                <F l="Rental Days" v={`${rentalDays}`} />
-                <F l="Overtime" v={otCharge > 0 ? `KES ${otCharge.toLocaleString()}` : 'None'} />
-              </div>
-            </HistoryCard>
-          )}
-
-          {/* ══ PICKUP STAGE (active) ══ */}
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {stage === 'pickup' && (
             <>
-              <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-3 flex gap-3">
+              <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-3 mb-4 flex gap-3">
                 <span className="text-2xl">🔑</span>
                 <div>
-                  <p className="text-sm font-bold text-orange-500">Pending Collection</p>
-                  <p className="text-xs text-muted-foreground">Complete checklist then log pickup to start the rental timer.</p>
+                  <p className="text-sm font-bold text-orange-500">Log Vehicle Pickup</p>
+                  <p className="text-xs text-muted-foreground">Complete the mandatory inspection form below before releasing the vehicle.</p>
                 </div>
               </div>
-
-              <SCard title="Client & Vehicle" icon={<User size={14} />}>
-                <div className="grid grid-cols-2 gap-3">
-                  <F l="Client" v={clientName} /><F l="Phone" v={clientPhone || 'N/A'} />
-                  <F l="Vehicle" v={carLine} /><F l="Plate" v={plate || 'N/A'} />
-                  <F l="Start" v={new Date(booking.start_date).toLocaleDateString()} /><F l="End" v={new Date(booking.end_date).toLocaleDateString()} />
-                  <F l="Days" v={`${rentalDays}`} /><F l="Total" v={`KES ${Number(booking.total_amount).toLocaleString()}`} />
-                </div>
-              </SCard>
-
-              <SCard title="Pre-Departure Checklist" icon={<CheckCircle2 size={14} />}>
-                <div className="space-y-2">
-                  {PICKUP_CHECKS.map(item => (
-                    <label key={item} className="flex items-center gap-3 cursor-pointer">
-                      <input type="checkbox" checked={pickupChecks[item] || false} onChange={e => setPickupChecks(p => ({ ...p, [item]: e.target.checked }))} className="w-4 h-4 accent-primary" />
-                      <span className={`text-sm ${pickupChecks[item] ? 'text-success line-through' : 'text-foreground'}`}>{item}</span>
-                    </label>
-                  ))}
-                </div>
-                {!allPickup && <p className="text-xs text-warning mt-3">Complete all items before logging pickup</p>}
-              </SCard>
-
-              <SCard title="Pickup Details" icon={<MapPin size={14} />}>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Pickup Location</label>
-                    <input value={pickupLoc} onChange={e => setPickupLoc(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="Enter actual pickup location" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Pickup Date & Time</label>
-                    <input type="datetime-local" value={pickupDt} onChange={e => setPickupDt(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Odometer Reading (km)</label>
-                    <div className="relative">
-                      <Gauge size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <input type="number" min={0} value={pickupOdo} onChange={e => setPickupOdo(e.target.value)} className="w-full pl-8 pr-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="e.g. 45230" />
-                    </div>
-                  </div>
-                </div>
-              </SCard>
-
-              <button onClick={handleLogPickup} disabled={saving || !allPickup} className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+              <InspectionForm type="pickup" />
+              <button onClick={handleLogPickup} disabled={saving} className="w-full mt-4 py-3 bg-primary text-primary-foreground rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Car size={16} />}
-                Log Car Collected — Start Rental
+                Confirm Pickup & Start Rental
               </button>
             </>
           )}
 
-          {/* ══ IN-TRANSIT STAGE (active) ══ */}
           {stage === 'in_transit' && (
-            <>
+            <div className="space-y-4">
               <div className={`border rounded-xl px-4 py-3 flex gap-3 ${isOverdue ? 'bg-error/10 border-error/20' : isWarn ? 'bg-warning/10 border-warning/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
                 <span className="text-2xl">{isOverdue ? '🚨' : isWarn ? '⏰' : '🚗'}</span>
                 <div>
@@ -434,7 +420,6 @@ export function AdminBookingLifecycle({ booking: init, onClose, onRefresh }: Pro
               <div className="bg-muted/30 rounded-xl p-4 border border-border">
                 <div className="flex justify-between text-xs text-muted-foreground mb-2">
                   <span>Elapsed: {fmtDur(elapsedMs)}</span>
-                  <span>{Math.round(pct)}%</span>
                   <span>{isOverdue ? 'Overdue' : 'Remaining: ' + fmtDur(remainMs)}</span>
                 </div>
                 <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
@@ -442,25 +427,18 @@ export function AdminBookingLifecycle({ booking: init, onClose, onRefresh }: Pro
                 </div>
               </div>
 
-              <SCard title="Client Contact" icon={<User size={14} />}>
-                <div className="flex flex-wrap items-center gap-3">
-                  <p className="text-sm font-semibold text-foreground">{clientName}</p>
-                  {clientPhone && <a href={`tel:${clientPhone}`} className="flex items-center gap-1.5 px-3 py-1.5 bg-success/10 text-success rounded-lg text-xs font-bold hover:bg-success/20 transition-colors">📞 Call</a>}
-                  {clientPhone && <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 text-green-500 rounded-lg text-xs font-bold hover:bg-green-500/20 transition-colors">💬 WhatsApp</a>}
-                  {clientEmail && <a href={`mailto:${clientEmail}`} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-lg text-xs font-bold hover:bg-blue-500/20 transition-colors">✉ Email</a>}
-                </div>
-              </SCard>
-
-              {!showReminder && (
-                <button onClick={openReminder} className={`w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border transition-colors ${isOverdue || isWarn ? 'bg-warning/10 text-warning border-warning/20 hover:bg-warning/20' : 'bg-muted/30 text-muted-foreground border-border hover:bg-muted'}`}>
+              {!showReminder ? (
+                <button onClick={() => {
+                  setReminderMsg(isOverdue ? `Dear ${clientName},\n\nYour ${carLine} rental (#${ref}) was due back ${fmtDur(Math.abs(remainMs))} ago.\n\nPlease return immediately or contact us.\n\nOvertime charges apply: KES ${otRate.toLocaleString()}/hr.` : `Dear ${clientName},\n\nFriendly reminder — your ${carLine} rental (#${ref}) is due in ${fmtDur(remainMs)}.\n\nReturn by: ${endDate.toLocaleDateString()}`);
+                  setShowReminder(true);
+                }} className="w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border bg-muted/30 text-muted-foreground border-border hover:bg-muted">
                   <Send size={14} /> Send Return Reminder
                 </button>
-              )}
-              {showReminder && (
+              ) : (
                 <SCard title="Return Reminder Message" icon={<Send size={14} />}>
-                  <textarea value={reminderMsg} onChange={e => setReminderMsg(e.target.value)} rows={7} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 mb-3" />
+                  <textarea value={reminderMsg} onChange={e => setReminderMsg(e.target.value)} rows={7} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm resize-none mb-3" />
                   <div className="flex gap-2">
-                    {clientEmail && <button onClick={handleSendReminder} disabled={saving} className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">{saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}Send Email</button>}
+                    {clientEmail && <button onClick={handleSendReminder} disabled={saving} className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-bold flex items-center justify-center gap-2">{saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}Send Email</button>}
                     {clientPhone && <a href={`https://wa.me/${waPhone}?text=${encodeURIComponent(reminderMsg)}`} target="_blank" rel="noopener noreferrer" className="flex-1 py-2 bg-green-500 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2">💬 WhatsApp</a>}
                     <button onClick={() => setShowReminder(false)} className="px-3 py-2 border border-border rounded-lg text-sm text-muted-foreground hover:bg-muted"><X size={14} /></button>
                   </div>
@@ -470,138 +448,42 @@ export function AdminBookingLifecycle({ booking: init, onClose, onRefresh }: Pro
               <button onClick={() => setStage('return_form')} className="w-full py-3 bg-teal-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-teal-700 transition-colors">
                 <CheckCircle2 size={16} /> Log Car Returned
               </button>
-            </>
+            </div>
           )}
 
-          {/* ══ RETURN FORM STAGE (active) ══ */}
           {stage === 'return_form' && (
             <>
-              <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl px-4 py-3 flex gap-3">
+              <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl px-4 py-3 mb-4 flex gap-3">
                 <span className="text-2xl">🏁</span>
                 <div>
                   <p className="text-sm font-bold text-teal-500">Log Vehicle Return</p>
-                  <p className="text-xs text-muted-foreground">Complete the return inspection and finalise the rental.</p>
+                  <p className="text-xs text-muted-foreground">Complete the return inspection form to finalise the rental.</p>
                 </div>
               </div>
-
+              
               {otHrs > 0 && (
-                <div className="bg-error/10 border border-error/20 rounded-xl px-4 py-3">
+                <div className="bg-error/10 border border-error/20 rounded-xl px-4 py-3 mb-4">
                   <p className="text-sm font-bold text-error">⚠ Overtime Detected</p>
                   <p className="text-xs text-muted-foreground mt-1">{otHrs.toFixed(1)} hrs × KES {otRate.toLocaleString()}/hr = <span className="font-bold text-error">KES {otCharge.toLocaleString()}</span></p>
                 </div>
               )}
 
-              <SCard title="Return Checklist" icon={<CheckCircle2 size={14} />}>
-                <div className="space-y-2">
-                  {RETURN_CHECKS.map(item => (
-                    <label key={item} className="flex items-center gap-3 cursor-pointer">
-                      <input type="checkbox" checked={returnChecks[item] || false} onChange={e => setReturnChecks(p => ({ ...p, [item]: e.target.checked }))} className="w-4 h-4 accent-primary" />
-                      <span className={`text-sm ${returnChecks[item] ? 'text-success line-through' : 'text-foreground'}`}>{item}</span>
-                    </label>
-                  ))}
-                </div>
-              </SCard>
-
-              <SCard title="Return Details" icon={<MapPin size={14} />}>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Return Date & Time</label>
-                    <input type="datetime-local" value={returnDt} onChange={e => setReturnDt(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Return Location</label>
-                    <input value={returnLoc} onChange={e => setReturnLoc(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Odometer Reading (km)</label>
-                    <div className="relative">
-                      <Gauge size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <input type="number" min={0} value={returnOdo} onChange={e => setReturnOdo(e.target.value)} className="w-full pl-8 pr-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="e.g. 45780" />
-                    </div>
-                    {kmDriven !== null && (
-                      <p className="text-xs text-primary font-bold mt-1">↳ {kmDriven.toLocaleString()} km driven this rental</p>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Vehicle Condition</label>
-                      <select value={returnCond} onChange={e => setReturnCond(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none">
-                        <option value="good">Good</option>
-                        <option value="minor_damage">Minor Damage</option>
-                        <option value="major_damage">Major Damage</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Fuel Level</label>
-                      <select value={fuelLevel} onChange={e => setFuelLevel(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none">
-                        <option value="full">Full</option>
-                        <option value="3/4">3/4</option>
-                        <option value="1/2">1/2</option>
-                        <option value="1/4">1/4</option>
-                        <option value="empty">Empty</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground uppercase tracking-wide block mb-1">Notes</label>
-                    <textarea value={returnNotes} onChange={e => setReturnNotes(e.target.value)} rows={3} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="Any notes on the return..." />
-                  </div>
-                </div>
-              </SCard>
-
-              <SCard title="Return Summary" icon={<AlertTriangle size={14} />}>
-                <div className="grid grid-cols-2 gap-3">
-                  <F l="Rental Days" v={`${rentalDays}`} />
-                  <F l="Base Amount" v={`KES ${Number(booking.total_amount).toLocaleString()}`} />
-                  {kmDriven !== null && <F l="KM Driven" v={`${kmDriven.toLocaleString()} km`} />}
-                  <F l="Overtime Hours" v={otHrs > 0 ? `${otHrs.toFixed(1)} hrs` : 'None'} />
-                  <F l="Overtime Charge" v={otCharge > 0 ? `KES ${otCharge.toLocaleString()}` : 'None'} />
-                  <F l="Condition" v={returnCond.replace('_', ' ')} />
-                  <F l="Fuel on Return" v={fuelLevel} />
-                </div>
-              </SCard>
-
-              <div className="flex gap-3">
-                <button onClick={() => setStage('in_transit')} className="px-4 py-3 border border-border rounded-xl text-sm font-bold text-muted-foreground hover:bg-muted transition-colors">← Back</button>
-                <button onClick={handleLogReturn} disabled={saving} className="flex-1 py-3 bg-teal-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-teal-700 transition-colors disabled:opacity-50">
-                  {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                  Finalise Return
-                </button>
-              </div>
+              <InspectionForm type="return" />
+              <button onClick={handleLogReturn} disabled={saving} className="w-full mt-4 py-3 bg-teal-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-teal-700 disabled:opacity-50">
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                Finalise Return
+              </button>
             </>
           )}
 
-          {/* ══ COMPLETED STAGE ══ */}
           {stage === 'completed' && (
-            <>
-              <div className="bg-success/10 border border-success/20 rounded-xl px-4 py-5 text-center">
-                <div className="text-4xl mb-2">✅</div>
-                <p className="text-lg font-black text-success">Rental Complete</p>
-                <p className="text-xs text-muted-foreground mt-1">Booking #{ref} has been successfully closed</p>
-              </div>
-
-              <SCard title="Full Rental Summary" icon={<Clock size={14} />}>
-                <div className="grid grid-cols-2 gap-3">
-                  <F l="Vehicle" v={carLine} />
-                  <F l="Client" v={clientName} />
-                  <F l="Rental Days" v={`${rentalDays}`} />
-                  <F l="Base Amount" v={`KES ${Number(booking.total_amount).toLocaleString()}`} />
-                  <F l="Pickup" v={fmt(booking.pickup_confirmed_at)} />
-                  <F l="Return" v={fmt(booking.return_confirmed_at)} />
-                  <F l="Odometer Out" v={booking.pickup_odometer ? `${Number(booking.pickup_odometer).toLocaleString()} km` : '—'} />
-                  <F l="Odometer In" v={booking.return_odometer ? `${Number(booking.return_odometer).toLocaleString()} km` : '—'} />
-                  {booking.pickup_odometer && booking.return_odometer && (
-                    <F l="KM Driven" v={`${(booking.return_odometer - booking.pickup_odometer).toLocaleString()} km`} />
-                  )}
-                  <F l="Condition" v={(booking.return_condition || 'good').replace('_', ' ')} />
-                  <F l="Overtime" v={(booking.overtime_charge || 0) > 0 ? `KES ${Number(booking.overtime_charge).toLocaleString()}` : 'None'} />
-                </div>
-              </SCard>
-
-              <button onClick={() => { onRefresh(); onClose(); }} className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold">Close</button>
-            </>
+            <div className="text-center py-10">
+              <div className="text-5xl mb-4">✅</div>
+              <h2 className="text-2xl font-black text-success">Rental Complete</h2>
+              <p className="text-muted-foreground mt-2">The return has been logged successfully.</p>
+              <button onClick={onClose} className="mt-8 px-8 py-3 bg-primary text-primary-foreground font-bold rounded-xl">Close View</button>
+            </div>
           )}
-
         </div>
       </div>
     </div>

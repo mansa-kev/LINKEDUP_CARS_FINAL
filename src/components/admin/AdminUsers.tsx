@@ -163,7 +163,7 @@ export function AdminUsers() {
     toast.promise(promise, {
       loading: 'Deleting user...',
       success: 'User deleted successfully',
-      error: 'Failed to delete user'
+      error: (err) => err instanceof Error ? err.message : 'Failed to delete user'
     });
   };
 

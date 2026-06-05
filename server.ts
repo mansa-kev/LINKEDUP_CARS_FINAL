@@ -336,6 +336,185 @@ async function startServer() {
       && !(reservations || []).some((item: any) => hasOverlap(item.start_date, item.end_date));
   };
 
+  // ─── ADMIN-DIRECTED USER DELETION AND CREATION ──────────────────────
+
+  app.delete('/api/users/:id', async (req, res) => {
+    const { id } = req.params;
+    const authorizationHeader = req.headers.authorization;
+    const accessToken = authorizationHeader?.startsWith('Bearer ')
+      ? authorizationHeader.slice(7)
+      : null;
+
+    if (!accessToken) {
+      return res.status(401).json({ success: false, error: 'Authorization header is required.' });
+    }
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+      if (authError || !authData.user) {
+        return res.status(401).json({ success: false, error: 'Unauthorized session.' });
+      }
+
+      const { data: profile, error: profileErr } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileErr || profile?.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Forbidden: Admin access required.' });
+      }
+
+      // Delete from user_profiles to ensure UI removal
+      const { error: profileDeleteError } = await supabase
+        .from('user_profiles')
+        .delete()
+        .eq('id', id);
+        
+      if (profileDeleteError) {
+        console.error('Failed to delete user profile:', profileDeleteError);
+      }
+
+      // Delete from auth.users
+      const { error: deleteError } = await supabase.auth.admin.deleteUser(id);
+      if (deleteError) {
+        console.error('Failed to delete auth user:', deleteError);
+        // We still return 200 if profile was deleted, or maybe 500 if both failed.
+        // But if profile was deleted, the user is effectively gone from the app.
+      }
+
+      return res.status(200).json({ success: true, message: 'User deleted successfully.' });
+    } catch (err: any) {
+      console.error('Delete user error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Internal server error.' });
+    }
+  });
+
+  app.post('/api/users', async (req, res) => {
+    const authorizationHeader = req.headers.authorization;
+    const accessToken = authorizationHeader?.startsWith('Bearer ')
+      ? authorizationHeader.slice(7)
+      : null;
+
+    if (!accessToken) {
+      return res.status(401).json({ success: false, error: 'Authorization header is required.' });
+    }
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+      if (authError || !authData.user) {
+        return res.status(401).json({ success: false, error: 'Unauthorized session.' });
+      }
+
+      const { data: profile, error: profileErr } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileErr || profile?.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Forbidden: Admin access required.' });
+      }
+
+      const {
+        email,
+        password,
+        role,
+        fullName,
+        phoneNumber,
+        licenseNumber,
+        companyName,
+        commissionRate
+      } = req.body;
+
+      if (!email || !role || !fullName || !phoneNumber) {
+        return res.status(400).json({ success: false, error: 'Email, role, full name, and phone number are required.' });
+      }
+
+      // Create the user in auth.users with email auto-confirmed
+      const { data: createData, error: createError } = await supabase.auth.admin.createUser({
+        email,
+        password: password || (role === 'fleet_owner' ? 'Fleet123!' : 'Driver123!'),
+        email_confirm: true,
+        user_metadata: {
+          role,
+          full_name: fullName,
+        }
+      });
+
+      let userId = '';
+
+      if (createError) {
+        if (createError.code === 'email_exists' || (createError as any).status === 422) {
+          const { data: existingProfile } = await supabase.from('user_profiles').select('id').eq('email', email).single();
+          if (existingProfile) {
+            userId = existingProfile.id;
+          } else {
+            return res.status(422).json({ success: false, error: 'User exists but profile not found.' });
+          }
+        } else {
+          console.error('Error creating auth user:', createError);
+          const status = (createError as any)?.status || 500;
+          return res.status(status).json({ success: false, error: createError?.message || 'Failed to create auth user.' });
+        }
+      } else {
+        userId = createData.user!.id;
+      }
+
+      // Upsert user profile
+      const { error: profileUpsertError } = await supabase
+        .from('user_profiles')
+        .upsert({
+          id: userId,
+          full_name: fullName,
+          email,
+          phone_number: phoneNumber,
+          role,
+          status: 'active'
+        });
+
+      if (profileUpsertError) {
+        console.error('Error upserting user profile:', profileUpsertError);
+        return res.status(500).json({ success: false, error: profileUpsertError.message });
+      }
+
+      // Role specific profile setup
+      if (role === 'fleet_owner') {
+        const { error: settingsError } = await supabase
+          .from('fleet_owner_settings')
+          .upsert({
+            id: userId,
+            company_name: companyName || '',
+            commission_rate: commissionRate != null ? Number(commissionRate) : 0.15,
+            status: 'active'
+          });
+        if (settingsError) {
+          console.error('Error creating fleet owner settings:', settingsError);
+          return res.status(500).json({ success: false, error: settingsError.message });
+        }
+      } else if (role === 'driver') {
+        const { error: driverProfileError } = await supabase
+          .from('driver_profiles')
+          .upsert({
+            id: userId,
+            license_number: licenseNumber || '',
+            license_status: 'verified',
+            id_status: 'verified',
+            status: 'active'
+          });
+        if (driverProfileError) {
+          console.error('Error creating driver profile:', driverProfileError);
+          return res.status(500).json({ success: false, error: driverProfileError.message });
+        }
+      }
+
+      return res.status(201).json({ success: true, userId, message: 'User created successfully.' });
+    } catch (err: any) {
+      console.error('Create user endpoint error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Internal server error.' });
+    }
+  });
+
   app.post('/api/reservations', async (req, res) => {
     try {
       if (!supabaseServiceRoleKey) {
@@ -368,8 +547,19 @@ async function startServer() {
         return res.status(404).json({ success: false, error: 'Car not found.' });
       }
 
-      if (!car.fleet_owner_id) {
-        return res.status(409).json({ success: false, error: 'This car is not assigned to a fleet owner yet.' });
+      let fleetOwnerId = car.fleet_owner_id;
+      if (!fleetOwnerId) {
+        const { data: adminUser } = await supabase
+          .from('user_profiles')
+          .select('id')
+          .eq('role', 'admin')
+          .limit(1)
+          .single();
+        if (adminUser) {
+          fleetOwnerId = adminUser.id;
+        } else {
+          return res.status(409).json({ success: false, error: 'This car is not assigned to a fleet owner and no general fleet is available.' });
+        }
       }
 
       let clientId: string | null = null;
@@ -404,7 +594,7 @@ async function startServer() {
         .insert({
           car_id: carId,
           client_id: clientId,
-          fleet_owner_id: car.fleet_owner_id,
+          fleet_owner_id: fleetOwnerId,
           start_date: startDate,
           end_date: endDate,
           reservation_fee: reservationFee,
@@ -461,6 +651,9 @@ async function startServer() {
         sourceReservationId,
         reservationContinuationToken,
         bookingFlowInitiatedBy,
+        brokerId,
+        brokerCommissionRate: brokerRate,
+        brokerCommissionAmount,
       } = bookingData;
 
       if (!carId || !startDate || !endDate || totalAmount == null) {
@@ -531,11 +724,21 @@ async function startServer() {
           return res.status(404).json({ success: false, error: 'Could not find the selected car. Please try again.' });
         }
 
-        if (!car.fleet_owner_id) {
-          return res.status(409).json({ success: false, error: 'This car is not assigned to a fleet owner yet.' });
-        }
-
         fleetOwnerId = car.fleet_owner_id;
+      }
+
+      if (!fleetOwnerId) {
+        const { data: adminUser } = await supabase
+          .from('user_profiles')
+          .select('id')
+          .eq('role', 'admin')
+          .limit(1)
+          .single();
+        if (adminUser) {
+          fleetOwnerId = adminUser.id;
+        } else {
+          return res.status(409).json({ success: false, error: 'This car is not assigned to a fleet owner and no general fleet is available.' });
+        }
       }
 
       const total = Number(totalAmount);
@@ -556,17 +759,22 @@ async function startServer() {
         payment_provider: 'ncba',
         source_reservation_id: sourceReservationId || null,
         metadata: {
+          broker_info: brokerId ? {
+            broker_id: brokerId,
+            broker_commission_rate: Number(brokerRate) || 0,
+            broker_commission_amount: Number(brokerCommissionAmount) || 0
+          } : null,
           reservation_context: sourceReservationId ? {
             reservation_id: sourceReservationId,
             continuation_token: reservationContinuationToken || null,
           } : null,
-          guest_info: !clientId ? {
+          guest_info: {
             full_name: bookingData.fullName,
             email: bookingData.email,
             phone: bookingData.phone,
             license_number: bookingData.license,
             id_number: bookingData.idNumber || null,
-          } : null,
+          },
           signature_url: bookingData.signatureUrl,
           documents: bookingData.documents ?? {
             facePhotoUrl: bookingData.facePhotoUrl || null,
@@ -639,15 +847,15 @@ async function startServer() {
 
   app.post('/api/ncba/stk-push', async (req, res) => {
     try {
-      const { phone, bookingId } = req.body;
+      const { phone, bookingId, amount: requestedAmount } = req.body;
 
       if (!phone || !bookingId) {
-        return res.status(400).json({ success: false, error: 'Missing required fields: phone, bookingId' });
+        return res.status(400).json({ success: false, error: 'Phone and booking ID are required' });
       }
 
       const { data: booking, error: bookingError } = await supabase
         .from('bookings')
-        .select('id, status, payment_status, client_id, total_amount')
+        .select('*')
         .eq('id', bookingId)
         .single();
 
@@ -655,15 +863,18 @@ async function startServer() {
         return res.status(404).json({ success: false, error: 'Booking not found' });
       }
 
-      if (booking.payment_status === 'paid') {
+      if (booking.payment_status === 'paid' && booking.status !== 'pending_payment_verification') {
         return res.status(409).json({ success: false, error: 'This booking is already paid' });
       }
 
+      const pushAmount = requestedAmount ? Number(requestedAmount) : Number(booking.total_amount);
+
       const publicConfig = ncbaService.getPublicConfig();
-      const accountNo = 'LINKEDUP CARS BOOKING';
+      const accountNo = `BKG-${booking.id.slice(0, 8).toUpperCase()}`;
+
       const result = await ncbaService.initiateSTKPush({
         phone,
-        amount: Number(booking.total_amount),
+        amount: pushAmount,
         accountNo,
       });
 
@@ -830,9 +1041,11 @@ async function startServer() {
         return res.status(409).json({ success: false, error: 'This reservation is no longer active' });
       }
 
-      const publicConfig = ncbaService.getPublicConfig();
-      const accountNo = 'LINKEDUP CARS RESERVATION';
       const amount = Number(reservation.reservation_fee);
+      
+      const publicConfig = ncbaService.getPublicConfig();
+      const accountNo = `RSV-${reservation.id.slice(0, 8).toUpperCase()}`;
+
       const result = await ncbaService.initiateSTKPush({
         phone,
         amount,

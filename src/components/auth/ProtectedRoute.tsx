@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: 'admin' | 'fleet_owner' | 'client';
+  requiredRole?: 'admin' | 'fleet_owner' | 'client' | 'driver';
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
@@ -25,7 +25,8 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
 
   // Redirect to login if not authenticated
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    const loginPath = requiredRole === 'driver' ? '/driver/login' : '/login';
+    return <Navigate to={loginPath} state={{ from: location }} replace />;
   }
 
   // Check role-based access if requiredRole is specified
@@ -35,9 +36,10 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
     const userRole = profile?.role || 'client';
     const targetSubdomain: Subdomain = userRole === 'admin' ? 'admin' :
                         userRole === 'fleet_owner' ? 'fleet' :
-                        'app';
+                        'app'; // Both driver and client use app subdomain
     const redirectPath = userRole === 'admin' ? '/admin' :
                         userRole === 'fleet_owner' ? '/fleet' :
+                        userRole === 'driver' ? '/driver' :
                         '/client';
 
     // Switch subdomain context first to prevent infinite redirect loop

@@ -5,51 +5,42 @@ import { supabase } from '../../lib/supabase';
 import {
   Search,
   Filter,
-  MoreHorizontal,
   Eye,
   CheckCircle2,
   XCircle,
   Calendar,
   User,
   Car,
-  ChevronRight,
-  ArrowUpDown,
   Loader2,
   AlertCircle,
   X,
-  FileText,
+  Trash2,
+  RefreshCw,
+  ArrowRight,
+  ShieldCheck,
   CreditCard,
   Mail,
-  Clock,
-  Trash2,
   Phone,
+  Clock,
   MapPin,
-  ShieldCheck,
-  AlertTriangle,
-  ChevronDown,
-  Hash,
-  RefreshCw
+  PenTool
 } from 'lucide-react';
 import { toast } from 'sonner';
-
-// --- Types ---
+import { useNavigate } from 'react-router-dom';
 
 type ReservationStatus = 'pending_payment' | 'reserved' | 'confirmed' | 'cancelled' | 'expired';
+type JourneyTab = 'all' | 'pending_payment' | 'reserved' | 'confirmed' | 'converted' | 'cancelled' | 'expired';
 
 interface Reservation {
   id: string;
   car_id: string;
   client_id: string;
-  fleet_owner_id: string;
   start_date: string;
   end_date: string;
   reservation_fee: number;
   total_amount: number;
   status: ReservationStatus;
   payment_status: 'pending' | 'paid' | 'refunded' | 'failed';
-  payment_method?: string | null;
-  payment_provider?: string | null;
-  transaction_code?: string | null;
   contact_name: string;
   contact_email: string;
   contact_phone: string;
@@ -57,78 +48,160 @@ interface Reservation {
   expires_at: string;
   created_at: string;
   linked_booking_id?: string | null;
-  booking_completion_token?: string | null;
   latest_payment_request?: any;
   cars?: any;
-  user_profiles?: any;
+  client?: any;
 }
 
-// --- Components ---
+const TABS: { key: JourneyTab; label: string; icon: string; color: string }[] = [
+  { key: 'all', label: 'All', icon: '📋', color: 'bg-primary text-primary-foreground border-primary' },
+  { key: 'pending_payment', label: 'Pending Payment', icon: '💳', color: 'bg-amber-500 text-white border-amber-500' },
+  { key: 'reserved', label: 'Reserved (Paid)', icon: '🔒', color: 'bg-indigo-500 text-white border-indigo-500' },
+  { key: 'confirmed', label: 'Confirmed', icon: '✨', color: 'bg-purple-500 text-white border-purple-500' },
+  { key: 'converted', label: 'Converted', icon: '🎉', color: 'bg-emerald-500 text-white border-emerald-500' },
+  { key: 'cancelled', label: 'Cancelled', icon: '🚫', color: 'bg-red-500 text-white border-red-500' },
+  { key: 'expired', label: 'Expired', icon: '⏳', color: 'bg-gray-500 text-white border-gray-500' },
+];
 
-const StatusBadge = ({ status }: { status: ReservationStatus }) => {
-  const styles: Record<ReservationStatus, string> = {
-    pending_payment: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-    reserved: 'bg-warning/10 text-warning border-warning/20',
-    confirmed: 'bg-success/10 text-success border-success/20',
-    cancelled: 'bg-error/10 text-error border-error/20',
-    expired: 'bg-muted text-muted-foreground border-border',
-  };
+const ReservationCard: React.FC<{
+  reservation: Reservation;
+  onViewDetails: () => void;
+  onDelete: () => void;
+  onUpdateStatus: (status: ReservationStatus) => void;
+  onSyncPayment: () => void;
+  onConvertToBooking: () => void;
+  syncingId: string | null;
+  preparingId: string | null;
+}> = ({ reservation, onViewDetails, onDelete, onUpdateStatus, onSyncPayment, onConvertToBooking, syncingId, preparingId }) => {
+  const clientName = reservation.contact_name || reservation.client?.full_name || 'Unknown';
+  const clientInitials = clientName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+  const carLine = `${reservation.cars?.make || ''} ${reservation.cars?.model || ''}`.trim() || 'N/A';
+  const carImage = reservation.cars?.images?.[0] || reservation.cars?.image_url;
+
+  const isConverted = !!reservation.linked_booking_id;
+  const isPaid = reservation.payment_status === 'paid';
+
+  const canSyncPayment = !isPaid && Boolean(reservation.latest_payment_request?.id);
+  const canContinueToBooking = isPaid && ['reserved', 'confirmed'].includes(reservation.status) && !isConverted;
+  const canConfirmReservation = isPaid && reservation.status === 'reserved' && !isConverted;
 
   return (
-    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${styles[status]}`}>
-      {status}
-    </span>
+    <div className="bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/30 transition-colors shadow-sm flex flex-col group">
+      {/* Top Section */}
+      <div className="p-4 border-b border-border bg-muted/10 relative">
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-black text-primary shrink-0">
+              {clientInitials}
+            </div>
+            <div>
+              <h3 className="font-black text-sm text-foreground truncate max-w-[150px]">{clientName}</h3>
+              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">ID: {reservation.id.slice(0,8).toUpperCase()}</p>
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+               isConverted ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
+               reservation.status === 'reserved' ? 'bg-indigo-500/15 text-indigo-500 border-indigo-500/30' :
+               reservation.status === 'confirmed' ? 'bg-purple-500/15 text-purple-500 border-purple-500/30' :
+               reservation.status === 'pending_payment' ? 'bg-amber-500/15 text-amber-500 border-amber-500/30' :
+               'bg-muted text-muted-foreground border-border'
+             }`}>
+                {isConverted ? 'CONVERTED' : reservation.status.replace(/_/g, ' ')}
+             </span>
+             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+               isPaid ? 'bg-green-500/15 text-green-500 border-green-500/30' : 'bg-amber-500/15 text-amber-500 border-amber-500/30'
+             }`}>
+               {isPaid ? 'PAID ✓' : reservation.payment_status}
+             </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+           {carImage ? (
+              <img src={carImage} alt={carLine} className="w-16 h-12 rounded-lg object-cover border border-border" />
+           ) : (
+             <div className="w-16 h-12 rounded-lg bg-muted flex items-center justify-center border border-border">
+               <Car size={16} className="text-muted-foreground" />
+             </div>
+           )}
+           <div>
+             <p className="text-sm font-bold">{carLine}</p>
+             <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+               <Calendar size={12} />
+               {new Date(reservation.start_date).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })} - 
+               {new Date(reservation.end_date).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })}
+             </p>
+           </div>
+        </div>
+      </div>
+
+      {/* Financials Row */}
+      <div className="grid grid-cols-2 divide-x divide-border border-b border-border bg-muted/5">
+        <div className="p-3 text-center">
+          <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Reservation Fee</p>
+          <p className="text-sm font-black text-warning mt-0.5">KES {reservation.reservation_fee?.toLocaleString()}</p>
+        </div>
+        <div className="p-3 text-center">
+          <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Total Amount</p>
+          <p className="text-sm font-black text-foreground mt-0.5">KES {reservation.total_amount?.toLocaleString()}</p>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="p-4 bg-card mt-auto flex flex-col gap-2">
+         {/* Main Action Button */}
+         {isConverted ? (
+           <div className="flex items-center justify-center gap-2 py-2 bg-emerald-500/10 text-emerald-500 rounded-xl text-xs font-bold w-full mb-1">
+             <CheckCircle2 size={14} /> Booking Created
+           </div>
+         ) : canConfirmReservation ? (
+           <button onClick={() => onUpdateStatus('confirmed')} className="flex items-center justify-center gap-2 w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-colors mb-1">
+             <CheckCircle2 size={14} /> Confirm Reservation
+           </button>
+         ) : canContinueToBooking ? (
+           <button onClick={onConvertToBooking} disabled={preparingId === reservation.id} className="flex items-center justify-center gap-2 w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors mb-1 disabled:opacity-50">
+             {preparingId === reservation.id ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />} Continue to Booking
+           </button>
+         ) : canSyncPayment ? (
+           <button onClick={onSyncPayment} disabled={syncingId === reservation.id} className="flex items-center justify-center gap-2 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-colors mb-1 disabled:opacity-50">
+             {syncingId === reservation.id ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Sync Payment
+           </button>
+         ) : null}
+
+         <div className="flex gap-2 w-full mt-1">
+            <button onClick={onViewDetails} className="flex-1 flex items-center justify-center gap-2 p-2 bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground rounded-xl text-xs font-bold transition-colors">
+              <Eye size={14} /> Details
+            </button>
+            {!isConverted && ['pending_payment', 'reserved', 'confirmed'].includes(reservation.status) && (
+              <button onClick={() => onUpdateStatus('cancelled')} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-colors" title="Cancel">
+                <XCircle size={14} />
+              </button>
+            )}
+            <button onClick={onDelete} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-colors" title="Delete">
+              <Trash2 size={14} />
+            </button>
+         </div>
+      </div>
+    </div>
   );
 };
 
-const PaymentStatusBadge = ({ status }: { status: string }) => {
-  const styles: Record<string, string> = {
-    pending: 'bg-warning/10 text-warning border-warning/20',
-    paid: 'bg-success/10 text-success border-success/20',
-    refunded: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-    failed: 'bg-error/10 text-error border-error/20',
-  };
-
-  return (
-    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${styles[status] || 'bg-muted text-muted-foreground'}`}>
-      {status}
-    </span>
-  );
-};
 
 export function AdminReservations() {
+  const navigate = useNavigate();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const pageSize = 50;
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ReservationStatus | 'all'>('all');
+  const [activeTab, setActiveTab] = useState<JourneyTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Filters
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const [filterClient, setFilterClient] = useState('');
-  const [filterCar, setFilterCar] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
+  
   const [syncingReservationId, setSyncingReservationId] = useState<string | null>(null);
   const [preparingBookingId, setPreparingBookingId] = useState<string | null>(null);
-
-  // Modal State
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
-
-  // Mobile State
-  const [isMobile, setIsMobile] = useState(false);
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
-
-  // Mobile detection
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const [deleteConfirm, setDeleteConfirm] = useState<Reservation | null>(null);
 
   const fetchReservations = async () => {
     setLoading(true);
@@ -150,25 +223,41 @@ export function AdminReservations() {
     fetchReservations();
   }, [page]);
 
-  const canSyncPayment = (reservation: Reservation) => {
-    return reservation.payment_status !== 'paid' && Boolean(reservation.latest_payment_request?.id);
+  const filterByTab = (r: Reservation): boolean => {
+    switch (activeTab) {
+      case 'all': return true;
+      case 'pending_payment': return r.status === 'pending_payment' && r.payment_status !== 'paid';
+      case 'reserved': return r.status === 'reserved' && !r.linked_booking_id;
+      case 'confirmed': return r.status === 'confirmed' && !r.linked_booking_id;
+      case 'converted': return !!r.linked_booking_id;
+      case 'cancelled': return r.status === 'cancelled';
+      case 'expired': return r.status === 'expired';
+      default: return true;
+    }
   };
 
-  const canContinueToBooking = (reservation: Reservation) => {
-    return reservation.payment_status === 'paid' && ['reserved', 'confirmed'].includes(reservation.status);
-  };
+  const filteredReservations = reservations
+    .filter(filterByTab)
+    .filter(r => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      const clientName = r.client?.full_name || r.contact_name || '';
+      const carModel = `${r.cars?.make} ${r.cars?.model}`;
+      return r.id.toLowerCase().includes(q) || clientName.toLowerCase().includes(q) || carModel.toLowerCase().includes(q);
+    });
 
-  const canConfirmReservation = (reservation: Reservation) => {
-    return reservation.status === 'reserved';
-  };
-
-  const canCancelReservation = (reservation: Reservation) => {
-    return ['pending_payment', 'reserved', 'confirmed'].includes(reservation.status);
+  const tabCounts: Record<JourneyTab, number> = {
+    all: reservations.length,
+    pending_payment: reservations.filter(r => r.status === 'pending_payment' && r.payment_status !== 'paid').length,
+    reserved: reservations.filter(r => r.status === 'reserved' && !r.linked_booking_id).length,
+    confirmed: reservations.filter(r => r.status === 'confirmed' && !r.linked_booking_id).length,
+    converted: reservations.filter(r => !!r.linked_booking_id).length,
+    cancelled: reservations.filter(r => r.status === 'cancelled').length,
+    expired: reservations.filter(r => r.status === 'expired').length,
   };
 
   const handleUpdateStatus = async (id: string, status: ReservationStatus) => {
     try {
-      // Get the reservation details first to get the car_id
       const { data: reservation, error: fetchError } = await supabase
         .from('car_reservations')
         .select('car_id')
@@ -177,97 +266,45 @@ export function AdminReservations() {
 
       if (fetchError) throw fetchError;
 
-      // Update reservation status
       const { error } = await supabase
         .from('car_reservations')
-        .update({
-          status,
-          updated_at: new Date().toISOString()
-        })
+        .update({ status, updated_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) throw error;
 
-      // If reservation is being cancelled or deleted, unfreeze the car
       if (status === 'cancelled' || status === 'expired') {
-        const { error: carUpdateError } = await supabase
+        await supabase
           .from('cars')
-          .update({
-            status: 'available',
-            updated_at: new Date().toISOString()
-          })
+          .update({ status: 'available', updated_at: new Date().toISOString() })
           .eq('id', reservation.car_id);
-
-        if (carUpdateError) {
-          console.warn('Failed to update car status:', carUpdateError);
-        } else {
-          console.log(`Car ${reservation.car_id} unfrozen and set to available`);
-        }
       }
 
       toast.success(`Reservation ${status} successfully`);
       fetchReservations();
     } catch (error) {
-      console.error('Failed to update reservation status:', error);
       toast.error('Failed to update reservation status');
     }
   };
 
-  const handleDeleteReservation = async (id: string) => {
-    if (!confirm(`Delete reservation ${id.split('-')[0]}? This will unfreeze the car.`)) return;
-
+  const handleDeleteReservation = async (reservation: Reservation) => {
     try {
-      // Get the reservation details first to get the car_id
-      const { data: reservation, error: fetchError } = await supabase
-        .from('car_reservations')
-        .select('car_id, client_id')
-        .eq('id', id)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      // Delete the reservation
-      const { error } = await supabase
-        .from('car_reservations')
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from('car_reservations').delete().eq('id', reservation.id);
       if (error) throw error;
 
-      // Unfreeze the car when reservation is deleted
-      const { error: carUpdateError } = await supabase
-        .from('cars')
-        .update({
-          status: 'available',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', reservation.car_id);
+      await supabase.from('cars').update({ status: 'available', updated_at: new Date().toISOString() }).eq('id', reservation.car_id);
 
-      if (carUpdateError) {
-        console.warn('Failed to update car status:', carUpdateError);
-      } else {
-        console.log(`Car ${reservation.car_id} unfrozen and set to available after reservation deletion`);
-      }
-
-      // Insert notification to client about reservation deletion
-      const { error: notificationError } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: reservation.client_id,
-          type: 'reservation_deleted',
-          message: `Your reservation #${id} has been deleted. The car is now available for booking.`,
-          created_at: new Date().toISOString()
-        });
-
-      if (notificationError) {
-        console.warn('Notification insertion failed:', notificationError);
-      }
+      await supabase.from('notifications').insert({
+        user_id: reservation.client_id,
+        type: 'reservation_deleted',
+        message: `Your reservation #${reservation.id} has been deleted. The car is now available for booking.`,
+        created_at: new Date().toISOString()
+      });
 
       toast.success('Reservation deleted successfully and car is now available!');
       fetchReservations();
-      setSelectedReservation(null);
+      setDeleteConfirm(null);
     } catch (error) {
-      console.error('Failed to delete reservation:', error);
       toast.error('Failed to delete reservation');
     }
   };
@@ -275,7 +312,6 @@ export function AdminReservations() {
   const handleSyncPayment = async (reservation: Reservation) => {
     try {
       setSyncingReservationId(reservation.id);
-
       const status = await reservationPaymentService.getPaymentStatus(reservation.id);
       const paymentRequest = reservation.latest_payment_request || status.paymentRequest;
 
@@ -285,9 +321,7 @@ export function AdminReservations() {
         return;
       }
 
-      if (!paymentRequest?.id) {
-        throw new Error('No reservation payment request was found for this reservation.');
-      }
+      if (!paymentRequest?.id) throw new Error('No reservation payment request found.');
 
       const result = await reservationPaymentService.querySTKStatus(paymentRequest.id);
 
@@ -298,11 +332,9 @@ export function AdminReservations() {
       } else {
         toast.message(result.description || 'Reservation payment is still pending.');
       }
-
       fetchReservations();
-    } catch (error) {
-      console.error('Failed to sync reservation payment:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to sync reservation payment');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to sync reservation payment');
     } finally {
       setSyncingReservationId(null);
     }
@@ -311,52 +343,19 @@ export function AdminReservations() {
   const handleConvertToBooking = async (reservation: Reservation) => {
     try {
       setPreparingBookingId(reservation.id);
-
       const result = await reservationService.prepareBookingContinuation(reservation.id, 'admin', true);
+      if (!result?.link) throw new Error('Booking continuation link could not be prepared');
 
-      if (!result?.link) {
-        throw new Error('Booking continuation link could not be prepared');
-      }
-
-      try {
-        await navigator.clipboard.writeText(result.link);
-      } catch {
-      }
-
+      try { await navigator.clipboard.writeText(result.link); } catch {}
       window.open(result.link, '_blank', 'noopener,noreferrer');
       toast.success('Booking continuation is ready. The link was copied and opened in a new tab.');
       fetchReservations();
-    } catch (error) {
-      console.error('Failed to prepare booking continuation:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to prepare booking continuation');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to prepare booking continuation');
     } finally {
       setPreparingBookingId(null);
     }
   };
-
-  const filteredReservations = reservations.filter(r => {
-    const matchesTab = activeTab === 'all' || r.status === activeTab;
-    const clientName = r.user_profiles?.full_name || r.contact_name || 'Unknown';
-    const carModel = `${r.cars?.make} ${r.cars?.model}` || 'Unknown Car';
-
-    const matchesSearch = clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          r.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          carModel.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          r.contact_email.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesClientFilter = filterClient === '' || clientName.toLowerCase().includes(filterClient.toLowerCase());
-    const matchesCarFilter = filterCar === '' || carModel.toLowerCase().includes(filterCar.toLowerCase());
-
-    let matchesDate = true;
-    if (dateRange.start && dateRange.end) {
-      const rStart = new Date(r.start_date);
-      const filterStart = new Date(dateRange.start);
-      const filterEnd = new Date(dateRange.end);
-      matchesDate = rStart >= filterStart && rStart <= filterEnd;
-    }
-
-    return matchesTab && matchesSearch && matchesClientFilter && matchesCarFilter && matchesDate;
-  });
 
   if (loading && reservations.length === 0) {
     return (
@@ -367,602 +366,178 @@ export function AdminReservations() {
   }
 
   return (
-    <>
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header & Search */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-          {['all', 'pending_payment', 'reserved', 'confirmed', 'cancelled', 'expired'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab as any)}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                activeTab === tab
-                  ? 'bg-warning text-white shadow-lg shadow-warning/20'
-                  : 'bg-card text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              {tab ? (tab.charAt(0).toUpperCase() + tab.slice(1)) : ''}
-            </button>
-          ))}
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black">Reservations Management</h1>
+          <p className="text-sm text-muted-foreground mt-1">Track and convert car reservations</p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+        {/* Search & Actions */}
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
-              type="text"
-              placeholder="Search reservations..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-card border border-border rounded-xl text-sm w-full md:w-64 focus:ring-2 focus:ring-warning/20 transition-all outline-none"
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by name or ID..."
+              className="w-full pl-9 pr-3 py-2.5 bg-muted/30 border border-border rounded-xl text-sm focus:outline-none focus:border-primary transition-colors"
             />
           </div>
           <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`p-2 rounded-xl border transition-colors ${showFilters ? 'bg-warning/10 border-warning text-warning' : 'bg-card border-border text-muted-foreground hover:bg-muted'}`}
+            onClick={() => navigate('/admin/concierge-booking')}
+            className="w-full sm:w-auto px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors shadow-sm whitespace-nowrap"
           >
-            <Filter size={20} />
+            <PenTool size={16} /> New Assisted Booking
           </button>
         </div>
       </div>
 
-      {/* Advanced Filters */}
-      {showFilters && (
-        <div className="bg-card p-4 rounded-xl border border-border shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4 animate-in slide-in-from-top-2">
-          <div>
-            <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Date Range</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={dateRange.start}
-                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-warning/50"
-              />
-              <span className="text-muted-foreground">-</span>
-              <input
-                type="date"
-                value={dateRange.end}
-                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-warning/50"
-              />
-            </div>
+      {/* Journey Tabs */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        {TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
+              activeTab === tab.key ? tab.color + ' shadow-sm' : 'bg-card text-muted-foreground border-border hover:bg-muted'
+            }`}
+          >
+            <span>{tab.icon}</span>
+            <span>{tab.label}</span>
+            {tabCounts[tab.key] > 0 && (
+              <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === tab.key ? 'bg-white/20' : 'bg-muted text-muted-foreground'
+              }`}>{tabCounts[tab.key]}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Card Grid */}
+      {filteredReservations.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 bg-muted/30 rounded-2xl flex items-center justify-center mb-4">
+            <Calendar size={28} className="text-muted-foreground" />
           </div>
-          <div>
-            <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Client Name</label>
-            <input
-              type="text"
-              placeholder="Filter by client..."
-              value={filterClient}
-              onChange={(e) => setFilterClient(e.target.value)}
-              className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-warning/50"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Car Model</label>
-            <input
-              type="text"
-              placeholder="Filter by car..."
-              value={filterCar}
-              onChange={(e) => setFilterCar(e.target.value)}
-              className="w-full bg-background border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-warning/50"
-            />
-          </div>
+          <p className="text-lg font-bold text-foreground">No reservations found</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {activeTab !== 'all' ? `No reservations in the "${TABS.find(t => t.key === activeTab)?.label}" stage` : 'No reservations match your search'}
+          </p>
         </div>
-      )}
-
-      {/* Desktop Table */}
-      {!isMobile && (
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Hash size={16} />
-                      ID
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Client</th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Car</th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Dates</th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Amount</th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Payment</th>
-                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredReservations.map((reservation) => (
-                  <tr key={reservation.id} className="hover:bg-muted/30 transition-colors group">
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-foreground truncate block w-24" title={reservation.id}>
-                        {reservation.id.split('-')[0]}...
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-warning/10 flex items-center justify-center text-warning">
-                          <User size={16} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{reservation.user_profiles?.full_name || reservation.contact_name}</p>
-                          <p className="text-xs text-muted-foreground">{reservation.contact_email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <Car size={16} className="text-muted-foreground" />
-                        <span className="text-sm text-foreground">{reservation.cars?.make} {reservation.cars?.model}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-sm text-foreground">{reservation.start_date}</span>
-                        <span className="text-xs text-muted-foreground">to {reservation.end_date}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-foreground">KES {reservation.total_amount?.toLocaleString()}</span>
-                        <span className="text-[10px] text-warning font-bold">Fee: KES {reservation.reservation_fee?.toLocaleString()}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <StatusBadge status={reservation.status} />
-                    </td>
-                    <td className="px-6 py-4">
-                      <PaymentStatusBadge status={reservation.payment_status} />
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1 md:gap-2 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
-                        <button
-                          onClick={() => setSelectedReservation(reservation)}
-                          className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-warning transition-colors"
-                          title="View Details"
-                        >
-                          <Eye size={18} />
-                        </button>
-                        {canContinueToBooking(reservation) && (
-                          <>
-                            <button
-                              onClick={() => handleConvertToBooking(reservation)}
-                              className="p-2 hover:bg-success/10 rounded-lg text-muted-foreground hover:text-success transition-colors"
-                              title="Continue to Booking"
-                            >
-                              {preparingBookingId === reservation.id ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
-                            </button>
-                          </>
-                        )}
-                        {canSyncPayment(reservation) && (
-                          <>
-                            <button
-                              onClick={() => handleSyncPayment(reservation)}
-                              className="p-2 hover:bg-primary/10 rounded-lg text-muted-foreground hover:text-primary transition-colors"
-                              title="Sync Payment"
-                            >
-                              {syncingReservationId === reservation.id ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
-                            </button>
-                          </>
-                        )}
-                        {canConfirmReservation(reservation) && (
-                          <>
-                            <button
-                              onClick={() => handleUpdateStatus(reservation.id, 'confirmed')}
-                              className="p-2 hover:bg-success/10 rounded-lg text-muted-foreground hover:text-success transition-colors"
-                              title="Confirm"
-                            >
-                              <CheckCircle2 size={18} />
-                            </button>
-                          </>
-                        )}
-                        {canCancelReservation(reservation) && (
-                          <>
-                            <button
-                              onClick={() => handleUpdateStatus(reservation.id, 'cancelled')}
-                              className="p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors"
-                              title="Cancel"
-                            >
-                              <XCircle size={18} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteReservation(reservation.id)}
-                              className="p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors"
-                              title="Delete Reservation"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile Expandable Rows */}
-      {isMobile && (
-        <div className="space-y-3">
-          {filteredReservations.map((reservation) => (
-            <div key={reservation.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-              {/* Summary Row */}
-              <div
-                className="flex justify-between items-center px-4 py-3 bg-card border border-border rounded-xl cursor-pointer select-none hover:bg-muted/30 transition-colors"
-                onClick={() => setExpandedRowId(expandedRowId === reservation.id ? null : reservation.id)}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center shrink-0">
-                    <User size={18} className="text-warning" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-foreground">{reservation.user_profiles?.full_name || reservation.contact_name}</p>
-                    <p className="text-xs text-muted-foreground">ID: {reservation.id.split('-')[0]}...</p>
-                  </div>
-                </div>
-                <ChevronRight
-                  size={20}
-                  className={`text-muted-foreground transition-transform duration-200 ${
-                    expandedRowId === reservation.id ? 'rotate-90' : ''
-                  }`}
-                />
-              </div>
-
-              {/* Expanded Content */}
-              {expandedRowId === reservation.id && (
-                <div className="px-4 py-4 space-y-4 border-t border-border bg-muted/10">
-                  {/* Car Details */}
-                  <div className="flex items-center gap-3">
-                    <Car size={16} className="text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{reservation.cars?.make} {reservation.cars?.model}</p>
-                      <p className="text-xs text-muted-foreground">{reservation.start_date} to {reservation.end_date}</p>
-                    </div>
-                  </div>
-
-                  {/* Details Grid */}
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Amount</p>
-                      <p className="font-bold text-foreground">KES {reservation.total_amount?.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Reservation Fee</p>
-                      <p className="font-bold text-warning">KES {reservation.reservation_fee?.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Status</p>
-                      <div className="mt-1">
-                        <StatusBadge status={reservation.status} />
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Payment</p>
-                      <div className="mt-1">
-                        <PaymentStatusBadge status={reservation.payment_status} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Contact Info */}
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Contact Information</p>
-                    <p className="text-sm text-foreground">{reservation.contact_email}</p>
-                    <p className="text-sm text-muted-foreground">{reservation.contact_phone}</p>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
-                    <button
-                      onClick={() => setSelectedReservation(reservation)}
-                      className="px-3 py-1.5 bg-warning text-black rounded-lg text-xs font-bold hover:bg-warning/90 transition-colors flex items-center gap-2"
-                    >
-                      <Eye size={12} />
-                      View Details
-                    </button>
-                    {canContinueToBooking(reservation) && (
-                      <>
-                        <button
-                          onClick={() => handleConvertToBooking(reservation)}
-                          className="px-3 py-1.5 bg-success text-white rounded-lg text-xs font-bold hover:bg-success/90 transition-colors flex items-center gap-2"
-                        >
-                          {preparingBookingId === reservation.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                          Continue to Booking
-                        </button>
-                      </>
-                    )}
-                    {canSyncPayment(reservation) && (
-                      <>
-                        <button
-                          onClick={() => handleSyncPayment(reservation)}
-                          className="px-3 py-1.5 bg-primary text-black rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-2"
-                        >
-                          {syncingReservationId === reservation.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                          Sync Payment
-                        </button>
-                      </>
-                    )}
-                    {canConfirmReservation(reservation) && (
-                      <>
-                        <button
-                          onClick={() => handleUpdateStatus(reservation.id, 'confirmed')}
-                          className="px-3 py-1.5 bg-success text-white rounded-lg text-xs font-bold hover:bg-success/90 transition-colors flex items-center gap-2"
-                        >
-                          <CheckCircle2 size={12} />
-                          Confirm Reservation
-                        </button>
-                      </>
-                    )}
-                    {canCancelReservation(reservation) && (
-                      <>
-                        <button
-                          onClick={() => handleUpdateStatus(reservation.id, 'cancelled')}
-                          className="px-3 py-1.5 bg-error text-white rounded-lg text-xs font-bold hover:bg-error/90 transition-colors flex items-center gap-2"
-                        >
-                          <XCircle size={12} />
-                          Cancel Reservation
-                        </button>
-                        <button
-                          onClick={() => handleDeleteReservation(reservation.id)}
-                          className="px-3 py-1.5 bg-error/90 text-white rounded-lg text-xs font-bold hover:bg-error transition-colors flex items-center gap-2"
-                        >
-                          <Trash2 size={12} />
-                          Delete Reservation
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4">
+          {filteredReservations.map(reservation => (
+            <ReservationCard
+              key={reservation.id}
+              reservation={reservation}
+              onViewDetails={() => setSelectedReservation(reservation)}
+              onDelete={() => setDeleteConfirm(reservation)}
+              onUpdateStatus={(status) => handleUpdateStatus(reservation.id, status)}
+              onSyncPayment={() => handleSyncPayment(reservation)}
+              onConvertToBooking={() => handleConvertToBooking(reservation)}
+              syncingId={syncingReservationId}
+              preparingId={preparingBookingId}
+            />
           ))}
         </div>
       )}
 
-      {filteredReservations.length === 0 && (
-        <div className="bg-card rounded-2xl border border-border shadow-sm p-12 text-center">
-          <p className="text-muted-foreground">No reservations found matching your criteria.</p>
-        </div>
-      )}
-
-      {/* Pagination */}
-      <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-muted/10">
-        <span className="text-xs text-muted-foreground font-medium">
-          Showing {reservations.length} of {totalCount} entries
-        </span>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50 hover:bg-muted transition-colors"
-          >
-            Previous
-          </button>
-          <div className="flex items-center gap-1">
-            <span className="text-xs font-bold px-2">Page {page}</span>
-          </div>
-            <button
-              onClick={() => setPage(p => p + 1)}
-              disabled={reservations.length < pageSize}
-              className="px-3 py-1 border border-border rounded-md text-xs font-bold disabled:opacity-50 hover:bg-muted transition-colors"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-
-      {/* Reservation Detail Modal */}
+      {/* Detail Modal */}
       {selectedReservation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between p-6 border-b border-border">
+          <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-6 border-b border-border bg-muted/10">
               <div>
-                <h2 className="text-xl font-bold">Reservation Details</h2>
-                <p className="text-sm text-muted-foreground mt-1">ID: {selectedReservation.id}</p>
+                <h2 className="text-xl font-black">Reservation Details</h2>
+                <p className="text-xs font-mono text-muted-foreground mt-1">ID: {selectedReservation.id}</p>
               </div>
-              <button
-                onClick={() => setSelectedReservation(null)}
-                className="p-2 hover:bg-muted rounded-full transition-colors"
-              >
+              <button onClick={() => setSelectedReservation(null)} className="p-2 hover:bg-muted rounded-full transition-colors">
                 <X size={20} />
               </button>
             </div>
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-muted/30 p-4 rounded-xl border border-border">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Status</p>
+                    <p className="text-sm font-bold capitalize">{selectedReservation.status.replace('_', ' ')}</p>
+                  </div>
+                  <div className="bg-muted/30 p-4 rounded-xl border border-border">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Payment Status</p>
+                    <p className="text-sm font-bold capitalize">{selectedReservation.payment_status}</p>
+                  </div>
+               </div>
 
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-
-                {/* Left Column */}
-                <div className="space-y-8">
-                  {/* Reservation Summary */}
-                  <section>
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                      <Calendar size={16} /> Reservation Summary
-                    </h3>
-                    <div className="bg-muted/30 p-4 rounded-xl space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Status</span>
-                        <StatusBadge status={selectedReservation.status} />
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Car</span>
-                        <span className="text-sm font-bold">{selectedReservation.cars?.make} {selectedReservation.cars?.model} ({selectedReservation.cars?.year})</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Pickup</span>
-                        <span className="text-sm font-medium">{new Date(selectedReservation.start_date).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Return</span>
-                        <span className="text-sm font-medium">{new Date(selectedReservation.end_date).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Expires</span>
-                        <span className="text-sm font-medium text-warning">
-                          {new Date(selectedReservation.expires_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="pt-4 border-t border-border">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-sm text-muted-foreground">Reservation Fee</span>
-                          <span className="text-sm font-bold text-warning">KES {selectedReservation.reservation_fee?.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-lg font-bold mt-4">
-                          <span>Total Amount</span>
-                          <span className="text-warning">KES {selectedReservation.total_amount?.toLocaleString()}</span>
-                        </div>
-                      </div>
+               <div>
+                 <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><Car size={14} /> Vehicle & Dates</h3>
+                 <div className="bg-muted/30 p-4 rounded-xl border border-border grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Vehicle</p>
+                      <p className="text-sm font-bold">{selectedReservation.cars?.make} {selectedReservation.cars?.model} ({selectedReservation.cars?.year})</p>
                     </div>
-                  </section>
-
-                  {/* Payment Details */}
-                  <section>
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                      <CreditCard size={16} /> Payment Details
-                    </h3>
-                    <div className="bg-muted/30 p-4 rounded-xl space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Status</span>
-                        <PaymentStatusBadge status={selectedReservation.payment_status} />
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Provider</span>
-                        <span className="text-sm font-mono">{selectedReservation.payment_provider || 'ncba'}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Method</span>
-                        <span className="text-sm font-mono">{selectedReservation.payment_method || 'Not specified'}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Reference</span>
-                        <span className="text-sm font-mono">{selectedReservation.transaction_code || selectedReservation.latest_payment_request?.provider_transaction_id || 'Pending'}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Request Status</span>
-                        <span className="text-sm font-medium">{selectedReservation.latest_payment_request?.status || 'No request'}</span>
-                      </div>
-                      {selectedReservation.latest_payment_request?.status_description && (
-                        <div className="pt-2 border-t border-border">
-                          <p className="text-xs text-muted-foreground mb-1">Gateway Message</p>
-                          <p className="text-sm">{selectedReservation.latest_payment_request.status_description}</p>
-                        </div>
-                      )}
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Total Value</p>
+                      <p className="text-sm font-black">KES {selectedReservation.total_amount?.toLocaleString()}</p>
                     </div>
-                  </section>
-                </div>
-
-                {/* Right Column */}
-                <div className="space-y-8">
-                  {/* Client Information */}
-                  <section>
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                      <User size={16} /> Client Information
-                    </h3>
-                    <div className="bg-muted/30 p-4 rounded-xl space-y-3">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center text-warning font-bold">
-                          {selectedReservation.user_profiles?.full_name?.charAt(0) || selectedReservation.contact_name?.charAt(0) || 'C'}
-                        </div>
-                        <div>
-                          <p className="font-bold">{selectedReservation.user_profiles?.full_name || selectedReservation.contact_name || 'Unknown Client'}</p>
-                          <p className="text-xs text-muted-foreground">{selectedReservation.contact_email}</p>
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Phone</span>
-                        <span className="text-sm font-medium">{selectedReservation.contact_phone || 'N/A'}</span>
-                      </div>
-                      {selectedReservation.notes && (
-                        <div className="pt-2 border-t border-border">
-                          <p className="text-xs text-muted-foreground mb-1">Notes</p>
-                          <p className="text-sm">{selectedReservation.notes}</p>
-                        </div>
-                      )}
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Pick-up</p>
+                      <p className="text-sm font-medium">{new Date(selectedReservation.start_date).toLocaleDateString()}</p>
                     </div>
-                  </section>
-
-                  {/* Timeline */}
-                  <section>
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                      <Clock size={16} /> Timeline
-                    </h3>
-                    <div className="bg-muted/30 p-4 rounded-xl space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Created</span>
-                        <span className="text-sm font-medium">{new Date(selectedReservation.created_at).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Expires</span>
-                        <span className="text-sm font-medium text-warning">
-                          {new Date(selectedReservation.expires_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Linked Booking</span>
-                        <span className="text-sm font-medium">{selectedReservation.linked_booking_id ? selectedReservation.linked_booking_id.split('-')[0] : 'Not started'}</span>
-                      </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Drop-off</p>
+                      <p className="text-sm font-medium">{new Date(selectedReservation.end_date).toLocaleDateString()}</p>
                     </div>
-                  </section>
-                </div>
-              </div>
+                 </div>
+               </div>
+
+               <div>
+                 <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><User size={14} /> Client Details</h3>
+                 <div className="bg-muted/30 p-4 rounded-xl border border-border grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Name</p>
+                      <p className="text-sm font-bold">{selectedReservation.client?.full_name || selectedReservation.contact_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Email</p>
+                      <p className="text-sm font-medium flex items-center gap-2"><Mail size={12}/> {selectedReservation.contact_email}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Phone</p>
+                      <p className="text-sm font-medium flex items-center gap-2"><Phone size={12}/> {selectedReservation.contact_phone}</p>
+                    </div>
+                 </div>
+               </div>
+               
+               {selectedReservation.linked_booking_id && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1 flex items-center gap-2"><CheckCircle2 size={12} /> Converted to Booking</p>
+                    <p className="text-sm font-mono text-emerald-700">{selectedReservation.linked_booking_id}</p>
+                  </div>
+               )}
             </div>
-
-            <div className="p-6 border-t border-border bg-muted/10 flex flex-wrap gap-3 justify-end">
-              {canContinueToBooking(selectedReservation) && (
-                <>
-                  <button
-                    onClick={() => handleConvertToBooking(selectedReservation)}
-                    className="px-4 py-2 rounded-lg font-bold border border-warning text-warning hover:bg-warning/10 transition-colors flex items-center gap-2"
-                  >
-                    {preparingBookingId === selectedReservation.id ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Continue to Booking
-                  </button>
-                </>
-              )}
-              {canSyncPayment(selectedReservation) && (
-                <>
-                  <button
-                    onClick={() => handleSyncPayment(selectedReservation)}
-                    className="px-4 py-2 rounded-lg font-bold border border-primary text-primary hover:bg-primary/10 transition-colors flex items-center gap-2"
-                  >
-                    {syncingReservationId === selectedReservation.id ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Sync Payment
-                  </button>
-                </>
-              )}
-              {canConfirmReservation(selectedReservation) && (
-                <>
-                  <button
-                    onClick={() => {
-                      handleUpdateStatus(selectedReservation.id, 'confirmed');
-                      setSelectedReservation(null);
-                    }}
-                    className="px-4 py-2 rounded-lg font-bold bg-success text-white hover:bg-success/90 transition-colors flex items-center gap-2"
-                  >
-                    <CheckCircle2 size={16} /> Confirm Reservation
-                  </button>
-                </>
-              )}
-              {canCancelReservation(selectedReservation) && (
-                <>
-                  <button
-                    onClick={() => {
-                      handleUpdateStatus(selectedReservation.id, 'cancelled');
-                      setSelectedReservation(null);
-                    }}
-                    className="px-4 py-2 rounded-lg font-bold bg-error text-white hover:bg-error/90 transition-colors flex items-center gap-2"
-                  >
-                    <XCircle size={16} /> Cancel Reservation
-                  </button>
-                </>
-              )}
+            <div className="p-4 border-t border-border bg-muted/10">
+               <button onClick={() => setSelectedReservation(null)} className="w-full py-2.5 bg-card border border-border text-foreground rounded-xl font-bold hover:bg-muted transition-colors">Close</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 p-6 text-center">
+             <div className="w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+               <AlertCircle size={24} />
+             </div>
+             <h3 className="text-lg font-black mb-2">Delete Reservation?</h3>
+             <p className="text-sm text-muted-foreground mb-6">This will permanently remove the reservation and unfreeze the car. This action cannot be undone.</p>
+             <div className="flex gap-3">
+               <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 rounded-xl font-bold bg-muted hover:bg-muted/80 transition-colors">Cancel</button>
+               <button onClick={() => handleDeleteReservation(deleteConfirm)} className="flex-1 py-2.5 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 transition-colors">Delete</button>
+             </div>
           </div>
         </div>
       )}
     </div>
-  </>
-);
+  );
 }

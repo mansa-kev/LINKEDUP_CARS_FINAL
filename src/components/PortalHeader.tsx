@@ -30,9 +30,10 @@ interface PortalHeaderProps {
   isDarkMode: boolean;
   setIsDarkMode: (isDark: boolean) => void;
   portalType: 'client' | 'fleet' | 'admin';
+  leftContent?: React.ReactNode;
 }
 
-export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHeaderProps) {
+export function PortalHeader({ isDarkMode, setIsDarkMode, portalType, leftContent }: PortalHeaderProps) {
   const navigate = useNavigate();
   const { profile: user } = useAuth();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -125,14 +126,17 @@ export function PortalHeader({ isDarkMode, setIsDarkMode, portalType }: PortalHe
 
   return (
     <header className="h-14 md:h-16 bg-card border-b border-border flex items-center justify-between px-4 md:px-8 relative z-50">
-      {/* Search - hidden on mobile */}
-      <div className="relative w-48 lg:w-64 hidden md:block">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-        <input type="text" placeholder="Search..." className="w-full pl-9 pr-4 py-2 bg-muted rounded-xl text-sm outline-none" />
+      <div className="flex items-center gap-4">
+        {leftContent}
+        {/* Search - hidden on mobile */}
+        <div className="relative w-48 lg:w-64 hidden md:block">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+          <input type="text" placeholder="Search..." className="w-full pl-9 pr-4 py-2 bg-muted rounded-xl text-sm outline-none" />
+        </div>
       </div>
 
       {/* Spacer on mobile */}
-      <div className="md:hidden" />
+      <div className="md:hidden flex-1" />
 
       <div className="flex items-center gap-2 md:gap-4">
         <button

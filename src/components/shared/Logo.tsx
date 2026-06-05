@@ -130,7 +130,7 @@ export function Logo({ size = 'md', showText = true, className, fallbackToDefaul
               alt="LinkedUp Logo"
               className={sizeClasses[size]}
               loading="eager"
-              fetchpriority="high"
+              fetchPriority="high"
               onError={() => setError(true)}
             />
           )

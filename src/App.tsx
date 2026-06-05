@@ -33,6 +33,7 @@ const AdminPortal = React.lazy(() => import('./components/AdminPortal').then(m =
 const FleetLayout = React.lazy(() => import('./components/fleet/FleetLayout').then(m => ({ default: m.FleetLayout })));
 const ClientLayout = React.lazy(() => import('./components/client/ClientLayout').then(m => ({ default: m.ClientLayout })));
 const PublicLayout = React.lazy(() => import('./components/public/PublicLayout').then(m => ({ default: m.PublicLayout })));
+const DriverPortal = React.lazy(() => import('./components/driver/DriverPortal').then(m => ({ default: m.DriverPortal })));
 
 export default function App() {
   const { subdomain } = useSubdomain();
@@ -88,9 +89,15 @@ export default function App() {
               <Suspense fallback={<LogoLoader fullScreen message="Loading your portal..." />}>
                 <Routes>
                   <Route path="/login" element={<Login />} />
+                  <Route path="/driver/login" element={<Login />} />
                   <Route path="/client/*" element={
                     <ProtectedRoute requiredRole="client">
                       <ClientLayout />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/driver/*" element={
+                    <ProtectedRoute requiredRole="driver">
+                      <DriverPortal />
                     </ProtectedRoute>
                   } />
                   <Route path="*" element={<Navigate to="/client" replace />} />

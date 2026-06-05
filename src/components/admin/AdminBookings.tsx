@@ -1,40 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { adminService } from '../../services/adminService';
-import { supabase } from '../../lib/supabase';
-import { AdminBookingDetail } from './AdminBookingDetail';
-import { AdminBookingLifecycle } from './AdminBookingLifecycle';
+import { useNavigate } from 'react-router-dom';
 import { 
-  Search, 
-  Filter, 
-  MoreHorizontal, 
-  Eye, 
-  CheckCircle2, 
-  XCircle, 
-  Calendar, 
-  User, 
-  Car,
-  ChevronRight,
-  ArrowUpDown,
-  Loader2,
-  AlertCircle,
-  X,
-  FileText,
-  CreditCard,
-  Mail,
-  Clock,
-  Trash2,
-  Phone,
-  MapPin,
-  ShieldCheck,
-  AlertTriangle,
-  ChevronDown
+  Search, Eye, CheckCircle2, XCircle, Calendar, User, Car,
+  Loader2, AlertCircle, X, CreditCard, Clock, Trash2, Phone,
+  Flag, AlertTriangle, ChevronDown, ArrowRight, DollarSign,
+  MapPin, Plus, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '../../utils/logger';
 
 // --- Types ---
-
 type BookingStatus = 'pending' | 'confirmed' | 'pending_collection' | 'on_trip' | 'returned' | 'completed' | 'cancelled' | 'pending_payment_verification';
+
+type JourneyTab = 'all' | 'flagged' | 'pending_payment' | 'pending_collection' | 'in_transit' | 'returns_due' | 'overdue' | 'extended' | 'completed' | 'from_reservation';
 
 interface Booking {
   id: string;
@@ -48,15 +27,14 @@ interface Booking {
   platform_commission: number;
   status: BookingStatus;
   payment_status: 'paid' | 'pending' | 'failed';
-  document_status?: 'pending' | 'approved' | 'rejected' | 'resubmission_required' | 'resubmitted';
+  document_status?: string;
   admin_notes?: string;
+  is_flagged?: boolean;
+  flag_reason?: string;
+  sub_status?: string;
   pickup_confirmed_at?: string;
-  pickup_confirmed_by?: string;
-  actual_pickup_location?: string;
   return_confirmed_at?: string;
-  return_confirmed_by?: string;
   return_condition?: string;
-  return_notes?: string;
   overtime_hours?: number;
   overtime_charge?: number;
   created_at: string;
@@ -66,53 +44,160 @@ interface Booking {
   metadata?: any;
 }
 
-// --- Components ---
+// --- Tab Config ---
+const TABS: { key: JourneyTab; label: string; icon: string; color: string }[] = [
+  { key: 'all', label: 'All', icon: '📋', color: 'bg-primary text-primary-foreground border-primary' },
+  { key: 'flagged', label: 'Action Required', icon: '🚩', color: 'bg-red-600 text-white border-red-600' },
+  { key: 'pending_payment', label: 'Pending Payment', icon: '💳', color: 'bg-amber-500 text-white border-amber-500' },
+  { key: 'pending_collection', label: 'Pending Collection', icon: '🔑', color: 'bg-orange-500 text-white border-orange-500' },
+  { key: 'in_transit', label: 'In Transit', icon: '🚗', color: 'bg-blue-500 text-white border-blue-500' },
+  { key: 'returns_due', label: 'Returns Due', icon: '⏰', color: 'bg-yellow-500 text-black border-yellow-500' },
+  { key: 'overdue', label: 'Overdue', icon: '🚨', color: 'bg-red-700 text-white border-red-700' },
+  { key: 'extended', label: 'Extended', icon: '📅', color: 'bg-purple-500 text-white border-purple-500' },
+  { key: 'completed', label: 'Completed', icon: '✅', color: 'bg-gray-500 text-white border-gray-500' },
+  { key: 'from_reservation', label: 'From Reservation', icon: '📝', color: 'bg-emerald-500 text-white border-emerald-500' },
+];
 
-const StatusBadge = ({ status }: { status: BookingStatus }) => {
-  const styles: Record<BookingStatus, string> = {
-    pending: 'bg-warning/10 text-warning border-warning/20',
-    confirmed: 'bg-success/10 text-success border-success/20',
-    pending_collection: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-    on_trip: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-    returned: 'bg-teal-500/10 text-teal-500 border-teal-500/20',
-    completed: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
-    cancelled: 'bg-error/10 text-error border-error/20',
-    pending_payment_verification: 'bg-muted/10 text-muted-foreground border-muted/20',
+// --- Status Badge ---
+const StatusBadge = ({ status, is_flagged }: { status: BookingStatus; is_flagged?: boolean }) => {
+  const styles: Record<string, string> = {
+    pending: 'bg-warning/15 text-warning border-warning/30',
+    confirmed: 'bg-success/15 text-success border-success/30',
+    pending_collection: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+    on_trip: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+    returned: 'bg-teal-500/15 text-teal-400 border-teal-500/30',
+    completed: 'bg-gray-500/15 text-gray-400 border-gray-500/30',
+    cancelled: 'bg-error/15 text-error border-error/30',
+    pending_payment_verification: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
   };
 
   return (
-    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${styles[status]}`}>
-      {status.replace('_', ' ')}
-    </span>
+    <div className="flex items-center gap-1.5">
+      {is_flagged && <Flag size={10} className="text-red-500" />}
+      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${styles[status] || styles.pending}`}>
+        {status.replace(/_/g, ' ')}
+      </span>
+    </div>
   );
 };
 
+// --- Booking Card ---
+const BookingCard: React.FC<{
+  booking: Booking;
+  onManage: () => void;
+  onViewDetails: () => void;
+  onDelete: () => void;
+}> = ({ booking, onManage, onViewDetails, onDelete }) => {
+  const clientName = booking.client?.full_name || booking.metadata?.guest_info?.full_name || 'Guest';
+  const clientInitials = clientName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+  const carLine = `${booking.cars?.make || ''} ${booking.cars?.model || ''}`.trim() || 'N/A';
+  const carImage = booking.cars?.images?.[0] || booking.cars?.image_url;
+  const totalPaid = booking.payment_status === 'paid' ? booking.total_amount : 0;
+  const balance = booking.total_amount - totalPaid;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const endDate = new Date(booking.end_date);
+  const isOverdue = booking.status === 'on_trip' && endDate < today;
+
+  return (
+    <div className={`bg-card rounded-2xl border overflow-hidden transition-all hover:shadow-lg hover:border-primary/30 group ${
+      booking.is_flagged ? 'border-red-500/40 shadow-red-500/5' : isOverdue ? 'border-red-600/30' : 'border-border'
+    }`}>
+      {/* Flag Banner */}
+      {booking.is_flagged && (
+        <div className="px-4 py-1.5 bg-red-500/10 border-b border-red-500/20 flex items-center gap-2">
+          <Flag size={10} className="text-red-500" />
+          <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">Flagged</span>
+          {booking.flag_reason && <span className="text-[10px] text-red-400 truncate">· {booking.flag_reason}</span>}
+        </div>
+      )}
+
+      {/* Card Header */}
+      <div className="p-4 pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+              {clientInitials}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-foreground truncate">{clientName}</p>
+              <p className="text-[11px] text-muted-foreground font-mono">#{booking.id.slice(0, 8).toUpperCase()}</p>
+            </div>
+          </div>
+          <StatusBadge status={booking.status} is_flagged={booking.is_flagged} />
+        </div>
+      </div>
+
+      {/* Car Info */}
+      <div className="px-4 pb-3">
+        <div className="flex items-center gap-3 bg-muted/30 rounded-xl p-2.5">
+          {carImage ? (
+            <img src={carImage} alt={carLine} className="w-14 h-10 rounded-lg object-cover shrink-0" />
+          ) : (
+            <div className="w-14 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <Car size={16} className="text-muted-foreground" />
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-foreground truncate">{carLine}</p>
+            <p className="text-[10px] text-muted-foreground">
+              {new Date(booking.start_date).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })} → {new Date(booking.end_date).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Financials */}
+      <div className="px-4 pb-3 grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Total</p>
+          <p className="text-sm font-black text-foreground">KES {booking.total_amount.toLocaleString()}</p>
+        </div>
+        <div>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Balance</p>
+          <p className={`text-sm font-black ${balance > 0 ? 'text-red-500' : 'text-green-500'}`}>
+            {balance > 0 ? `KES ${balance.toLocaleString()}` : 'Paid ✓'}
+          </p>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="px-4 pb-4 flex gap-2">
+        <button
+          onClick={onManage}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-bold hover:bg-primary/90 transition-colors"
+        >
+          Manage Booking <ArrowRight size={12} />
+        </button>
+        <button
+          onClick={onViewDetails}
+          className="p-2.5 bg-muted/50 hover:bg-muted rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+          title="View Details"
+        >
+          <Eye size={14} />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-2.5 bg-red-500/10 hover:bg-red-500/20 rounded-xl text-red-400 hover:text-red-500 transition-colors"
+          title="Delete"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- Main Component ---
 export function AdminBookings() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 50;
   const [loading, setLoading] = useState(true);
-  
-  // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const [filterClient, setFilterClient] = useState('');
-  const [filterCar, setFilterCar] = useState('');
-  const [filterFleetOwner, setFilterFleetOwner] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-
-  // Tab state
-  const [activeTab, setActiveTab] = useState<'all' | 'pending_collection' | 'on_trip' | 'returns_due' | 'completed'>('all');
-
-  // Modal State
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [lifecycleBooking, setLifecycleBooking] = useState<Booking | null>(null);
+  const [activeTab, setActiveTab] = useState<JourneyTab>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<Booking | null>(null);
-  
-  // Mobile expandable row state
-  const [isMobile, setIsMobile] = useState(false);
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
   const fetchBookings = async () => {
     setLoading(true);
@@ -130,67 +215,15 @@ export function AdminBookings() {
     }
   };
 
-  useEffect(() => {
-    fetchBookings();
-  }, [page]);
-
-  // Mobile detection with resize listener
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  const handleUpdateStatus = async (id: string, status: BookingStatus) => {
-    try {
-      await adminService.updateBookingStatus(id, status);
-      toast.success(`Booking status updated to ${status}`);
-
-      // Send cancellation notification to client when admin cancels via dropdown
-      if (status === 'cancelled') {
-        const booking = bookings.find(b => b.id === id);
-        if (booking?.client_id) {
-          await supabase.from('notifications').insert({
-            user_id: booking.client_id,
-            type: 'booking_cancelled',
-            title: 'Booking Cancelled',
-            content: `Your booking #${id} has been cancelled. Please contact support if you believe this is an error or to request a refund.`,
-            link: `/booking-confirmation/${id}`,
-            is_read: false,
-            created_at: new Date().toISOString(),
-          });
-
-          const clientEmail = booking.client?.email || booking.metadata?.guest_info?.email;
-          if (clientEmail) {
-            supabase.functions.invoke('send-email', {
-              body: {
-                to: clientEmail,
-                subject: 'Booking Cancelled - LinkedUp Cars',
-                message: `Dear ${booking.client?.full_name || 'Valued Customer'},\n\nYour booking #${id} has been cancelled.\n\nIf you believe this is an error or would like to request a refund, please contact our support team.\n\nThank you,\nLinkedUp Cars Team`,
-              },
-            }).catch(() => {});
-          }
-        }
-      }
-
-      fetchBookings();
-    } catch (error) {
-      logger.error('Error updating status:', error);
-      toast.error('Failed to update booking status');
-    }
-  };
+  useEffect(() => { fetchBookings(); }, [page]);
 
   const handleDeleteBooking = async (booking: Booking) => {
     try {
       const result = await adminService.deleteBooking(booking.id);
-      logger.log('Delete result:', result);
-      
-      if (result) {
+      if (result !== undefined) {
         toast.success('Booking deleted successfully');
         fetchBookings();
         setDeleteConfirm(null);
-        setSelectedBooking(null);
       } else {
         toast.error('Failed to delete booking');
       }
@@ -200,30 +233,51 @@ export function AdminBookings() {
     }
   };
 
-  const today = new Date(); today.setHours(0,0,0,0);
+  // --- Filtering ---
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const tabBookings = bookings.filter(b => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'pending_collection') return b.status === 'confirmed' || b.status === 'pending_collection';
-    if (activeTab === 'on_trip') return b.status === 'on_trip';
-    if (activeTab === 'returns_due') return b.status === 'on_trip' && new Date(b.end_date) < today;
-    if (activeTab === 'completed') return b.status === 'completed' || b.status === 'returned';
-    return true;
-  });
+  const filterByTab = (b: Booking): boolean => {
+    switch (activeTab) {
+      case 'all': return true;
+      case 'flagged': return !!b.is_flagged;
+      case 'pending_payment': return b.payment_status !== 'paid' && b.status !== 'cancelled';
+      case 'pending_collection': return (b.status === 'confirmed' || b.status === 'pending_collection') && b.payment_status === 'paid';
+      case 'in_transit': return b.status === 'on_trip' && new Date(b.end_date) >= today;
+      case 'returns_due': return b.status === 'on_trip' && new Date(b.end_date) >= today && new Date(b.end_date) < tomorrow;
+      case 'overdue': return b.status === 'on_trip' && new Date(b.end_date) < today;
+      case 'extended': return b.sub_status === 'extended';
+      case 'completed': return b.status === 'completed' || b.status === 'returned';
+      case 'from_reservation': return !!b.metadata?.from_reservation?.reservation_id;
+      default: return true;
+    }
+  };
 
-  const filteredBookings = tabBookings.filter(b => {
-    const name = b.client?.full_name || b.metadata?.guest_info?.full_name || '';
-    const matchesSearch = b.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  const filteredBookings = bookings
+    .filter(filterByTab)
+    .filter(b => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      const name = b.client?.full_name || b.metadata?.guest_info?.full_name || '';
+      return b.id.toLowerCase().includes(q) || name.toLowerCase().includes(q);
+    });
 
-  const tabCounts = {
+  // --- Tab Counts ---
+  const tabCounts: Record<JourneyTab, number> = {
     all: bookings.length,
-    pending_collection: bookings.filter(b => b.status === 'confirmed' || b.status === 'pending_collection').length,
-    on_trip: bookings.filter(b => b.status === 'on_trip').length,
-    returns_due: bookings.filter(b => b.status === 'on_trip' && new Date(b.end_date) < today).length,
+    flagged: bookings.filter(b => !!b.is_flagged).length,
+    pending_payment: bookings.filter(b => b.payment_status !== 'paid' && b.status !== 'cancelled').length,
+    pending_collection: bookings.filter(b => (b.status === 'confirmed' || b.status === 'pending_collection') && b.payment_status === 'paid').length,
+    in_transit: bookings.filter(b => b.status === 'on_trip' && new Date(b.end_date) >= today).length,
+    returns_due: bookings.filter(b => b.status === 'on_trip' && new Date(b.end_date) >= today && new Date(b.end_date) < tomorrow).length,
+    overdue: bookings.filter(b => b.status === 'on_trip' && new Date(b.end_date) < today).length,
+    extended: bookings.filter(b => b.sub_status === 'extended').length,
     completed: bookings.filter(b => b.status === 'completed' || b.status === 'returned').length,
+    from_reservation: bookings.filter(b => !!b.metadata?.from_reservation?.reservation_id).length,
+  };
+
+  const handleManageBooking = (booking: Booking) => {
+    navigate(`/admin/bookings/${booking.id}`);
   };
 
   if (loading && bookings.length === 0) {
@@ -237,307 +291,96 @@ export function AdminBookings() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Bookings Management</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage all car rental bookings</p>
+          <h1 className="text-2xl md:text-3xl font-black">Bookings Management</h1>
+          <p className="text-sm text-muted-foreground mt-1">Track every booking through its complete journey</p>
+        </div>
+        {/* Search & Actions */}
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by name or ID..."
+              className="w-full pl-9 pr-3 py-2.5 bg-muted/30 border border-border rounded-xl text-sm focus:outline-none focus:border-primary transition-colors"
+            />
+          </div>
+          <button
+            onClick={() => navigate('/admin/concierge-booking')}
+            className="w-full sm:w-auto px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors shadow-sm whitespace-nowrap"
+          >
+            <Calendar size={16} /> New Concierge Booking
+          </button>
         </div>
       </div>
 
-      {/* Lifecycle Tabs */}
+      {/* Journey Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        {([
-          { key: 'all',                label: 'All Bookings',       icon: '📋' },
-          { key: 'pending_collection', label: 'Pending Collection', icon: '🔑' },
-          { key: 'on_trip',            label: 'In Transit',         icon: '🚗' },
-          { key: 'returns_due',        label: 'Returns Due',        icon: '⏰' },
-          { key: 'completed',          label: 'Completed',          icon: '✅' },
-        ] as const).map(tab => (
+        {TABS.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
-              activeTab === tab.key
-                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                : 'bg-card text-muted-foreground border-border hover:bg-muted'
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
+              activeTab === tab.key ? tab.color + ' shadow-sm' : 'bg-card text-muted-foreground border-border hover:bg-muted'
             }`}
           >
             <span>{tab.icon}</span>
             <span>{tab.label}</span>
             {tabCounts[tab.key] > 0 && (
-              <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                activeTab === tab.key ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'
-              }${
-                tab.key === 'returns_due' && tabCounts.returns_due > 0 ? ' !bg-error/20 !text-error' : ''
+              <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === tab.key ? 'bg-white/20' : 'bg-muted text-muted-foreground'
               }`}>{tabCounts[tab.key]}</span>
             )}
           </button>
         ))}
       </div>
 
-      {/* Table - Desktop View */}
-      {!isMobile && (
-        <div className="bg-card rounded-xl md:rounded-2xl border border-border shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs md:text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Booking ID
-                  </th>
-                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Client
-                  </th>
-                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Car
-                  </th>
-                  <th className="hidden lg:table-cell px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Fleet Owner
-                  </th>
-                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Dates
-                  </th>
-                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Amount
-                  </th>
-                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Status
-                  </th>
-                  <th className="hidden md:table-cell px-6 py-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Submitted
-                  </th>
-                  <th className="px-3 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground text-right">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredBookings.map((booking) => (
-                  <tr key={booking.id} className="hover:bg-muted/30 transition-colors group">
-                    <td className="px-3 md:px-6 py-2 md:py-4">
-                      <span className="text-xs md:text-sm font-mono">{booking.id.split('-')[0]}...</span>
-                    </td>
-                    <td className="px-3 md:px-6 py-2 md:py-4">
-                      <div className="flex items-center gap-2 md:gap-3">
-                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                          <User size={12} />
-                        </div>
-                        <span className="text-xs md:text-sm font-medium">{booking.client?.full_name || booking.metadata?.guest_info?.full_name || booking.metadata?.guest_info?.name || 'Guest'}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 md:px-6 py-2 md:py-4">
-                      <div className="flex items-center gap-2 md:gap-3">
-                        <Car size={12} className="text-muted-foreground" />
-                        <span className="text-xs md:text-sm">{booking.cars?.make} {booking.cars?.model}</span>
-                      </div>
-                    </td>
-                    <td className="hidden lg:table-cell px-6 py-4">
-                      <span className="text-xs text-muted-foreground">{booking.fleet_owner?.full_name || 'Platform Owned'}</span>
-                    </td>
-                    <td className="px-3 md:px-6 py-2 md:py-4">
-                      <div className="text-xs md:text-sm">
-                        <div>{new Date(booking.start_date).toLocaleDateString()}</div>
-                        <div className="text-muted-foreground">to {new Date(booking.end_date).toLocaleDateString()}</div>
-                      </div>
-                    </td>
-                    <td className="px-3 md:px-6 py-2 md:py-4">
-                      <span className="text-xs md:text-sm font-bold">KES {booking.total_amount.toLocaleString()}</span>
-                    </td>
-                    <td className="px-3 md:px-6 py-2 md:py-4">
-                      <StatusBadge status={booking.status} />
-                    </td>
-                    <td className="hidden md:table-cell px-6 py-4">
-                      <div className="text-xs text-muted-foreground">
-                        <div>{new Date(booking.created_at).toLocaleDateString()}</div>
-                        <div>{new Date(booking.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                      </div>
-                    </td>
-                    <td className="px-3 md:px-6 py-2 md:py-4 text-right">
-                      <div className="flex items-center justify-end gap-1 md:gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {['confirmed','pending_collection','on_trip','returned'].includes(booking.status) && (
-                          <button
-                            onClick={() => setLifecycleBooking(booking)}
-                            className="p-1.5 md:p-2 hover:bg-blue-500/10 rounded-lg text-muted-foreground hover:text-blue-500 transition-colors"
-                            title="Manage Lifecycle"
-                          >
-                            <Car size={14} />
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => setSelectedBooking(booking)}
-                          className="p-1.5 md:p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors" 
-                          title="View Details"
-                        >
-                          <Eye size={14} />
-                        </button>
-                        <button 
-                          onClick={() => setDeleteConfirm(booking)}
-                          className="p-1.5 md:p-2 hover:bg-error/10 rounded-lg text-muted-foreground hover:text-error transition-colors" 
-                          title="Delete Booking"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Card Grid */}
+      {filteredBookings.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 bg-muted/30 rounded-2xl flex items-center justify-center mb-4">
+            <Calendar size={28} className="text-muted-foreground" />
           </div>
+          <p className="text-lg font-bold text-foreground">No bookings found</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {activeTab !== 'all' ? `No bookings in the "${TABS.find(t => t.key === activeTab)?.label}" stage` : 'No bookings match your search'}
+          </p>
         </div>
-      )}
-
-      {/* Mobile Expandable Rows */}
-      {isMobile && (
-        <div className="space-y-2">
-          {filteredBookings.map((booking) => (
-            <div key={booking.id}>
-              {/* Summary Row */}
-              <div 
-                className="flex justify-between items-center px-4 py-3 bg-card border border-border rounded-xl cursor-pointer select-none hover:bg-muted/30 transition-colors"
-                onClick={() => setExpandedRowId(expandedRowId === booking.id ? null : booking.id)}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                    <User size={12} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold">{booking.client?.full_name || booking.metadata?.guest_info?.full_name || booking.id.split('-')[0]}...</p>
-                    <p className="text-xs text-muted-foreground">{booking.client?.email || booking.metadata?.guest_info?.email || booking.id.slice(0,8).toUpperCase()}</p>
-                  </div>
-                </div>
-                <ChevronDown 
-                  size={16} 
-                  className={`transition-transform duration-200 ${expandedRowId === booking.id ? 'rotate-180' : ''}`}
-                />
-              </div>
-
-              {/* Expanded Card */}
-              {expandedRowId === booking.id && (
-                <div className="bg-card border border-border rounded-xl p-4 mb-3 max-h-[65vh] overflow-y-auto">
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                    <div>
-                      <span className="text-xs text-muted uppercase tracking-wide">Booking ID</span>
-                      <p className="text-sm text-white font-medium break-all">{booking.id}</p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted uppercase tracking-wide">Client</span>
-                      <p className="text-sm text-white font-medium">{booking.client?.full_name || booking.metadata?.guest_info?.full_name || 'Guest'}</p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted uppercase tracking-wide">Car</span>
-                      <p className="text-sm text-white font-medium">{booking.cars?.make} {booking.cars?.model}</p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted uppercase tracking-wide">Fleet Owner</span>
-                      <p className="text-sm text-white font-medium">{booking.fleet_owner?.full_name || 'Platform Owned'}</p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted uppercase tracking-wide">Submitted At</span>
-                      <p className="text-sm text-white font-medium">
-                        {new Date(booking.created_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted uppercase tracking-wide">Dates</span>
-                      <p className="text-sm text-white font-medium">
-                        {new Date(booking.start_date).toLocaleDateString()} - {new Date(booking.end_date).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted uppercase tracking-wide">Amount</span>
-                      <p className="text-sm text-white font-medium">KES {booking.total_amount.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted uppercase tracking-wide">Status</span>
-                      <div className="mt-1">
-                        <StatusBadge status={booking.status} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
-                    {['confirmed','pending_collection','on_trip','returned'].includes(booking.status) && (
-                      <button
-                        onClick={() => setLifecycleBooking(booking)}
-                        className="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-colors flex items-center gap-2"
-                      >
-                        <Car size={12} />
-                        Manage
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => setSelectedBooking(booking)}
-                      className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-2"
-                    >
-                      <Eye size={12} />
-                      View Details
-                    </button>
-                    <button 
-                      onClick={() => setDeleteConfirm(booking)}
-                      className="px-3 py-1.5 bg-error text-white rounded-lg text-xs font-bold hover:bg-error/90 transition-colors flex items-center gap-2"
-                    >
-                      <Trash2 size={12} />
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filteredBookings.map((booking: Booking) => (
+            <BookingCard
+              key={booking.id}
+              booking={booking}
+              onManage={() => handleManageBooking(booking)}
+              onViewDetails={() => handleManageBooking(booking)}
+              onDelete={() => { setDeleteConfirm(booking); }}
+            />
           ))}
         </div>
       )}
 
-      {/* Booking Detail Modal — delegated to AdminBookingDetail */}
-      {selectedBooking && (
-        <AdminBookingDetail
-          booking={selectedBooking as any}
-          onClose={() => setSelectedBooking(null)}
-          onRefresh={fetchBookings}
-          onDelete={() => { setDeleteConfirm(selectedBooking); setSelectedBooking(null); }}
-        />
-      )}
-
-      {/* Lifecycle Modal */}
-      {lifecycleBooking && (
-        <AdminBookingLifecycle
-          booking={lifecycleBooking as any}
-          onClose={() => setLifecycleBooking(null)}
-          onRefresh={fetchBookings}
-        />
-      )}
-
-
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 md:p-4 bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-xl md:rounded-2xl shadow-xl w-full max-w-md max-h-[95vh] md:max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-            <div className="p-4 md:p-6">
+          <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6">
               <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-error/10">
                 <AlertCircle className="w-6 h-6 text-error" />
               </div>
-              <h3 className="text-lg font-bold text-center mb-2">Delete Booking</h3>
+              <h3 className="text-lg font-black text-center mb-2">Delete Booking</h3>
               <p className="text-sm text-muted-foreground text-center mb-6">
-                Are you sure you want to delete this booking? This action cannot be undone and all related data will be permanently lost, including:
+                Are you sure? This action cannot be undone and all related data will be permanently lost.
               </p>
-              <ul className="text-xs text-muted-foreground space-y-1 mb-6 pl-4">
-                <li>· Booking record</li>
-                <li>· Payment transactions</li>
-                <li>· Pending payments</li>
-                <li>· Associated contracts</li>
-              </ul>
               <div className="flex gap-3">
-                <button 
-                  onClick={() => setDeleteConfirm(null)}
-                  className="flex-1 px-4 py-2 rounded-lg font-bold border border-border bg-card hover:bg-muted transition-colors text-sm"
-                >
+                <button onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl font-bold border border-border bg-card hover:bg-muted transition-colors text-sm">
                   Cancel
                 </button>
-                <button 
-                  onClick={() => handleDeleteBooking(deleteConfirm)}
-                  className="flex-1 px-4 py-2 rounded-lg font-bold bg-error text-white hover:bg-error/90 transition-colors text-sm"
-                >
+                <button onClick={() => handleDeleteBooking(deleteConfirm)}
+                  className="flex-1 px-4 py-2.5 rounded-xl font-bold bg-error text-white hover:bg-error/90 transition-colors text-sm">
                   Delete Forever
                 </button>
               </div>

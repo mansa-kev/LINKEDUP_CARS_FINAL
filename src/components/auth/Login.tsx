@@ -23,11 +23,12 @@ const LOCKOUT_DURATION = 15 * 60 * 1000;
 // ---------------------------------------------------------------------------
 // Portal detection
 // ---------------------------------------------------------------------------
-type PortalType = 'admin' | 'fleet' | 'client' | 'www';
+type PortalType = 'admin' | 'fleet' | 'client' | 'driver' | 'www';
 
 function detectPortal(subdomain: string, pathname: string): PortalType {
   if (subdomain === 'admin' || pathname.startsWith('/admin')) return 'admin';
   if (subdomain === 'fleet' || pathname.startsWith('/fleet')) return 'fleet';
+  if (pathname.includes('/driver')) return 'driver';
   if (subdomain === 'app' || pathname.startsWith('/client')) return 'client';
   return 'www';
 }
@@ -36,6 +37,7 @@ const PORTAL_CONFIG: Record<PortalType, { title: string; subtitle: string; allow
   admin: { title: 'Admin Portal', subtitle: 'Manage your platform', allowSignUp: false, roleLabel: 'Administrator' },
   fleet: { title: 'Fleet Portal', subtitle: 'Manage your fleet', allowSignUp: false, roleLabel: 'Fleet Owner' },
   client: { title: 'Client Portal', subtitle: 'Your driving experience', allowSignUp: true, roleLabel: 'Client' },
+  driver: { title: 'Driver Portal', subtitle: 'Trip Sheets & Handover Logs', allowSignUp: false, roleLabel: 'Driver' },
   www: { title: 'LinkedUp Cars', subtitle: 'Premium car rentals', allowSignUp: true, roleLabel: 'Client' },
 };
 
@@ -129,6 +131,7 @@ export function Login() {
   const redirectAfterLogin = (userRole: string) => {
     const targetSubdomain = portal === 'admin' ? 'admin'
       : portal === 'fleet' ? 'fleet'
+      : portal === 'driver' ? 'app'
       : userRole === 'admin' ? 'admin'
       : userRole === 'fleet_owner' ? 'fleet'
       : 'app';
@@ -137,10 +140,11 @@ export function Login() {
       setPreviewSubdomain(targetSubdomain);
       if (targetSubdomain === 'admin') navigate('/admin');
       else if (targetSubdomain === 'fleet') navigate('/fleet');
+      else if (userRole === 'driver') navigate('/driver');
       else navigate('/client');
     } else {
       const portalUrl = getPortalUrl(targetSubdomain as 'app' | 'fleet' | 'admin');
-      const path = targetSubdomain === 'app' ? '/client' : `/${targetSubdomain}`;
+      const path = targetSubdomain === 'app' ? (userRole === 'driver' ? '/driver' : '/client') : `/${targetSubdomain}`;
       window.location.href = `${portalUrl}${path}`;
     }
   };
@@ -227,6 +231,11 @@ export function Login() {
         if (portal === 'admin' && userRole !== 'admin') {
           await supabase.auth.signOut();
           setError('This portal is for administrators only. Please use the correct login portal.');
+          return;
+        }
+        if (portal === 'driver' && userRole !== 'driver') {
+          await supabase.auth.signOut();
+          setError('This portal is for drivers only. Please use the correct login portal.');
           return;
         }
 

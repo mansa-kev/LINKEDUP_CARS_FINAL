@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { clientService } from '../../services/clientService';
 import { useAuth } from '../../contexts/AuthContext';
 import { User, Heart, Settings as SettingsIcon, History, Save, Trash2, Car, MapPin, CreditCard, CheckCircle2 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export function MyProfile() {
   const { user, profile: authProfile } = useAuth();
@@ -11,6 +12,10 @@ export function MyProfile() {
     preferred_dropoff_location: '',
     default_payment_method: 'ncba_stk',
     always_include_chauffeur: false
+  });
+  const [extraDetails, setExtraDetails] = useState({
+    id_number: '',
+    license_number: ''
   });
   const [wishlist, setWishlist] = useState<any[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
@@ -35,6 +40,19 @@ export function MyProfile() {
         if (prefs) setPreferences(prefs);
         setWishlist(wish || []);
         setBookings(bks || []);
+
+        // Fetch extra profile details (id_number, license_number) if any exist
+        const { data: profileData } = await supabase
+          .from('user_profiles')
+          .select('id_number, license_number')
+          .eq('id', user.id)
+          .single();
+        if (profileData) {
+          setExtraDetails({
+            id_number: profileData.id_number || '',
+            license_number: profileData.license_number || ''
+          });
+        }
       }
     } catch (err) {
       console.error("Error fetching profile data:", err);
@@ -50,7 +68,9 @@ export function MyProfile() {
       await clientService.updateProfile(profile.id, {
         full_name: profile.full_name,
         phone_number: profile.phone_number,
-        address: profile.address
+        address: profile.address,
+        id_number: extraDetails.id_number,
+        license_number: extraDetails.license_number
       });
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
     } catch (err) {
@@ -142,6 +162,24 @@ export function MyProfile() {
                   type="text"
                   value={profile?.address || ''}
                   onChange={(e) => setProfile({...profile, address: e.target.value})}
+                  className="w-full px-4 py-2 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase">National ID Number</label>
+                <input
+                  type="text"
+                  value={extraDetails.id_number}
+                  onChange={(e) => setExtraDetails({...extraDetails, id_number: e.target.value})}
+                  className="w-full px-4 py-2 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase">Driver's License Number</label>
+                <input
+                  type="text"
+                  value={extraDetails.license_number}
+                  onChange={(e) => setExtraDetails({...extraDetails, license_number: e.target.value})}
                   className="w-full px-4 py-2 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
