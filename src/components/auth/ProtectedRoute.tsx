@@ -25,7 +25,8 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
 
   // Redirect to login if not authenticated
   if (!user) {
-    const loginPath = requiredRole === 'driver' ? '/driver/login' : '/login';
+    const isDriversSubdomain = window.location.hostname.startsWith('drivers.');
+    const loginPath = (requiredRole === 'driver' && !isDriversSubdomain) ? '/driver/login' : '/login';
     return <Navigate to={loginPath} state={{ from: location }} replace />;
   }
 
@@ -36,10 +37,11 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
     const userRole = profile?.role || 'client';
     const targetSubdomain: Subdomain = userRole === 'admin' ? 'admin' :
                         userRole === 'fleet_owner' ? 'fleet' :
-                        'app'; // Both driver and client use app subdomain
+                        userRole === 'driver' ? 'drivers' :
+                        'app'; 
     const redirectPath = userRole === 'admin' ? '/admin' :
                         userRole === 'fleet_owner' ? '/fleet' :
-                        userRole === 'driver' ? '/driver' :
+                        userRole === 'driver' ? '/' :
                         '/client';
 
     // Switch subdomain context first to prevent infinite redirect loop
