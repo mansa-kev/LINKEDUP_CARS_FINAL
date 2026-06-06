@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { logger } from '../utils/logger';
 
-export type Subdomain = 'www' | 'app' | 'admin' | 'fleet';
+export type Subdomain = 'www' | 'app' | 'admin' | 'fleet' | 'drivers';
 
 interface SubdomainContextType {
   subdomain: Subdomain;
@@ -29,6 +29,9 @@ export function SubdomainProvider({ children }: { children: ReactNode }) {
     } else if (hostname.startsWith('fleet.')) {
       logger.log('[SubdomainContext] Detected via hostname: fleet');
       setSubdomain('fleet');
+    } else if (hostname.startsWith('drivers.')) {
+      logger.log('[SubdomainContext] Detected via hostname: drivers');
+      setSubdomain('drivers');
     } else {
       logger.log('[SubdomainContext] Detected via hostname: default (www)');
       setSubdomain('www');

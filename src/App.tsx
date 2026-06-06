@@ -95,11 +95,6 @@ export default function App() {
                       <ClientLayout />
                     </ProtectedRoute>
                   } />
-                  <Route path="/driver/*" element={
-                    <ProtectedRoute requiredRole="driver">
-                      <DriverPortal />
-                    </ProtectedRoute>
-                  } />
                   <Route path="*" element={<Navigate to="/client" replace />} />
                 </Routes>
               </Suspense>
@@ -135,6 +130,21 @@ export default function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="*" element={<Navigate to="/fleet" replace />} />
+                </Routes>
+              </Suspense>
+            </div>
+          )}
+
+          {subdomain === 'drivers' && (
+            <div className="min-h-screen bg-background">
+              <Suspense fallback={<LogoLoader fullScreen message="Loading driver portal..." />}>
+                <Routes>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/*" element={
+                    <ProtectedRoute requiredRole="driver">
+                      <DriverPortal />
+                    </ProtectedRoute>
+                  } />
                 </Routes>
               </Suspense>
             </div>
