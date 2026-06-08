@@ -88,8 +88,9 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
         
         // Inject company settings
         replaced = replaced.replace(/\{\{companyPoBox\}\}/g, settings['company_po_box'] || '_____________');
-        replaced = replaced.replace(/\{\{companySignatureUrl\}\}/g, settings['company_signature_url'] || '');
-        replaced = replaced.replace(/\{\{logoUrl\}\}/g, window.location.origin + '/logo.png');
+        const companySig = settings['company_signature_url'] || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        replaced = replaced.replace(/\{\{companySignatureUrl\}\}/g, companySig);
+        replaced = replaced.replace(/\{\{logoUrl\}\}/g, 'https://edroffvtzrowpsooszqh.supabase.co/storage/v1/object/public/public_assets/logo.png');
         
         setHtmlContent(replaced);
       })

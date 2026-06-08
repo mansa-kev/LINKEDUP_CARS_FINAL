@@ -103,20 +103,24 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
           
           const sigImg = document.createElement('img');
           sigImg.src = signatureData;
-          sigImg.style.width = '200px';
-          sigImg.style.marginTop = '20px';
+          sigImg.style.maxHeight = '60px';
+          sigImg.style.marginTop = '10px';
           
-          wrapper.appendChild(document.createElement('br'));
-          const sigText = document.createElement('p');
-          sigText.innerHTML = '<strong>Client Signature:</strong>';
-          wrapper.appendChild(sigText);
-          wrapper.appendChild(sigImg);
+          const placeholder = wrapper.querySelector('#client-signature-placeholder');
+          if (placeholder) {
+            placeholder.appendChild(sigImg);
+          } else {
+            const sigText = document.createElement('p');
+            sigText.innerHTML = '<strong>Client Signature:</strong>';
+            wrapper.appendChild(sigText);
+            wrapper.appendChild(sigImg);
+          }
           
           const opt = {
             margin: 10,
             filename: 'contract.pdf',
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2 },
+            html2canvas: { scale: 2, useCORS: true, allowTaint: true },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
           };
           
