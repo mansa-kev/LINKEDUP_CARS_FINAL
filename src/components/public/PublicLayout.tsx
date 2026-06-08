@@ -244,7 +244,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             <div className="mt-6 space-y-2 text-sm text-muted-foreground">
               <p>Lanphil Arcade, Ridgeways, Kiambu Road</p>
               <p>info@linkedupcarsrentals.com</p>
-              <p>+254 700 000 000</p>
+              <a href="https://wa.me/254714764162" target="_blank" rel="noreferrer" className="block hover:text-primary transition-colors">+254 714 764 162</a>
             </div>
           </div>
           <div>

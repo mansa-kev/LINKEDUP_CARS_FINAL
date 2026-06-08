@@ -298,6 +298,9 @@ export function DriverFieldBooking({ onBack }: DriverFieldBookingProps) {
         await adminService.confirmBankTransferPayment(result.id, bookingData.bankReference);
         toast.success('Bank transfer confirmed!');
         setCurrentStep('success');
+      } else if (bookingData.paymentMethod === 'payment_link') {
+        toast.success('Booking recorded. Payment link generated.');
+        setCurrentStep('success');
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to create booking');
@@ -633,7 +636,7 @@ export function DriverFieldBooking({ onBack }: DriverFieldBookingProps) {
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <button 
                 onClick={() => updateData({ paymentMethod: 'stk_push' })} 
                 className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-2 transition-all ${
@@ -641,7 +644,7 @@ export function DriverFieldBooking({ onBack }: DriverFieldBookingProps) {
                 }`}
               >
                 <Phone size={24} />
-                <span className="font-bold text-xs">M-Pesa STK Push</span>
+                <span className="font-bold text-xs text-center">M-Pesa STK Push</span>
               </button>
               <button 
                 onClick={() => updateData({ paymentMethod: 'bank_transfer' })} 
@@ -650,7 +653,16 @@ export function DriverFieldBooking({ onBack }: DriverFieldBookingProps) {
                 }`}
               >
                 <Building2 size={24} />
-                <span className="font-bold text-xs">Bank Transfer</span>
+                <span className="font-bold text-xs text-center">Bank Transfer</span>
+              </button>
+              <button 
+                onClick={() => updateData({ paymentMethod: 'payment_link' })} 
+                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-2 transition-all ${
+                  bookingData.paymentMethod === 'payment_link' ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card text-muted-foreground hover:bg-muted/50'
+                }`}
+              >
+                <CreditCard size={24} />
+                <span className="font-bold text-xs text-center">Send Payment Link</span>
               </button>
             </div>
 
@@ -682,7 +694,8 @@ export function DriverFieldBooking({ onBack }: DriverFieldBookingProps) {
               </button>
               <button onClick={handleCreateBooking} disabled={loading || polling} className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-primary/95 transition-all disabled:opacity-50">
                  {loading ? <Loader2 size={18} className="animate-spin" /> : 
-                  bookingData.paymentMethod === 'stk_push' ? 'Trigger STK & Book' : 'Confirm Transfer & Book'}
+                  bookingData.paymentMethod === 'stk_push' ? 'Trigger STK & Book' : 
+                  bookingData.paymentMethod === 'payment_link' ? 'Generate Link & Book' : 'Confirm Transfer & Book'}
               </button>
             </div>
           </div>
@@ -715,9 +728,21 @@ export function DriverFieldBooking({ onBack }: DriverFieldBookingProps) {
                 </div>
              </div>
 
-             <button onClick={() => window.location.reload()} className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-primary/95 transition-all">
-               Done & Return
-             </button>
+             <div className="flex flex-col gap-3 w-full">
+               {bookingData.paymentMethod === 'payment_link' && bookingId && (
+                 <a 
+                   href={`https://wa.me/${bookingData.phone.replace('+', '')}?text=${encodeURIComponent(`Hello ${bookingData.fullName}, your booking at LinkedUp Cars is confirmed. Please complete your payment using this secure link: ${window.location.origin}/pay/${bookingId}`)}`}
+                   target="_blank"
+                   rel="noreferrer"
+                   className="w-full py-3 bg-emerald-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all"
+                 >
+                   <Phone size={18} /> Share Payment Link on WhatsApp
+                 </a>
+               )}
+               <button onClick={() => window.location.reload()} className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-primary/95 transition-all">
+                 Done & Return
+               </button>
+             </div>
           </div>
         )}
       </div>

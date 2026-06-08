@@ -79,20 +79,39 @@ export function Settings() {
     }
   };
 
-  const handleExportData = () => {
-    // Mock data export
-    const data = {
-      user: currentUser,
-      preferences: preferences,
-      exportDate: new Date().toISOString()
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `my-data-${currentUser.id.slice(0, 8)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportData = async () => {
+    try {
+      setMessage({ type: 'success', text: 'Preparing your data export...' });
+      const [bookings, transactions, messages] = await Promise.all([
+        clientService.getAllBookings(currentUser.id),
+        clientService.getTransactions(currentUser.id),
+        clientService.getMessages(currentUser.id)
+      ]);
+
+      const data = {
+        user: currentUser,
+        preferences: preferences,
+        bookings: bookings || [],
+        transactions: transactions || [],
+        messages: messages || [],
+        exportDate: new Date().toISOString()
+      };
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `my-data-${currentUser.id.slice(0, 8)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      setMessage({ type: 'success', text: 'Data exported successfully.' });
+    } catch (err) {
+      console.error("Data export failed", err);
+      setMessage({ type: 'error', text: 'Failed to export data.' });
+    } finally {
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
   };
 
   if (loading) return <div className="p-8">Loading settings...</div>;

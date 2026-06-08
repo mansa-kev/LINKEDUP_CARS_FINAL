@@ -291,6 +291,36 @@ export function AdminTaxes() {
     toast.success('Invoice downloaded');
   };
 
+  const exportLedgerCSV = () => {
+    if (records.length === 0) {
+      toast.info('No records to export');
+      return;
+    }
+    const headers = ['Invoice Number', 'Booking Ref', 'Client Name', 'Client KRA PIN', 'Gross Amount', 'Taxable Value', 'VAT Amount', 'WHT Amount', 'Status', 'Receipt Number', 'Date'];
+    const rows = records.map(r => [
+      r.invoice_number,
+      r.booking?.booking_reference || r.booking_id || 'N/A',
+      r.client?.full_name || 'N/A',
+      r.client_kra_pin || 'N/A',
+      r.gross_amount,
+      r.taxable_value,
+      r.vat_amount,
+      r.wht_amount,
+      r.etims_status,
+      r.etims_receipt_number || 'N/A',
+      new Date(r.created_at).toLocaleDateString()
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Tax_Ledger_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Tax Ledger CSV exported');
+  };
+
   // ── Computed Stats ─────────────────────────────────────────────────────────
 
   const totalVAT      = records.reduce((s, r) => s + Number(r.vat_amount), 0);
@@ -338,6 +368,14 @@ export function AdminTaxes() {
           >
             <Hash size={16} />
             Sync Bookings
+          </button>
+          <button
+            onClick={exportLedgerCSV}
+            className="flex items-center gap-2 px-4 py-2.5 bg-muted hover:bg-muted/80 text-foreground rounded-xl text-sm font-bold transition-all border border-border"
+            title="Export full tax ledger as CSV"
+          >
+            <FileText size={16} />
+            Export CSV
           </button>
           <button
             onClick={transmitAllPending}

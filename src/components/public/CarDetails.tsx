@@ -30,6 +30,7 @@ import { BookingFlow } from './BookingFlow/BookingFlow';
 import { ReservationFlow } from './BookingFlow/ReservationFlow';
 import { Logo } from '../shared/Logo';
 import { LogoLoader } from '../shared/LogoLoader';
+import { FloatingSupportWidget } from './FloatingSupportWidget';
 
 export function CarDetails() {
   const { id } = useParams<{ id: string }>();
@@ -577,6 +578,7 @@ export function CarDetails() {
         </div>
       </div>
     </div>
+    <FloatingSupportWidget context={`Viewing Car: ${car.make} ${car.model}`} />
     </>
   );
 }

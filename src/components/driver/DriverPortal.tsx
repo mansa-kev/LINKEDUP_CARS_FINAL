@@ -93,6 +93,27 @@ export function DriverPortal() {
     setActiveStep('inspection');
   };
 
+  const handleSOS = async (booking: any) => {
+    if (!window.confirm("Are you sure you want to trigger an SOS? This alerts administration immediately.")) return;
+    try {
+      const msg = {
+        sender_id: user.id,
+        receiver_id: null, // to admin
+        booking_id: booking.id,
+        subject: `EMERGENCY: Driver SOS / Incident`,
+        content: `Emergency alert triggered by driver for car ${booking.cars?.license_plate}. Please contact driver immediately.`,
+        status: 'new',
+        urgency: 'high'
+      };
+      const { error } = await supabase.from('messages').insert(msg);
+      if (error) throw error;
+      toast.success('SOS Alert sent. Administration will contact you shortly.');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to send SOS. Please call admin directly.');
+    }
+  };
+
   // Filter logic
   const filteredBookings = bookings.filter(b => {
     if (filterType === 'all') return true;
@@ -165,11 +186,11 @@ export function DriverPortal() {
         {activeStep === 'dashboard' && (
           <div className="space-y-6">
             {/* Stats Dashboard */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-card border border-border p-4 rounded-2xl flex flex-col justify-between">
                 <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Trips Completed</p>
                 <div className="flex items-end justify-between mt-2">
-                  <span className="text-2xl font-black">{profile?.total_trips || 0}</span>
+                  <span className="text-2xl font-black">{profile?.total_trips || bookings.filter(b => b.status === 'completed').length || 0}</span>
                   <TrendingUp size={16} className="text-emerald-500 mb-1" />
                 </div>
               </div>
@@ -187,6 +208,14 @@ export function DriverPortal() {
                 <div className="flex items-end justify-between mt-2">
                   <span className="text-2xl font-black">{bookings.filter(b => b.status === 'confirmed' || b.status === 'on_trip').length}</span>
                   <Award size={16} className="text-primary mb-1" />
+                </div>
+              </div>
+
+              <div className="bg-card border border-border p-4 rounded-2xl flex flex-col justify-between">
+                <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Earnings (Est)</p>
+                <div className="flex items-end justify-between mt-2">
+                  <span className="text-lg font-black truncate pr-1">KSh {(bookings.filter(b => b.status === 'completed' && b.needs_chauffeur).reduce((sum, b) => sum + Number(b.total_amount) * 0.15, 0) || 0).toLocaleString()}</span>
+                  <CreditCard size={16} className="text-emerald-500 mb-1 shrink-0" />
                 </div>
               </div>
             </div>
@@ -298,6 +327,13 @@ export function DriverPortal() {
                           </div>
 
                           <div className="flex gap-2 w-full sm:w-auto">
+                            <button
+                              onClick={() => handleSOS(booking)}
+                              className="flex-none px-4 py-2 bg-red-500/10 text-red-500 text-xs font-black uppercase tracking-wider rounded-xl hover:bg-red-500/20 transition-colors border border-red-500/20 flex items-center gap-2"
+                              title="Report Emergency / Issue"
+                            >
+                              <AlertTriangle size={14} /> SOS
+                            </button>
                             {!hasPre && (
                               <button
                                 onClick={() => handleStartInspection(booking, 'pre_handover')}

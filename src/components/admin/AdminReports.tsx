@@ -68,9 +68,44 @@ export function AdminReports() {
 
   const handleGenerateReport = async (title: string, category: string) => {
     try {
+      // Simulate saving to report history
       await adminService.generateReport({ title, category });
       fetchReports();
+
+      // Actually generate CSV for the user
+      const { data, error } = await adminService.getFinancials(); // Assuming it fetches some transactions or we can just fetch bookings directly
+      
+      const { supabase } = await import('../../lib/supabase');
+      const { data: bookings } = await supabase.from('bookings').select('*, cars(make, model), user_profiles(full_name)').limit(500);
+
+      if (!bookings || bookings.length === 0) {
+        alert('No data to export for this report');
+        return;
+      }
+
+      const headers = ['Booking ID', 'Car', 'Client', 'Start Date', 'End Date', 'Status', 'Total Amount', 'Payment Status'];
+      const rows = bookings.map((b: any) => [
+        b.id,
+        `${b.cars?.make || ''} ${b.cars?.model || ''}`,
+        b.user_profiles?.full_name || 'N/A',
+        new Date(b.start_date).toLocaleDateString(),
+        new Date(b.end_date).toLocaleDateString(),
+        b.status,
+        b.total_amount,
+        b.payment_status
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+
     } catch (error) {
+      console.error('Failed to generate report', error);
       alert('Failed to generate report');
     }
   };

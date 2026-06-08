@@ -15,9 +15,9 @@ const contactInfo = [
   },
   {
     icon: Phone,
-    label: "Call Us",
-    value: "+254 700 000 000",
-    link: "tel:+254700000000"
+    label: "Call / WhatsApp",
+    value: "+254 714 764 162",
+    link: "https://wa.me/254714764162"
   },
   {
     icon: MapPin,
@@ -287,7 +287,7 @@ export function Contact() {
           </div>
           <div className="h-[400px] md:h-[500px] rounded-[40px] md:rounded-[60px] overflow-hidden border border-white/5">
             <iframe
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d273.65313116902155!2d36.83753435486073!3d-1.2237729429610222!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x182f17f709e4cbd3%3A0xdb6fe45e814d8054!2sLanphil%20Arcade!5e1!3m2!1sen!2ske!4v1775346762737!5m2!1sen!2ske"
+              src="https://maps.google.com/maps?q=Lanphil%20Arcade,%20Ridgeways,%20Kiambu%20Road,%20Nairobi&t=&z=15&ie=UTF8&iwloc=&output=embed"
               width="100%"
               height="100%"
               style={{ border: 0 }}

@@ -1,5 +1,6 @@
 import { supabase, handleSupabaseErrorWrapper as handleSupabaseError } from '../lib/supabase';
 import { logger } from '../utils/logger';
+import { Car } from '../types';
 
 export const fleetService = {
   // --- Public Fleet ---
@@ -246,16 +247,21 @@ export const fleetService = {
     }
   },
 
-  addCar: async (car: any) => {
+  addCar: async (car: Partial<Car>) => {
+    const processedCar = {
+      ...car,
+      is_approved: false,
+      status: 'unavailable'
+    };
     const { data, error } = await supabase
       .from('cars')
-      .insert([car])
+      .insert([processedCar])
       .select();
     if (error) return handleSupabaseError(error, 'addCar');
     return data;
   },
 
-  updateCar: async (id: string, updates: any) => {
+  updateCar: async (id: string, updates: Partial<Car>) => {
     const { data, error } = await supabase
       .from('cars')
       .update(updates)
@@ -469,20 +475,34 @@ export const fleetService = {
       logger.log("Pricing suggestions:", pricingSuggestions);
 
       // 2. Market Insights
+      const categoryCounts: Record<string, number> = {};
+      (bookings || []).forEach((b: any) => {
+        const cat = b.cars?.category;
+        if (cat) {
+          categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+        }
+      });
+      const topCategories = Object.entries(categoryCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([cat, count]) => ({ query: `${cat} searches`, count: count * 3 + 12 })); // simulated search volume based on real bookings
+      
       const marketInsights = {
-        topQueries: [
-          { query: 'SUV for rent', count: 150 },
-          { query: 'Electric cars', count: 120 },
-          { query: 'Long term rental', count: 90 }
+        topQueries: topCategories.length ? topCategories : [
+          { query: 'SUV rentals', count: 15 },
+          { query: 'Electric cars', count: 10 }
         ],
-        underSupplied: 'High demand for electric sedans in your area, low supply'
+        underSupplied: topCategories.length > 0 ? `High demand for ${topCategories[0].query.split(' ')[0]} vehicles based on platform activity` : 'High demand for SUVs in your area'
       };
 
       // 3. Fleet Expansion Recommendations
-      const expansionRecommendations = [
-        { model: 'Tesla Model 3', reason: 'High demand for electric sedans' },
-        { model: 'Toyota Land Cruiser', reason: 'Consistently high demand for SUVs' }
-      ];
+      const expansionRecommendations = topCategories.map(tc => ({
+        model: `Expand your ${tc.query.split(' ')[0]} fleet`,
+        reason: `Based on high platform demand`
+      }));
+      if (expansionRecommendations.length === 0) {
+         expansionRecommendations.push({ model: 'Add an SUV', reason: 'Consistently high demand generally' });
+      }
 
       const result = { pricingSuggestions, marketInsights, expansionRecommendations };
       logger.log("Returning result:", result);

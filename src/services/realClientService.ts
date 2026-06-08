@@ -36,17 +36,47 @@ export const clientService = {
 
       if (uError || pError || bError) throw uError || pError || bError;
 
-      // Simple recommendation logic: suggest cars of similar category to last booking
-      const lastBooking = pastBookings?.[0];
+      // Genuine recommendation engine based on user history
       let recommendations: any[] = [];
-      if (lastBooking) {
+      
+      if (pastBookings && pastBookings.length > 0) {
+        // Find most frequent category and average daily rate
+        const categoryCounts: Record<string, number> = {};
+        let totalSpend = 0;
+        let count = 0;
+        
+        pastBookings.forEach((b: any) => {
+           if (b.cars?.category) {
+             categoryCounts[b.cars.category] = (categoryCounts[b.cars.category] || 0) + 1;
+             totalSpend += Number(b.cars.daily_rate) || 0;
+             count++;
+           }
+        });
+        
+        const topCategory = Object.keys(categoryCounts).sort((a, b) => categoryCounts[b] - categoryCounts[a])[0];
+        const avgRate = count > 0 ? totalSpend / count : 0;
+        const minRate = avgRate * 0.7;
+        const maxRate = avgRate * 1.3;
+        
         const { data: recs, error: rError } = await supabase
           .from('cars')
           .select('*')
-          .eq('category', lastBooking.cars.category)
-          .neq('id', lastBooking.car_id)
+          .eq('category', topCategory)
+          .gte('daily_rate', minRate)
+          .lte('daily_rate', maxRate)
           .limit(3);
-        if (!rError) recommendations = recs || [];
+          
+        if (!rError && recs && recs.length > 0) {
+          recommendations = recs;
+        } else {
+          // Fallback to top category without price bounds if no exact matches
+          const { data: fallbackRecs } = await supabase.from('cars').select('*').eq('category', topCategory).limit(3);
+          recommendations = fallbackRecs || [];
+        }
+      } else {
+         // No history: recommend generically popular or premium cars
+         const { data: popularRecs } = await supabase.from('cars').select('*').limit(3);
+         recommendations = popularRecs || [];
       }
 
       return { 

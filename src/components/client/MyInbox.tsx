@@ -6,11 +6,12 @@ import { Inbox, Send, Plus, Clock, MessageSquare, User, Shield, AlertCircle, Che
 export function MyInbox() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
+  const [conversations, setConversations] = useState<any[][]>([]);
   const [extensionRequests, setExtensionRequests] = useState<any[]>([]);
   const [activeBookings, setActiveBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'messages' | 'extensions' | 'support'>('messages');
-  const [selectedConversation, setSelectedConversation] = useState<any>(null);
+  const [selectedConversation, setSelectedConversation] = useState<any[] | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
 
@@ -36,9 +37,30 @@ export function MyInbox() {
           clientService.getExtensionRequests(user.id),
           clientService.getAllBookings(user.id)
         ]);
-        setMessages(msgs || []);
+        
+        const validMsgs = msgs || [];
+        const groups = validMsgs.reduce((acc: any, msg: any) => {
+          const key = msg.booking_id || msg.subject || 'general';
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(msg);
+          return acc;
+        }, {});
+        
+        const sortedGroups: any[][] = Object.values(groups).sort((a: any, b: any) => 
+          new Date(b[0].created_at).getTime() - new Date(a[0].created_at).getTime()
+        );
+
+        setConversations(sortedGroups);
         setExtensionRequests(exts || []);
         setActiveBookings(bks?.filter((b: any) => b.status === 'in_progress') || []);
+
+        if (selectedConversation && sortedGroups.length > 0) {
+           const updatedThread = sortedGroups.find((g: any) => 
+             (g[0].booking_id === selectedConversation[0].booking_id) && 
+             (g[0].subject === selectedConversation[0].subject)
+           );
+           if (updatedThread) setSelectedConversation(updatedThread);
+        }
       }
     } catch (err) {
       console.error("Error fetching inbox data:", err);
@@ -51,11 +73,14 @@ export function MyInbox() {
     e.preventDefault();
     if (!newMessage.trim() || !selectedConversation) return;
 
+    const lastMsg = selectedConversation[0]; // most recent message in thread
+    const receiverId = lastMsg.sender_id === currentUser.id ? lastMsg.receiver_id : lastMsg.sender_id;
+
     const msg = {
       sender_id: currentUser.id,
-      receiver_id: selectedConversation.sender_id === currentUser.id ? selectedConversation.receiver_id : selectedConversation.sender_id,
-      booking_id: selectedConversation.booking_id,
-      subject: selectedConversation.subject,
+      receiver_id: receiverId,
+      booking_id: lastMsg.booking_id,
+      subject: lastMsg.subject,
       content: newMessage,
       status: 'new'
     };
@@ -154,28 +179,31 @@ export function MyInbox() {
               </h3>
             </div>
             <div className="flex-1 overflow-y-auto">
-              {messages.length > 0 ? (
-                messages.map((msg) => (
-                  <button 
-                    key={msg.id}
-                    onClick={() => setSelectedConversation(msg)}
-                    className={`w-full p-4 text-left border-b border-border hover:bg-muted/50 transition-colors ${selectedConversation?.id === msg.id ? 'bg-muted' : ''}`}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <p className="font-bold text-sm truncate pr-2">{msg.subject || 'No Subject'}</p>
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{new Date(msg.created_at).toLocaleDateString()}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground line-clamp-1">{msg.content}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        msg.sender_id === currentUser.id ? 'bg-blue-100 text-blue-600' : 'bg-primary/10 text-primary'
-                      }`}>
-                        {msg.sender_id === currentUser.id ? 'Sent' : 'Received'}
-                      </span>
-                      {msg.status === 'new' && <div className="w-2 h-2 bg-primary rounded-full" />}
-                    </div>
-                  </button>
-                ))
+              {conversations.length > 0 ? (
+                conversations.map((thread, idx) => {
+                  const latestMsg = thread[0];
+                  return (
+                    <button 
+                      key={latestMsg.id || idx}
+                      onClick={() => setSelectedConversation(thread)}
+                      className={`w-full p-4 text-left border-b border-border hover:bg-muted/50 transition-colors ${selectedConversation && selectedConversation[0].id === latestMsg.id ? 'bg-muted' : ''}`}
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <p className="font-bold text-sm truncate pr-2">{latestMsg.subject || 'No Subject'} <span className="text-[10px] text-muted-foreground ml-1">({thread.length})</span></p>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">{new Date(latestMsg.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{latestMsg.content}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          latestMsg.sender_id === currentUser.id ? 'bg-blue-100 text-blue-600' : 'bg-primary/10 text-primary'
+                        }`}>
+                          {latestMsg.sender_id === currentUser.id ? 'Sent' : 'Received'}
+                        </span>
+                        {latestMsg.status === 'new' && <div className="w-2 h-2 bg-primary rounded-full" />}
+                      </div>
+                    </button>
+                  );
+                })
               ) : (
                 <div className="p-8 text-center text-muted-foreground">
                   <MessageSquare className="mx-auto mb-2 opacity-20" size={32} />
@@ -191,27 +219,28 @@ export function MyInbox() {
               <>
                 <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
                   <div>
-                    <h3 className="font-bold text-sm">{selectedConversation.subject}</h3>
+                    <h3 className="font-bold text-sm">{selectedConversation[0].subject}</h3>
                     <p className="text-xs text-muted-foreground">
-                      With: {selectedConversation.sender_id === currentUser.id ? 
-                        (selectedConversation.receiver?.full_name || 'Admin') : 
-                        (selectedConversation.sender?.full_name || 'Admin')}
+                      With: {selectedConversation[0].sender_id === currentUser.id ? 
+                        (selectedConversation[0].receiver?.full_name || 'Admin') : 
+                        (selectedConversation[0].sender?.full_name || 'Admin')}
                     </p>
                   </div>
                   <span className="text-[10px] font-bold uppercase px-2 py-1 bg-muted rounded-lg">
-                    {selectedConversation.status}
+                    {selectedConversation[0].status}
                   </span>
                 </div>
-                <div className="flex-1 p-6 overflow-y-auto space-y-4">
-                  {/* In a real app, we'd fetch the full thread. For now, we show the selected message and a mock thread */}
-                  <div className={`flex ${selectedConversation.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] p-4 rounded-2xl text-sm ${
-                      selectedConversation.sender_id === currentUser.id ? 'bg-primary text-primary-foreground rounded-tr-none' : 'bg-muted rounded-tl-none'
-                    }`}>
-                      {selectedConversation.content}
-                      <p className="text-[10px] mt-2 opacity-70">{new Date(selectedConversation.created_at).toLocaleTimeString()}</p>
+                <div className="flex-1 p-6 overflow-y-auto space-y-4 flex flex-col-reverse">
+                  {selectedConversation.map((msg: any) => (
+                    <div key={msg.id} className={`flex ${msg.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[80%] p-4 rounded-2xl text-sm ${
+                        msg.sender_id === currentUser.id ? 'bg-primary text-primary-foreground rounded-tr-none' : 'bg-muted rounded-tl-none'
+                      }`}>
+                        {msg.content}
+                        <p className="text-[10px] mt-2 opacity-70">{new Date(msg.created_at).toLocaleTimeString()}</p>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
                 <form onSubmit={handleSendMessage} className="p-4 border-t border-border bg-muted/10 flex gap-2">
                   <input 
