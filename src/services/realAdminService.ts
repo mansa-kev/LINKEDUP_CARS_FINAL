@@ -309,17 +309,20 @@ export const adminService = {
   },
 
   deleteUser: async (id: string) => {
-    const session = (await supabase.auth.getSession()).data.session;
-    const response = await fetch(`/api/users/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${session?.access_token || ''}`
-      }
+    const { data, error } = await supabase.functions.invoke('delete-user', {
+      body: { userId: id }
     });
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Failed to delete user');
+
+    if (error) {
+      console.error('Delete user Edge Function error:', error);
+      throw new Error(error.message || 'Failed to delete user');
     }
+
+    if (data?.error) {
+      console.error('Delete user API error:', data.error);
+      throw new Error(data.error || 'Failed to delete user');
+    }
+
     return true;
   },
 
@@ -427,14 +430,8 @@ export const adminService = {
   },
 
   createFleetOwnerAccount: async (data: any) => {
-    const session = (await supabase.auth.getSession()).data.session;
-    const response = await fetch('/api/users', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token || ''}`
-      },
-      body: JSON.stringify({
+    const { data: resData, error: invokeError } = await supabase.functions.invoke('create-user', {
+      body: {
         email: data.email,
         password: data.password || 'Fleet123!',
         role: 'fleet_owner',
@@ -442,15 +439,16 @@ export const adminService = {
         phoneNumber: data.phone_number,
         companyName: data.company_name,
         commissionRate: data.commission_rate
-      })
+      }
     });
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Failed to create fleet owner account');
+    if (invokeError) {
+      throw new Error(invokeError.message || 'Failed to create fleet owner account');
+    }
+    if (resData?.error) {
+      throw new Error(resData.error || 'Failed to create fleet owner account');
     }
 
-    const resData = await response.json();
     const userId = resData.userId;
 
     // Send welcome email
@@ -848,28 +846,23 @@ export const adminService = {
   },
 
   addDriver: async (driver: any) => {
-    const session = (await supabase.auth.getSession()).data.session;
-    const response = await fetch('/api/users', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token || ''}`
-      },
-      body: JSON.stringify({
+    const { data: resData, error: invokeError } = await supabase.functions.invoke('create-user', {
+      body: {
         email: driver.email,
         role: 'driver',
         fullName: driver.full_name,
         phoneNumber: driver.phone_number,
         licenseNumber: driver.license_number
-      })
+      }
     });
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Failed to add driver');
+    if (invokeError) {
+      throw new Error(invokeError.message || 'Failed to add driver');
+    }
+    if (resData?.error) {
+      throw new Error(resData.error || 'Failed to add driver');
     }
 
-    const resData = await response.json();
     return [{ id: resData.userId, ...driver }];
   },
 
