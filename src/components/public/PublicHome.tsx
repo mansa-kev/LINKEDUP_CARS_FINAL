@@ -9,6 +9,7 @@ import { ArrowRight, Star, BookOpen, Clock, Quote, ChevronLeft, ChevronRight } f
 import { usePublicImagesFinal } from '../../hooks/usePublicImagesFinal';
 import { supabase } from '../../lib/supabase';
 import { logger } from '../../utils/logger';
+import { FloatingSupportWidget } from './FloatingSupportWidget';
 
 export function PublicHome() {
   const { images, loading } = usePublicImagesFinal();
@@ -442,6 +443,7 @@ export function PublicHome() {
         </section>
       )}
 
+      <FloatingSupportWidget />
     </div>
     </>
   );

@@ -10,6 +10,28 @@ import {
 import { toast } from 'sonner';
 import { logger } from '../../utils/logger';
 
+// --- Countdown Hook ---
+const useCountdown = (targetDate: string) => {
+  const [timeLeft, setTimeLeft] = useState(new Date(targetDate).getTime() - new Date().getTime());
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setTimeLeft(new Date(targetDate).getTime() - new Date().getTime());
+    }, 1000);
+    return () => clearInterval(intervalId);
+  }, [targetDate]);
+
+  return timeLeft;
+};
+
+const formatTimeLeft = (ms: number) => {
+  if (ms <= 0) return '00:00:00';
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((ms % (1000 * 60)) / 1000);
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
 // --- Types ---
 type BookingStatus = 'pending' | 'confirmed' | 'pending_collection' | 'on_trip' | 'returned' | 'completed' | 'cancelled' | 'pending_payment_verification';
 
@@ -96,7 +118,12 @@ const BookingCard: React.FC<{
   const balance = booking.total_amount - totalPaid;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const endDate = new Date(booking.end_date);
-  const isOverdue = booking.status === 'on_trip' && endDate < today;
+  
+  // Real-time Countdown logic
+  const timeLeftMs = useCountdown(booking.end_date);
+  const isOverdue = booking.status === 'on_trip' && timeLeftMs <= 0;
+  const isLessThanAnHour = booking.status === 'on_trip' && timeLeftMs > 0 && timeLeftMs <= 3600000;
+  const isApproaching = booking.status === 'on_trip' && timeLeftMs > 3600000 && timeLeftMs <= 10800000; // < 3 hours
 
   return (
     <div className={`bg-card rounded-2xl border overflow-hidden transition-all hover:shadow-lg hover:border-primary/30 group ${
@@ -145,6 +172,28 @@ const BookingCard: React.FC<{
           </div>
         </div>
       </div>
+
+      {/* Live Timer for In Transit */}
+      {booking.status === 'on_trip' && (
+        <div className="px-4 pb-3">
+          <div className={`p-2.5 rounded-xl border flex items-center justify-between transition-colors ${
+            isOverdue ? 'bg-red-500/10 border-red-500/30 text-red-500' :
+            isLessThanAnHour ? 'bg-red-500/10 border-red-500 animate-pulse text-red-500' :
+            isApproaching ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600 dark:text-yellow-400' :
+            'bg-blue-500/10 border-blue-500/30 text-blue-500'
+          }`}>
+            <div className="flex items-center gap-2">
+              <Clock size={14} className={isLessThanAnHour ? 'animate-bounce' : ''} />
+              <span className="text-xs font-bold uppercase tracking-wider">
+                {isOverdue ? 'Return Overdue' : 'Time Remaining'}
+              </span>
+            </div>
+            <span className="font-mono font-black text-sm">
+              {isOverdue ? '00:00:00' : formatTimeLeft(timeLeftMs)}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Financials */}
       <div className="px-4 pb-3 grid grid-cols-2 gap-3">
