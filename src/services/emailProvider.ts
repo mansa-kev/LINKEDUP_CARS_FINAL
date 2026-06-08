@@ -145,6 +145,20 @@ export const EMAIL_TEMPLATES: Record<string, { subject: string; html: (data: Rec
     `),
     text: (d) => `Hi ${d.name},\n\nYour fleet owner account has been created.\nEmail: ${d.email}\nTemporary Password: Fleet123!\n\nPlease change your password immediately after first login.\n\nLogin at: https://fleet.linkedupcarsrentals.com/login\n\n- LinkedUp Cars Team`,
   },
+
+  manual_payment_pending: {
+    subject: 'Booking Received - Pending Payment - LinkedUp Cars',
+    html: (d) => wrapInHtml('Payment Pending', `
+      <p style="color:#334155;line-height:1.6;margin:0 0 16px;">We have received your alternative payment request for Booking <strong>#${d.booking_id}</strong>.</p>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:20px;margin:0 0 16px;">
+        <p style="margin:0 0 8px;font-weight:600;color:#1e3a8a;">Car: ${d.car_name}</p>
+        <p style="margin:0;color:#1e3a8a;">Amount Due: KES ${d.total_amount}</p>
+      </div>
+      <p style="color:#334155;line-height:1.6;margin:0 0 16px;">Our team is processing your request. If you close your browser, you can always track your booking status here:</p>
+      <a href="${d.tracking_link}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:12px 24px;border-radius:12px;text-decoration:none;font-weight:700;font-size:14px;">Track Booking Status</a>
+    `),
+    text: (d) => `We received your payment request for Booking #${d.booking_id}.\nCar: ${d.car_name}\nAmount: KES ${d.total_amount}\n\nTrack your booking here: ${d.tracking_link}\n\n- LinkedUp Cars Team`,
+  },
 };
 
 // ---------------------------------------------------------------------------

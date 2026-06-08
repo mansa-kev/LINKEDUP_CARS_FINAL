@@ -28,6 +28,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { InternationalPhoneInput } from '../ui/InternationalPhoneInput';
 
 type Step = 'vehicle' | 'client' | 'documents' | 'signature' | 'payment' | 'success';
 
@@ -434,12 +435,9 @@ export function FleetConciergeBooking() {
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Phone Number</label>
-                <input 
-                  type="tel" 
+                <InternationalPhoneInput 
                   value={bookingData.phone}
-                  onChange={(e) => updateData({ phone: e.target.value })}
-                  placeholder="07XXXXXXXX"
-                  className="w-full px-4 py-3 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                  onChange={(val) => updateData({ phone: val })}
                 />
               </div>
               <div className="space-y-2">

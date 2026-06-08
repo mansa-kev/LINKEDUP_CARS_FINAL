@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Mail, Lock, Loader2, AlertCircle, ArrowRight, Clock, UserPlus, Eye, EyeOff, X, CheckCircle2, User } from 'lucide-react';
+import { PasswordField } from './PasswordField';
+import { InternationalPhoneInput } from '../ui/InternationalPhoneInput';
 import { Logo } from '../shared/Logo';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSubdomain } from '../../contexts/SubdomainContext';
@@ -726,11 +728,11 @@ export function Login() {
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">+254</span>
-                    <input
-                      type="tel" value={signUpPhone} onChange={(e) => setSignUpPhone(e.target.value)}
-                      className="w-full pl-16 pr-4 py-3.5 bg-muted border border-transparent focus:border-primary/30 rounded-xl outline-none transition-all font-medium text-sm"
-                      placeholder="712345678"
+                    <InternationalPhoneInput
+                      value={signUpPhone}
+                      onChange={setSignUpPhone}
+                      placeholder="Phone Number"
+                      className="bg-muted border-transparent"
                     />
                   </div>
                 </div>

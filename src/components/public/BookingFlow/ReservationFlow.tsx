@@ -24,6 +24,8 @@ import { reservationService, ReservationData } from '../../../services/reservati
 import { reservationPaymentService } from '../../../services/reservationPaymentService';
 import { Car } from '../../../types';
 import { supabase } from '../../../lib/supabase';
+import { sendTemplatedEmail } from '../../../services/emailProvider';
+import { InternationalPhoneInput } from '../../ui/InternationalPhoneInput';
 
 interface ReservationFlowProps {
   car: Car;
@@ -39,7 +41,9 @@ export function ReservationFlow({ car, onClose }: ReservationFlowProps) {
   const [paymentRequestId, setPaymentRequestId] = useState<string | null>(null);
   const [reservationToken, setReservationToken] = useState<string | null>(null);
   const [lastMessage, setLastMessage] = useState('');
-  const [phase, setPhase] = useState<'ready' | 'creating_reservation' | 'sending_stk' | 'waiting' | 'paid' | 'failed' | 'timeout'>('ready');
+  const [showAltPayment, setShowAltPayment] = useState(false);
+  const [altPaymentNotes, setAltPaymentNotes] = useState('');
+  const [phase, setPhase] = useState<'ready' | 'creating_reservation' | 'sending_stk' | 'waiting' | 'paid' | 'failed' | 'timeout' | 'manual_pending'>('ready');
   const [formData, setFormData] = useState<ReservationData>({
     carId: car.id,
     startDate: '',
@@ -213,6 +217,54 @@ export function ReservationFlow({ car, onClose }: ReservationFlowProps) {
       setPhase('failed');
       setLastMessage(error.message || 'Payment could not be started. Please try again.');
       toast.error(error.message || 'Payment could not be started. Please try again.');
+    }
+  };
+
+  const handleAltPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phone) {
+      toast.error('Please provide a valid phone number.');
+      return;
+    }
+
+    try {
+      setPhase('creating_reservation');
+      const id = await getOrCreateReservation();
+      
+      const messageContent = `Alternative Payment Request (Reservation Fee)\nReservation ID: ${id}\nCar: ${car.make} ${car.model}\nName: ${formData.contactName}\nEmail: ${formData.contactEmail}\nPhone: ${phone}\nReservation Fee: KES ${reservationFee}\nNotes: ${altPaymentNotes}`;
+      
+      await supabase.from('contact_messages').insert([{
+        name: formData.contactName,
+        phone: phone,
+        email: formData.contactEmail,
+        subject: 'Alternative Payment Request (Reservation)',
+        message: messageContent,
+      }]);
+
+      // Send email to user with tracking link if they provided an email
+      if (formData.contactEmail) {
+        await sendTemplatedEmail(formData.contactEmail, 'manual_payment_pending', {
+          booking_id: id,
+          car_name: `${car.make} ${car.model}`,
+          total_amount: reservationFee.toLocaleString(),
+          tracking_link: `${window.location.origin}/booking-confirmation/${id}` // Or my-bookings
+        }).catch(err => console.error('Failed to send pending payment email', err));
+      }
+
+      toast.success('Request sent! Redirecting to WhatsApp...');
+      
+      const waMessage = encodeURIComponent(`Hello LinkedUp Cars, I would like to pay the reservation fee for ${car.make} ${car.model} but I'm not using M-Pesa.\n\nMy name is ${formData.contactName} and phone is ${phone}.\nReservation ID: ${id.substring(0,8)}`);
+      window.open(`https://wa.me/254714764162?text=${waMessage}`, '_blank');
+      
+      setPhase('manual_pending');
+      setLastMessage('Waiting for admin verification. You can safely close this window or wait here for confirmation.');
+      setShowAltPayment(false);
+
+    } catch (error: any) {
+      console.error('Alt payment error:', error);
+      setPhase('failed');
+      setLastMessage(error.message || 'Could not process request. Please try again.');
+      toast.error(error.message || 'Could not process request.');
     }
   };
 
@@ -396,13 +448,10 @@ export function ReservationFlow({ car, onClose }: ReservationFlowProps) {
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Phone Number *</label>
               <div className="relative">
                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                <input
-                  type="tel"
+                <InternationalPhoneInput
                   required
                   value={formData.contactPhone}
-                  onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                  className="w-full pl-12 pr-4 py-3 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-warning/20"
-                  placeholder="+254 700 000 000"
+                  onChange={(val) => setFormData({ ...formData, contactPhone: val })}
                 />
               </div>
             </div>
@@ -475,7 +524,16 @@ export function ReservationFlow({ car, onClose }: ReservationFlowProps) {
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-warning/20 flex items-center justify-center shrink-0">
                 <Smartphone className="text-warning" size={18} />
               </div>
-              <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-warning">NCBA STK Push</p>
+              <div className="flex-1 flex justify-between items-center">
+                <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-warning">NCBA STK Push</p>
+                <button
+                  type="button"
+                  onClick={() => setShowAltPayment(!showAltPayment)}
+                  className="text-[10px] text-warning/80 underline font-bold uppercase tracking-widest hover:text-warning transition-colors ml-2"
+                >
+                  Not using M-Pesa?
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -495,30 +553,62 @@ export function ReservationFlow({ car, onClose }: ReservationFlowProps) {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] sm:text-xs font-black uppercase tracking-[0.15em] text-warning">Phone Number</label>
-              <input
-                type="tel"
-                placeholder="07XXXXXXXX or 2547XXXXXXXX"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                disabled={isBusy}
-                className="w-full px-4 py-3 sm:py-4 bg-card/50 border border-border rounded-[14px] sm:rounded-[18px] text-sm sm:text-base font-bold text-foreground focus:ring-2 focus:ring-warning/30 focus:border-warning/40 outline-none transition-all disabled:opacity-60"
-              />
-            </div>
+            {showAltPayment ? (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 p-4 border border-warning/20 bg-warning/5 rounded-2xl">
+                <p className="text-xs text-foreground/80 font-medium">Please leave your details below and our team will call you back immediately to process your payment via card or bank transfer.</p>
+                <form onSubmit={handleAltPayment} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] sm:text-xs font-black uppercase tracking-[0.15em] text-warning">Phone Number</label>
+                    <InternationalPhoneInput
+                      value={phone}
+                      onChange={(val) => setPhone(val)}
+                      disabled={isBusy}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] sm:text-xs font-black uppercase tracking-[0.15em] text-warning">Additional Notes (Optional)</label>
+                    <textarea
+                      rows={2}
+                      value={altPaymentNotes}
+                      onChange={(e) => setAltPaymentNotes(e.target.value)}
+                      placeholder="Preferred alternative payment method (e.g. Visa, Bank Transfer)..."
+                      className="w-full px-4 py-3 bg-card/50 border border-border rounded-[14px] text-sm text-foreground focus:ring-2 focus:ring-warning/30 outline-none"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isBusy || !phone}
+                    className="w-full py-3 bg-warning rounded-[14px] text-black font-black uppercase tracking-[0.15em] text-xs hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                  >
+                    {isBusy ? <Loader2 className="animate-spin mx-auto" size={16} /> : 'Request Call Back & Go to WhatsApp'}
+                  </button>
+                </form>
+              </motion.div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <label className="text-[10px] sm:text-xs font-black uppercase tracking-[0.15em] text-warning">Phone Number</label>
+                  <InternationalPhoneInput
+                    value={phone}
+                    onChange={(val) => setPhone(val)}
+                    disabled={isBusy}
+                  />
+                </div>
 
-            <div className="pt-2 border-t border-warning/10">
-              <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
-                <strong className="text-foreground/70">How it works:</strong> Tap the button below, approve the NCBA STK Push prompt on your phone, then return here. No manual transaction code is required.
-              </p>
-            </div>
+                <div className="pt-2 border-t border-warning/10">
+                  <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
+                    <strong className="text-foreground/70">How it works:</strong> Tap the button below, approve the NCBA STK Push prompt on your phone, then return here. No manual transaction code is required.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
 
           {phase !== 'ready' && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-[14px] border border-border bg-card/50">
               <div className="flex items-start gap-2">
-                {phase === 'creating_reservation' || phase === 'sending_stk' || phase === 'waiting' ? (
-                  <Loader2 className="animate-spin text-warning shrink-0 mt-0.5" size={16} />
+                {phase === 'creating_reservation' || phase === 'sending_stk' || phase === 'waiting' || phase === 'manual_pending' ? (
+                  <Loader2 className={`animate-spin shrink-0 mt-0.5 ${phase === 'manual_pending' ? 'text-blue-500' : 'text-warning'}`} size={16} />
                 ) : (
                   <AlertCircle className="text-yellow-500 shrink-0 mt-0.5" size={16} />
                 )}
@@ -527,6 +617,7 @@ export function ReservationFlow({ car, onClose }: ReservationFlowProps) {
                     {phase === 'creating_reservation' && 'Creating reservation'}
                     {phase === 'sending_stk' && 'Sending STK Push'}
                     {phase === 'waiting' && 'Waiting for payment'}
+                    {phase === 'manual_pending' && 'Waiting for Verification'}
                     {phase === 'failed' && 'Payment attempt failed'}
                     {phase === 'timeout' && 'Payment still pending'}
                   </p>

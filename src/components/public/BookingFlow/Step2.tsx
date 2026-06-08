@@ -5,7 +5,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useDropzone } from 'react-dropzone';
 import { bookingService } from '../../../services/bookingService';
 import { clientService } from '../../../services/clientService';
+import { AuthModal } from '../auth/AuthModal';
 import { supabase } from '../../../lib/supabase';
+import { InternationalPhoneInput } from '../../ui/InternationalPhoneInput';
 import { toast } from 'sonner';
 import { validateFile } from '../../../utils/fileValidation';
 import { CameraCapture } from './CameraCapture';
@@ -280,11 +282,10 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="group relative">
-              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-primary transition-colors" size={18} />
-              <input
-                type="tel" placeholder="Phone Number" required
-                value={formData.phone || ''} onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-[18px] text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all hover:bg-card/70"
+              <InternationalPhoneInput
+                required
+                value={formData.phone || ''}
+                onChange={(val) => setFormData({...formData, phone: val})}
               />
             </div>
             <div className="group relative">

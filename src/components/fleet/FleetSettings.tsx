@@ -19,6 +19,7 @@ import {
   Zap,
   ChevronRight
 } from 'lucide-react';
+import { InternationalPhoneInput } from '../ui/InternationalPhoneInput';
 
 export function FleetSettings() {
   const [settings, setSettings] = useState<any>(null);
@@ -140,13 +141,10 @@ export function FleetSettings() {
               <div className="space-y-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase">Support Phone</label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <input 
-                    type="tel" 
+                  <InternationalPhoneInput 
                     value={settings.support_phone}
-                    onChange={(e) => setSettings({ ...settings, support_phone: e.target.value })}
-                    onBlur={() => handleUpdate({ support_phone: settings.support_phone })}
-                    className="w-full pl-10 pr-4 py-2 bg-muted rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                    onChange={(val) => setSettings({ ...settings, support_phone: val })}
+                    className="bg-muted border-none"
                   />
                 </div>
               </div>

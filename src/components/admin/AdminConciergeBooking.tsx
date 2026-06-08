@@ -32,6 +32,7 @@ import {
   Percent
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { InternationalPhoneInput } from '../ui/InternationalPhoneInput';
 
 type Step = 'vehicle' | 'client' | 'documents' | 'signature' | 'payment' | 'success';
 
@@ -448,7 +449,10 @@ export function AdminConciergeBooking() {
                 </div>
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Phone Number (M-Pesa) *</label>
-                  <input type="tel" placeholder="0712345678" value={bookingData.phone} onChange={e => updateData({ phone: e.target.value })} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-primary transition-colors" />
+                  <InternationalPhoneInput 
+                    value={bookingData.phone} 
+                    onChange={val => updateData({ phone: val })} 
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">National ID / Passport *</label>

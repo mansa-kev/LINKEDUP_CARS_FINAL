@@ -6,6 +6,8 @@ import { bookingService } from '../../../services/bookingService';
 import { enhancedContractService } from '../../../services/enhancedContractService';
 import { paymentService } from '../../../services/paymentService';
 import { supabase } from '../../../lib/supabase';
+import { sendTemplatedEmail } from '../../../services/emailProvider';
+import { InternationalPhoneInput } from '../../ui/InternationalPhoneInput';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -16,11 +18,13 @@ interface Step4Props {
   onComplete?: () => void;
 }
 
-type PaymentPhase = 'ready' | 'creating_booking' | 'sending_stk' | 'waiting' | 'paid' | 'failed' | 'timeout';
+type PaymentPhase = 'ready' | 'creating_booking' | 'sending_stk' | 'waiting' | 'paid' | 'failed' | 'timeout' | 'manual_pending';
 
 export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<PaymentPhase>('ready');
+  const [showAltPayment, setShowAltPayment] = useState(false);
+  const [altPaymentNotes, setAltPaymentNotes] = useState('');
   const [phone, setPhone] = useState(bookingData.phone || '');
   const [bookingId, setBookingId] = useState<string | null>(() => sessionStorage.getItem(`pending_booking_${car.id}`));
   const [paymentRequestId, setPaymentRequestId] = useState<string | null>(null);
@@ -164,10 +168,61 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
         setLastMessage('Payment is still pending or timed out. You can retry STK Push for the same booking.');
       }
     } catch (error: any) {
-      console.error('NCBA STK payment error:', error);
+      console.error('Payment error:', error);
       setPhase('failed');
       setLastMessage(error.message || 'Payment could not be started. Please try again.');
       toast.error(error.message || 'Payment could not be started. Please try again.');
+    }
+  };
+
+  const handleAltPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phone) {
+      toast.error('Please provide a valid phone number.');
+      return;
+    }
+
+    try {
+      setPhase('creating_booking');
+      const id = await getOrCreateBooking();
+      
+      // Send message to contact_messages
+      const messageContent = `Alternative Payment Request (Full Booking)\nBooking ID: ${id}\nCar: ${car.make} ${car.model}\nName: ${bookingData.fullName}\nEmail: ${bookingData.email}\nPhone: ${phone}\nTotal Amount: KES ${editableAmount}\nNotes: ${altPaymentNotes}`;
+      
+      await supabase.from('contact_messages').insert([{
+        name: bookingData.fullName,
+        phone: phone,
+        email: bookingData.email,
+        subject: 'Alternative Payment Request',
+        message: messageContent,
+      }]);
+
+      // Send email to user with tracking link
+      if (bookingData.email) {
+        await sendTemplatedEmail(bookingData.email, 'manual_payment_pending', {
+          booking_id: id,
+          car_name: `${car.make} ${car.model}`,
+          total_amount: editableAmount.toLocaleString(),
+          tracking_link: `${window.location.origin}/booking-confirmation/${id}` // Or my-bookings
+        }).catch(err => console.error('Failed to send pending payment email', err));
+      }
+
+      toast.success('Request sent! Redirecting to WhatsApp...');
+      
+      // Redirect to WhatsApp
+      const waMessage = encodeURIComponent(`Hello LinkedUp Cars, I would like to complete my payment for ${car.make} ${car.model} but I'm not using M-Pesa.\n\nMy name is ${bookingData.fullName} and phone is ${phone}.\nBooking ID: ${id.substring(0,8)}`);
+      window.open(`https://wa.me/254714764162?text=${waMessage}`, '_blank');
+      
+      // Mark as manual_pending
+      setPhase('manual_pending');
+      setLastMessage('Waiting for admin verification. You can safely close this window or wait here for confirmation.');
+      setShowAltPayment(false);
+
+    } catch (error: any) {
+      console.error('Alt payment error:', error);
+      setPhase('failed');
+      setLastMessage(error.message || 'Could not process request. Please try again.');
+      toast.error(error.message || 'Could not process request.');
     }
   };
 
@@ -190,23 +245,69 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
           <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
             <Smartphone size={20} className="text-primary" />
           </div>
-          <div>
-            <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-primary">NCBA STK Push</p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">You will receive a payment prompt on your phone.</p>
+          <div className="flex-1 flex justify-between items-center">
+            <div>
+              <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-primary">NCBA STK Push</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">You will receive a payment prompt on your phone.</p>
+            </div>
+            <button
+              onClick={() => setShowAltPayment(!showAltPayment)}
+              className="text-[10px] text-primary/80 underline font-bold uppercase tracking-widest hover:text-primary transition-colors text-right ml-2"
+            >
+              Not using M-Pesa?
+            </button>
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[10px] sm:text-xs font-black uppercase tracking-[0.15em] text-primary">Phone Number</label>
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            disabled={isBusy}
-            placeholder="07XXXXXXXX or 2547XXXXXXXX"
-            className="w-full px-4 py-3 sm:py-4 bg-card/50 border border-border rounded-[14px] sm:rounded-[18px] text-sm sm:text-base font-bold text-foreground focus:ring-2 focus:ring-primary/30 focus:border-primary/40 outline-none transition-all disabled:opacity-60"
-          />
-        </div>
+        {showAltPayment ? (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 p-4 border border-primary/20 bg-primary/5 rounded-2xl">
+            <p className="text-xs text-foreground/80 font-medium">Please leave your details below and our team will call you back immediately to process your payment via card or bank transfer.</p>
+            <form onSubmit={handleAltPayment} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] sm:text-xs font-black uppercase tracking-[0.15em] text-primary">Phone Number</label>
+                <InternationalPhoneInput
+                  value={phone}
+                  onChange={(val) => setPhone(val)}
+                  disabled={isBusy}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] sm:text-xs font-black uppercase tracking-[0.15em] text-primary">Additional Notes (Optional)</label>
+                <textarea
+                  rows={2}
+                  value={altPaymentNotes}
+                  onChange={(e) => setAltPaymentNotes(e.target.value)}
+                  placeholder="Preferred alternative payment method (e.g. Visa, Bank Transfer)..."
+                  className="w-full px-4 py-3 bg-card/50 border border-border rounded-[14px] text-sm text-foreground focus:ring-2 focus:ring-primary/30 outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isBusy || !phone}
+                className="w-full py-3 bg-primary rounded-[14px] text-black font-black uppercase tracking-[0.15em] text-xs hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {isBusy ? <Loader2 className="animate-spin mx-auto" size={16} /> : 'Request Call Back & Go to WhatsApp'}
+              </button>
+            </form>
+          </motion.div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <label className="text-[10px] sm:text-xs font-black uppercase tracking-[0.15em] text-primary">Phone Number</label>
+              <InternationalPhoneInput
+                value={phone}
+                onChange={(val) => setPhone(val)}
+                disabled={isBusy}
+              />
+            </div>
+            
+            <div className="pt-2 border-t border-primary/10">
+              <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
+                <strong className="text-foreground/70">How it works:</strong> Tap the button below, approve the NCBA STK Push prompt on your phone, then return here. No manual transaction code is required.
+              </p>
+            </div>
+          </>
+        )}
 
         <div className="grid grid-cols-2 gap-2">
           <div className="p-3 bg-card/50 rounded-[14px] border border-border space-y-1">
@@ -228,8 +329,8 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
         {phase !== 'ready' && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-[14px] border border-border bg-card/50">
             <div className="flex items-start gap-2">
-              {phase === 'creating_booking' || phase === 'sending_stk' || phase === 'waiting' ? (
-                <Loader2 className="animate-spin text-primary shrink-0 mt-0.5" size={16} />
+              {phase === 'creating_booking' || phase === 'sending_stk' || phase === 'waiting' || phase === 'manual_pending' ? (
+                <Loader2 className={`animate-spin shrink-0 mt-0.5 ${phase === 'manual_pending' ? 'text-blue-500' : 'text-primary'}`} size={16} />
               ) : phase === 'paid' ? (
                 <CheckCircle2 className="text-green-500 shrink-0 mt-0.5" size={16} />
               ) : (
@@ -237,17 +338,18 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
               )}
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-foreground">
-                  {phase === 'creating_booking' && 'Creating booking'}
+                  {phase === 'creating_booking' && 'Creating Booking'}
                   {phase === 'sending_stk' && 'Sending STK Push'}
                   {phase === 'waiting' && 'Waiting for payment'}
                   {phase === 'paid' && 'Payment confirmed'}
+                  {phase === 'manual_pending' && 'Waiting for Verification'}
                   {phase === 'failed' && 'Payment attempt failed'}
                   {phase === 'timeout' && 'Payment still pending'}
                 </p>
                 <p className="text-[10px] text-muted-foreground mt-1">
                   {lastMessage || 'Please wait while we process your payment.'}
                 </p>
-                {paymentRequestId && (
+                {paymentRequestId && phase !== 'manual_pending' && (
                   <p className="text-[9px] text-muted-foreground/60 mt-1 font-mono">Request: {paymentRequestId.slice(0, 8).toUpperCase()}</p>
                 )}
               </div>

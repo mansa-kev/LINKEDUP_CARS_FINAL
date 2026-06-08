@@ -28,6 +28,7 @@ import {
   Percent
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { InternationalPhoneInput } from '../ui/InternationalPhoneInput';
 
 interface DriverFieldBookingProps {
   onBack: () => void;
@@ -452,13 +453,9 @@ export function DriverFieldBooking({ onBack }: DriverFieldBookingProps) {
                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">M-Pesa Phone Number *</label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-3 text-muted-foreground" size={16} />
-                  <input
-                    type="tel"
-                    required
-                    placeholder="07XXXXXXXX"
+                  <InternationalPhoneInput
                     value={bookingData.phone}
-                    onChange={e => updateData({ phone: e.target.value })}
-                    className="w-full bg-background border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-primary"
+                    onChange={val => updateData({ phone: val })}
                   />
                 </div>
               </div>

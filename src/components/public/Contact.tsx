@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mail, Phone, MapPin, Send, Clock, ChevronDown, Loader2, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { InternationalPhoneInput } from '../ui/InternationalPhoneInput';
 import { toast } from 'sonner';
 
 const contactInfo = [
@@ -214,13 +215,10 @@ export function Contact() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-4">Phone Number *</label>
-                      <input
-                        type="tel"
+                      <InternationalPhoneInput
                         required
                         value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        placeholder="+254 7XX XXX XXX"
-                        className="w-full px-8 py-5 rounded-2xl bg-background border border-white/10 focus:border-primary/40 focus:outline-none transition-all text-white font-medium"
+                        onChange={(val) => setFormData({ ...formData, phone: val })}
                       />
                     </div>
                     <div className="space-y-2">

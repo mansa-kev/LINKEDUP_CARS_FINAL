@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { adminService } from '../../services/adminService';
 import { supabase } from '../../lib/supabase';
+import { InternationalPhoneInput } from '../ui/InternationalPhoneInput';
 import { toast } from 'sonner';
 import { 
   Search, 
@@ -941,11 +942,11 @@ export function AdminFleetOwners() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Phone Number</label>
-                      <input 
-                        type="tel" required
+                      <InternationalPhoneInput 
+                        required
                         value={formData.phone_number}
-                        onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
-                        className="w-full px-4 py-2 bg-muted border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                        onChange={(val) => setFormData({ ...formData, phone_number: val })}
+                        className="bg-muted border-none"
                       />
                     </div>
                   </div>

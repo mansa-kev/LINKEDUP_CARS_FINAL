@@ -140,3 +140,19 @@ h1, h2, h3, h4, h5, h6 {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Phone Input Overrides */
+.international-phone-container .PhoneInputInput {
+  border: none;
+  background: transparent;
+  outline: none;
+  color: inherit;
+  font-size: inherit;
+  padding-left: 0.5rem;
+}
+.international-phone-container .PhoneInputCountry {
+  margin-right: 0.5rem;
+}
+.international-phone-container .PhoneInputCountrySelectArrow {
+  opacity: 0.5;
+}
