@@ -25,8 +25,14 @@ serve(async (req) => {
       throw new Error('Unauthorized request')
     }
 
-    // Verify the requesting user is actually an admin
-    const { data: adminCheck, error: adminError } = await supabaseClient
+    // Initialize an admin client with service_role key to bypass RLS
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    // Verify the requesting user is actually an admin using the service_role client to bypass RLS
+    const { data: adminCheck, error: adminError } = await supabaseAdmin
       .from('user_profiles')
       .select('role')
       .eq('id', user.id)
@@ -41,12 +47,6 @@ serve(async (req) => {
     if (!userId) {
       throw new Error('Missing userId in request body')
     }
-
-    // Initialize an admin client with service_role key to bypass RLS and delete users
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
 
     // Delete the user from auth.users (This should cascade to profiles automatically)
     const { data, error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)

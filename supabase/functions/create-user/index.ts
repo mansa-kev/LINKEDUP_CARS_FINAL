@@ -25,8 +25,14 @@ serve(async (req) => {
       throw new Error('Unauthorized request')
     }
 
-    // Verify the requesting user is actually an admin
-    const { data: adminCheck, error: adminError } = await supabaseClient
+    // Initialize an admin client with service_role key to bypass RLS
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    // Verify the requesting user is actually an admin using the service_role client to bypass RLS
+    const { data: adminCheck, error: adminError } = await supabaseAdmin
       .from('user_profiles')
       .select('role')
       .eq('id', user.id)
@@ -41,12 +47,6 @@ serve(async (req) => {
     if (!email || !role || !fullName || !phoneNumber) {
       throw new Error('Missing required fields: email, role, fullName, or phoneNumber')
     }
-
-    // Initialize an admin client with service_role key to bypass RLS and create users
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
 
     // Create the user in Auth
     const { data: userData, error: createError } = await supabaseAdmin.auth.admin.createUser({
