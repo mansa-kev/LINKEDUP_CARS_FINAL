@@ -27,7 +27,7 @@ serve(async (req) => {
 
     // Verify the requesting user is actually an admin
     const { data: adminCheck, error: adminError } = await supabaseClient
-      .from('profiles')
+      .from('user_profiles')
       .select('role')
       .eq('id', user.id)
       .single()
@@ -56,7 +56,7 @@ serve(async (req) => {
     }
 
     // Also try to explicitly delete the profile just in case cascade is off
-    await supabaseAdmin.from('profiles').delete().eq('id', userId)
+    await supabaseAdmin.from('user_profiles').delete().eq('id', userId)
 
     return new Response(
       JSON.stringify({ success: true, message: 'User deleted successfully' }),
