@@ -285,9 +285,9 @@ export function Contact() {
             </h2>
             <p className="text-muted-foreground mt-2">Kiambu Road, Nairobi, Kenya</p>
           </div>
-          <div className="h-[400px] md:h-[500px] rounded-[40px] md:rounded-[60px] overflow-hidden border border-white/5">
+          <div className="h-[400px] md:h-[500px] rounded-[40px] md:rounded-[60px] overflow-hidden border border-white/5 relative bg-muted">
             <iframe
-              src="https://maps.google.com/maps?q=Lanphil%20Arcade,%20Ridgeways,%20Kiambu%20Road,%20Nairobi&t=&z=15&ie=UTF8&iwloc=&output=embed"
+              src="https://www.openstreetmap.org/export/embed.html?bbox=36.839%2C-1.218%2C36.859%2C-1.198&amp;layer=mapnik&amp;marker=-1.208%2C36.849"
               width="100%"
               height="100%"
               style={{ border: 0 }}
@@ -296,6 +296,12 @@ export function Contact() {
               referrerPolicy="no-referrer-when-downgrade"
               title="LinkedUp Cars - Lanphil Arcade, Ridgeways"
             />
+            {/* Small credit to OpenStreetMap as required by their license */}
+            <div className="absolute bottom-2 right-4 text-[10px] bg-background/80 backdrop-blur-md px-2 py-1 rounded border border-border/50 text-muted-foreground z-10">
+              <a href="https://www.openstreetmap.org/?mlat=-1.208&amp;mlon=36.849#map=15/-1.2080/36.8490" target="_blank" rel="noreferrer" className="hover:text-primary">
+                View Larger Map
+              </a>
+            </div>
           </div>
         </div>
       </section>

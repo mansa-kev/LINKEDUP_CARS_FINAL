@@ -435,25 +435,20 @@ export const adminService = {
   },
 
   deleteUser: async (id: string) => {
-    const session = (await supabase.auth.getSession()).data.session;
-    const response = await fetch(`/api/users/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${session?.access_token || ''}`
-      }
+    const { data, error } = await supabase.functions.invoke('delete-user', {
+      body: { userId: id }
     });
-    if (!response.ok) {
-      let err;
-      try {
-        err = await response.json();
-      } catch (e) {
-        const text = await response.text();
-        console.error('Delete user failed with non-JSON response:', response.status, text);
-        throw new Error(`Server returned ${response.status}: ${text}`);
-      }
-      console.error('Delete user API error:', err);
-      throw new Error(err.error || 'Failed to delete user');
+
+    if (error) {
+      console.error('Delete user Edge Function error:', error);
+      throw new Error(error.message || 'Failed to delete user');
     }
+
+    if (data?.error) {
+      console.error('Delete user API error:', data.error);
+      throw new Error(data.error || 'Failed to delete user');
+    }
+
     return true;
   },
 

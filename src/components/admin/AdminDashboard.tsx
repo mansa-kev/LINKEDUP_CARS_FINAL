@@ -521,10 +521,9 @@ export function AdminDashboard() {
                 animationDuration={800}
               >
                 {bookingsByDay.map((entry, index) => (
-                  <Bar
+                  <Cell
                     key={entry.day}
-                    dataKey="count"
-                    fill={entry.count === maxDayBookings ? '#ff6b00' : '#ff6b0060'}
+                    fill={entry.count === maxDayBookings && entry.count > 0 ? 'url(#barGrad)' : '#ff6b0060'}
                   />
                 ))}
               </Bar>
