@@ -38,8 +38,8 @@ serve(async (req) => {
       .eq('id', user.id)
       .single()
 
-    if (adminError || adminCheck.role !== 'admin') {
-      throw new Error('Forbidden: Only admins can create users')
+    if (adminError || (adminCheck.role !== 'admin' && adminCheck.role !== 'fleet_owner')) {
+      throw new Error('Forbidden: Only admins and fleet owners can create users')
     }
 
     // Parse request body

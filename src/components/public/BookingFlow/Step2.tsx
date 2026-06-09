@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Car } from '../../../types';
 import { Upload, ArrowRight, ArrowLeft, User, Mail, Phone, FileText, CheckCircle2, Loader2, Camera, Image, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useDropzone } from 'react-dropzone';
+// Removed react-dropzone for mobile stability
 import { bookingService } from '../../../services/bookingService';
 import { clientService } from '../../../services/clientService';
 import { AuthModal } from '../auth/AuthModal';
@@ -47,26 +47,15 @@ interface DocumentSlotProps {
 }
 
 function DocumentSlot({ type, uploadedUrl, isUploading, onUploadFile, onOpenCamera }: DocumentSlotProps) {
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (files) => { if (files[0]) onUploadFile(files[0], type); },
-    accept: { 'image/*': ['.jpeg', '.jpg', '.png', '.webp'], 'application/pdf': ['.pdf'] },
-    maxFiles: 1,
-    multiple: false,
-    noClick: true
-  } as any);
-
   return (
     <div className="space-y-2">
       <p className="text-[9px] font-black uppercase tracking-widest text-white/50 text-center">{DOC_LABELS[type]}</p>
       <div
-        {...getRootProps()}
         className={`relative p-4 border-2 border-dashed rounded-[16px] md:rounded-[20px] text-center transition-all ${
           uploadedUrl ? 'border-green-500/50 bg-green-500/5'
-          : isDragActive ? 'border-primary bg-primary/5'
           : 'border-white/10 hover:border-white/20'
         }`}
       >
-        <input {...getInputProps()} />
         <AnimatePresence mode="wait">
           {isUploading ? (
             <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-1 py-2">
@@ -83,7 +72,10 @@ function DocumentSlot({ type, uploadedUrl, isUploading, onUploadFile, onOpenCame
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => onOpenCamera(type)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onOpenCamera(type);
+                  }}
                   className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 rounded-xl text-primary hover:bg-primary/20 transition-colors"
                 >
                   <Camera size={14} />
