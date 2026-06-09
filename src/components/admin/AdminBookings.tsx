@@ -10,19 +10,8 @@ import {
 import { toast } from 'sonner';
 import { logger } from '../../utils/logger';
 
-// --- Countdown Hook ---
-const useCountdown = (targetDate: string) => {
-  const [timeLeft, setTimeLeft] = useState(new Date(targetDate).getTime() - new Date().getTime());
-
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setTimeLeft(new Date(targetDate).getTime() - new Date().getTime());
-    }, 1000);
-    return () => clearInterval(intervalId);
-  }, [targetDate]);
-
-  return timeLeft;
-};
+// No longer using separate countdown hooks per card to prevent performance bottlenecks.
+// Real-time updates are driven by a single parent clock in the main component.
 
 const formatTimeLeft = (ms: number) => {
   if (ms <= 0) return '00:00:00';
@@ -106,10 +95,11 @@ const StatusBadge = ({ status, is_flagged }: { status: BookingStatus; is_flagged
 // --- Booking Card ---
 const BookingCard: React.FC<{
   booking: Booking;
+  now: number;
   onManage: () => void;
   onViewDetails: () => void;
   onDelete: () => void;
-}> = ({ booking, onManage, onViewDetails, onDelete }) => {
+}> = ({ booking, now, onManage, onViewDetails, onDelete }) => {
   const clientName = booking.client?.full_name || booking.metadata?.guest_info?.full_name || 'Guest';
   const clientInitials = clientName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
   const carLine = `${booking.cars?.make || ''} ${booking.cars?.model || ''}`.trim() || 'N/A';
@@ -119,8 +109,8 @@ const BookingCard: React.FC<{
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const endDate = new Date(booking.end_date);
   
-  // Real-time Countdown logic
-  const timeLeftMs = useCountdown(booking.end_date);
+  // Real-time Countdown logic calculated from a single parent clock
+  const timeLeftMs = endDate.getTime() - now;
   const isOverdue = booking.status === 'on_trip' && timeLeftMs <= 0;
   const isLessThanAnHour = booking.status === 'on_trip' && timeLeftMs > 0 && timeLeftMs <= 3600000;
   const isApproaching = booking.status === 'on_trip' && timeLeftMs > 3600000 && timeLeftMs <= 10800000; // < 3 hours
@@ -247,6 +237,18 @@ export function AdminBookings() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<JourneyTab>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<Booking | null>(null);
+  const [now, setNow] = useState(Date.now());
+
+  // A single timer for the entire bookings list, only running if there are bookings currently on trip.
+  useEffect(() => {
+    const hasOnTripBookings = bookings.some((b) => b.status === 'on_trip');
+    if (!hasOnTripBookings) return;
+
+    const intervalId = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(intervalId);
+  }, [bookings]);
 
   const fetchBookings = async () => {
     setLoading(true);
@@ -403,6 +405,7 @@ export function AdminBookings() {
             <BookingCard
               key={booking.id}
               booking={booking}
+              now={now}
               onManage={() => handleManageBooking(booking)}
               onViewDetails={() => handleManageBooking(booking)}
               onDelete={() => { setDeleteConfirm(booking); }}
