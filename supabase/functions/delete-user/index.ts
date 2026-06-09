@@ -57,7 +57,7 @@ serve(async (req) => {
     // Delete the user from auth.users (This should cascade to profiles automatically)
     const { data, error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)
 
-    if (deleteError) {
+    if (deleteError && deleteError.status !== 404) {
       throw deleteError
     }
 
