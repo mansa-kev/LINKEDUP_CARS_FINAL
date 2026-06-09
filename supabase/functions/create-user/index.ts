@@ -19,10 +19,16 @@ serve(async (req) => {
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
 
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      throw new Error('Missing Authorization header')
+    }
+    const token = authHeader.replace('Bearer ', '')
+
     // Check if the user making the request is authenticated
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
     if (authError || !user) {
-      throw new Error('Unauthorized request')
+      throw new Error(`Unauthorized request: ${authError?.message || 'No user found'}`)
     }
 
     // Initialize an admin client with service_role key to bypass RLS
