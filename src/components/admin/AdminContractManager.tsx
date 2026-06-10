@@ -18,7 +18,8 @@ import {
   X,
   FileDown,
   Building2,
-  Save
+  Save,
+  Image as ImageIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
@@ -41,17 +42,24 @@ export function AdminContractManager() {
 
   const [companySettings, setCompanySettings] = useState({
     company_po_box: '',
-    company_signature_url: ''
+    company_signature_url: '',
+    contract_logo_url: ''
   });
   const [savingSettings, setSavingSettings] = useState(false);
   const [uploadingSig, setUploadingSig] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const fetchSettings = async () => {
     try {
-      const data = await adminService.getAppSettings(['company_po_box', 'company_signature_url']);
+      const data = await adminService.getAppSettings(['company_po_box', 'company_signature_url', 'contract_logo']);
       if (data) {
         const settings: any = {};
-        data.forEach(item => settings[item.key] = item.value);
+        data.forEach(item => {
+          settings[item.key] = item.value ?? item.logo_url ?? '';
+          if (item.key === 'contract_logo') {
+            settings.contract_logo_url = item.logo_url ?? item.value ?? '';
+          }
+        });
         setCompanySettings(prev => ({ ...prev, ...settings }));
       }
     } catch (error) {
@@ -106,9 +114,56 @@ export function AdminContractManager() {
     }
   }, []);
 
+  const onDropLogo = useCallback(async (acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (!file) return;
+
+    setUploadingLogo(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `contract-logo-${Date.now()}.${fileExt}`;
+      const filePath = `settings/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('public_assets')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('public_assets')
+        .getPublicUrl(filePath);
+
+      await supabase
+        .from('app_settings')
+        .upsert({
+          key: 'contract_logo',
+          logo_url: publicUrl,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'key'
+        });
+
+      setCompanySettings(prev => ({ ...prev, contract_logo_url: publicUrl }));
+      toast.success('Contract logo uploaded successfully!');
+    } catch (error: any) {
+      console.error('Upload logo error:', error);
+      toast.error('Failed to upload contract logo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  }, []);
+
   const { getRootProps: getSigProps, getInputProps: getSigInputProps, isDragActive: isSigDragActive } = useDropzone({ 
     onDrop: onDropSig,
     accept: { 'image/*': ['.png', '.jpg', '.jpeg'] },
+    maxFiles: 1,
+    multiple: false
+  } as any);
+
+  const { getRootProps: getLogoProps, getInputProps: getLogoInputProps, isDragActive: isLogoDragActive } = useDropzone({
+    onDrop: onDropLogo,
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.svg'] },
     maxFiles: 1,
     multiple: false
   } as any);
@@ -493,7 +548,41 @@ export function AdminContractManager() {
                 </div>
               )}
             </div>
-            <p className="text-[10px] text-muted-foreground">This signature will be embedded onto the generated contract PDF automatically.</p>
+            <p className="text-[10px] text-muted-foreground">This signature will be embedded onto the generated contract automatically.</p>
+          </div>
+
+          <div className="space-y-2 md:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Contract Logo</label>
+            <div
+              {...getLogoProps()}
+              className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer flex flex-col items-center justify-center min-h-[150px] ${
+                isLogoDragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+              }`}
+            >
+              <input {...getLogoInputProps()} />
+              {uploadingLogo ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="animate-spin text-primary" size={24} />
+                  <p className="text-xs font-bold">Uploading...</p>
+                </div>
+              ) : companySettings.contract_logo_url ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <img 
+                    src={companySettings.contract_logo_url} 
+                    alt="Contract Logo" 
+                    className="max-h-20 object-contain"
+                  />
+                  <p className="text-xs text-primary font-bold">Click to replace logo</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <ImageIcon size={24} className="text-muted-foreground" />
+                  <p className="text-sm font-bold">Upload Contract Logo</p>
+                  <p className="text-[10px] text-muted-foreground">This logo appears on the rental agreement HTML template</p>
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground">Use a clean logo that will be injected into the contract HTML template.</p>
           </div>
         </div>
       </div>

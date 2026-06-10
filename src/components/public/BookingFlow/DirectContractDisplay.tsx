@@ -6,20 +6,21 @@ interface DirectContractDisplayProps {
   contract: any;
   bookingData: any;
   car: any;
+  signatureData?: string;
 }
 
-export function DirectContractDisplay({ contract, bookingData, car }: DirectContractDisplayProps) {
+export function DirectContractDisplay({ contract, bookingData, car, signatureData }: DirectContractDisplayProps) {
   if (!contract) {
     return (
       <div className="p-8 bg-yellow-100 border border-yellow-300 rounded-lg text-center">
         <h3 className="text-lg font-bold text-yellow-800 mb-2">No Contract Available</h3>
-        <p className="text-yellow-700">Please upload a contract template in the admin panel.</p>
+        <p className="text-yellow-700">Please upload an HTML contract template in the admin panel.</p>
       </div>
     );
   }
 
-  // Get the PDF URL - support preview_url, pdf_url and contract_url
-  const pdfUrl = contract.preview_url || contract.pdf_url || contract.contract_url;
+  const templateUrl = contract.preview_url || contract.pdf_url || contract.contract_url || contract.template_url;
+  const isHtmlTemplate = !!templateUrl && templateUrl.includes('.html');
 
   // Format the date professionally
   const formatDate = (date: string) => {
@@ -53,22 +54,22 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
     return typeof totalCost === 'number' ? totalCost : parseFloat(totalCost) || 0;
   };
 
-  const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  const [htmlTemplate, setHtmlTemplate] = useState<string | null>(null);
   const [loadingHtml, setLoadingHtml] = useState(false);
 
   useEffect(() => {
-    if (pdfUrl && pdfUrl.includes('.html')) {
+    if (isHtmlTemplate && templateUrl) {
       setLoadingHtml(true);
       
       Promise.all([
-        fetch(pdfUrl).then(res => res.text()),
+        fetch(templateUrl).then(res => res.text()),
         adminService.getAppSettings()
       ])
       .then(([text, settingsData]) => {
-        let settings = {};
+        const settings: Record<string, any> = {};
         if (settingsData) {
           settingsData.forEach(item => {
-            settings[item.key] = item.value;
+            settings[item.key] = item.value ?? item.logo_url ?? '';
           });
         }
         
@@ -89,24 +90,29 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
         // Inject company settings
         replaced = replaced.replace(/\{\{companyPoBox\}\}/g, settings['company_po_box'] || '2345');
         const companySig = settings['company_signature_url'] || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        const contractLogo = settings['contract_logo'] || settings['site_logo'] || settings['logo_url'] || '';
+        replaced = replaced.replace(/\{\{companyLogoUrl\}\}/g, contractLogo || settings['site_logo'] || companySig);
+        replaced = replaced.replace(/\{\{logoUrl\}\}/g, contractLogo || settings['site_logo'] || companySig);
         replaced = replaced.replace(/\{\{companySignatureUrl\}\}/g, companySig);
         replaced = replaced.replace(/\{\{companySignature\}\}/g, `<img src="${companySig}" alt="Company Signature" style="max-height: 80px;" />`);
-        replaced = replaced.replace(/\{\{logoUrl\}\}/g, 'https://edroffvtzrowpsooszqh.supabase.co/storage/v1/object/public/public_assets/logo.png');
         
-        // Client Signature
-        const clientSig = bookingData?.signatureData || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
-        replaced = replaced.replace(/\{\{clientSignatureUrl\}\}/g, clientSig);
-        replaced = replaced.replace(/\{\{clientSignature\}\}/g, `<img src="${clientSig}" alt="Client Signature" style="max-height: 80px;" />`);
-
         // Fix wording for mileage if present
         replaced = replaced.replace(/\(as confirmed at the pickup\)/gi, '(as confirmed during pickup)');
         
-        setHtmlContent(replaced);
+        setHtmlTemplate(replaced);
       })
       .catch(err => console.error('Failed to load HTML contract', err))
       .finally(() => setLoadingHtml(false));
     }
-  }, [pdfUrl, bookingData, car]);
+  }, [isHtmlTemplate, templateUrl, bookingData, car]);
+
+  const clientSignature = signatureData || bookingData?.signatureData || bookingData?.liveSignatureData || '';
+  const blankSignature = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+  const renderedHtml = htmlTemplate
+    ? htmlTemplate
+        .replace(/\{\{clientSignatureUrl\}\}/g, clientSignature || blankSignature)
+        .replace(/\{\{clientSignature\}\}/g, `<img src="${clientSignature || blankSignature}" alt="Client Signature" style="max-height: 80px;" />`)
+    : '';
 
   return (
     <div className="bg-gradient-to-br from-card to-muted rounded-xl overflow-hidden shadow-xl border border-border">
@@ -138,10 +144,10 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
         </div>
       </div>
 
-      {/* Optimized PDF Display - Mobile Full Screen */}
+      {/* Optimized Contract Display - Mobile Full Screen */}
       <div className="p-2 sm:p-6 bg-card">
         <div className="bg-background rounded-lg shadow-lg overflow-hidden border border-border">
-          {pdfUrl && pdfUrl.includes('.html') ? (
+          {isHtmlTemplate ? (
             loadingHtml ? (
               <div className="w-full h-96 flex items-center justify-center">
                 <Loader2 className="animate-spin text-primary" size={32} />
@@ -150,24 +156,9 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
               <div 
                 id="contract-html-container"
                 className="p-8 sm:p-12 prose prose-sm sm:prose-base max-w-none bg-white text-black min-h-[500px]"
-                dangerouslySetInnerHTML={{ __html: htmlContent || '' }}
+                dangerouslySetInnerHTML={{ __html: renderedHtml }}
               />
             )
-          ) : pdfUrl ? (
-            <div className="relative">
-              {/* Mobile-optimized iframe - full screen on mobile */}
-              <iframe
-                src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&t=${Date.now()}`}
-                className="w-full border-0"
-                style={{ 
-                  height: '70vh',
-                  minHeight: '500px',
-                  transform: 'scale(1)',
-                  transformOrigin: 'top left'
-                }}
-                title="Rental Agreement PDF"
-              />
-            </div>
           ) : (
             <div className="w-full h-96 flex items-center justify-center p-8 text-center">
               <div className="max-w-sm">
@@ -176,9 +167,9 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-bold text-gray-800 mb-2">PDF Not Available</h3>
+                <h3 className="text-lg font-bold text-gray-800 mb-2">HTML Contract Not Available</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  No PDF URL provided.
+                  Contract Manager must provide an HTML contract template.
                 </p>
               </div>
             </div>

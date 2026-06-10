@@ -20,39 +20,15 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
   const [contract, setContract] = useState<any>(null);
   const [loadingContract, setLoadingContract] = useState(true);
   const [signingContract, setSigningContract] = useState(false);
+  const [liveSignatureData, setLiveSignatureData] = useState('');
 
   useEffect(() => {
     const fetchContract = async () => {
       try {
         const contract = await enhancedContractService.getMasterContract();
         if (contract) {
-          const pdfUrl = contract.pdf_url || contract.contract_url || contract.template_url;
-          if (pdfUrl && pdfUrl.includes('.html')) {
-            contract.preview_url = pdfUrl;
-          } else {
-            try {
-              const previewUrl = await enhancedContractService.previewDynamicContract({
-                booking_id: 'PREVIEW',
-                client_name: bookingData.fullName || '',
-                client_email: bookingData.email || '',
-                client_phone: bookingData.phone || '',
-                car_make: car.make,
-                car_model: car.model,
-                license_plate: car.license_plate || '',
-                pickup_date: bookingData.startDate || '',
-                dropoff_date: bookingData.endDate || '',
-                daily_rate: car.daily_rate || 0,
-                total_amount: bookingData.totalAmount || 0,
-                security_deposit: car.security_deposit || 0,
-                po_box: bookingData.poBox || '',
-                id_number: bookingData.idNumber || '',
-                color: car.color || ''
-              });
-              contract.preview_url = previewUrl;
-            } catch (err) {
-              console.error('Failed to generate preview:', err);
-            }
-          }
+          const htmlUrl = contract.pdf_url || contract.contract_url || contract.template_url;
+          contract.preview_url = htmlUrl && htmlUrl.includes('.html') ? htmlUrl : null;
           setContract(contract);
         }
       } catch (error) {
@@ -68,6 +44,16 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
     if (sigPad.current) {
       sigPad.current.clear();
     }
+    setLiveSignatureData('');
+  };
+
+  const syncSignaturePreview = () => {
+    if (!sigPad.current || sigPad.current.isEmpty()) {
+      setLiveSignatureData('');
+      return;
+    }
+
+    setLiveSignatureData(sigPad.current.toDataURL());
   };
 
   const handleSignAndProceed = async () => {
@@ -85,6 +71,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
       setSigningContract(true);
 
       const signatureData = sigPad.current.toDataURL();
+      setLiveSignatureData(signatureData);
 
       let pdfBase64 = null;
       const contractElement = document.getElementById('contract-html-container');
@@ -108,6 +95,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
           
           const placeholder = wrapper.querySelector('#client-signature-placeholder');
           if (placeholder) {
+            placeholder.innerHTML = '';
             placeholder.appendChild(sigImg);
           } else {
             const sigText = document.createElement('p');
@@ -158,7 +146,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
     <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="space-y-1">
         <h3 className="text-xl sm:text-2xl md:text-3xl font-serif font-black italic text-foreground">Review & Sign</h3>
-        <p className="text-muted-foreground text-xs sm:text-sm">Review your rental agreement and provide your digital signature.</p>
+        <p className="text-muted-foreground text-xs sm:text-sm">Review the HTML contract, then sign to generate the final PDF copy.</p>
       </div>
 
       <div className="space-y-6 md:space-y-8">
@@ -199,6 +187,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
               contract={contract}
               bookingData={bookingData}
               car={car}
+              signatureData={liveSignatureData}
             />
           </motion.div>
         ) : (
@@ -208,13 +197,13 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
               <div>
                 <h3 className="text-lg font-bold text-yellow-500 mb-2">No Active Contract Template</h3>
                 <p className="text-sm text-yellow-500/80 mb-4">
-                  Please upload and activate a contract template in the admin panel first.
+                  Please upload and activate an HTML contract template in the admin panel first.
                 </p>
                 <div className="bg-yellow-500/5 rounded-lg p-4 text-left">
                   <p className="text-xs text-yellow-500/60 font-bold mb-2">Required Steps:</p>
                   <ol className="text-xs text-yellow-500/80 space-y-1 list-decimal list-inside">
                     <li>Go to Admin Portal &rarr; Contract Manager</li>
-                    <li>Upload a master contract PDF</li>
+                    <li>Upload a master contract HTML file</li>
                     <li>Set the contract as "Active"</li>
                     <li>Return to booking flow to continue</li>
                   </ol>
@@ -239,6 +228,7 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
             <SignatureCanvas
               ref={sigPad}
               penColor='#D4AF37'
+              onEnd={syncSignaturePreview}
               canvasProps={{
                 className: 'w-full h-full cursor-crosshair',
                 style: { width: '100%', height: '100%' }

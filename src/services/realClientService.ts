@@ -110,7 +110,7 @@ export const clientService = {
 
   getGloveboxData: async (clientId: string) => {
     return getOrSetCache(`client:glovebox:${clientId}`, CLIENT_CACHE_TTL_MS, async () => {
-      const [bookingsRes, paymentsRes, profileRes] = await Promise.all([
+      const [bookingsRes, paymentsRes, signedContractsRes, profileRes] = await Promise.all([
         supabase
           .from('bookings')
           .select('id, document_status, admin_notes, metadata, start_date, end_date, cars(make, model)')
@@ -122,6 +122,24 @@ export const clientService = {
           .eq('user_id', clientId)
           .order('created_at', { ascending: false }),
         supabase
+          .from('signed_contracts')
+          .select(`
+            id,
+            booking_id,
+            contract_url,
+            signature_data,
+            signed_at,
+            agreement_status,
+            bookings!inner(
+              id,
+              start_date,
+              end_date,
+              cars(make, model)
+            )
+          `)
+          .eq('bookings.client_id', clientId)
+          .order('signed_at', { ascending: false }),
+        supabase
           .from('user_profiles')
           .select('*')
           .eq('id', clientId)
@@ -130,13 +148,24 @@ export const clientService = {
 
       const bookings = bookingsRes.data || [];
       const payments = paymentsRes.data || [];
+      const signedContracts = signedContractsRes.data || [];
       const profile = profileRes.data || {};
 
       const docBooking = bookings.find((b: any) => b.metadata?.documents);
       const docs = docBooking?.metadata?.documents || {};
       const idNumber = profile.id_number || docBooking?.metadata?.guest_info?.id_number || docBooking?.metadata?.guest_info?.idNumber || docBooking?.metadata?.idNumber || null;
 
-      const contracts = bookings
+      const signedContractEntries = signedContracts.map((contract: any) => ({
+        id: contract.booking_id || contract.id,
+        car: contract.bookings?.cars ? `${contract.bookings.cars.make} ${contract.bookings.cars.model}` : 'Unknown Car',
+        start_date: contract.bookings?.start_date || null,
+        end_date: contract.bookings?.end_date || null,
+        contract_url: contract.contract_url || null,
+        signature_url: contract.signature_data || null,
+        signed_at: contract.signed_at || null
+      }));
+
+      const legacyContracts = bookings
         .filter((b: any) => b.metadata?.contract_url || b.metadata?.signature_url)
         .map((b: any) => ({
           id: b.id,
@@ -146,6 +175,10 @@ export const clientService = {
           contract_url: b.metadata?.contract_url || null,
           signature_url: b.metadata?.signature_url || null,
         }));
+
+      const contractMap = new Map<string, any>();
+      legacyContracts.forEach((contract: any) => contractMap.set(contract.id, contract));
+      signedContractEntries.forEach((contract: any) => contractMap.set(contract.id, contract));
 
       return {
         docBooking,
@@ -159,7 +192,7 @@ export const clientService = {
           status: docBooking?.document_status || null,
           bookingId: docBooking?.id || null,
         },
-        contracts,
+        contracts: Array.from(contractMap.values()),
         payments,
       };
     });

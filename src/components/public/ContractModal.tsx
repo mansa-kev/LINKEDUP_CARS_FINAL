@@ -122,7 +122,7 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
     <iframe src="${pdfUrl}" title="Rental Agreement Contract"></iframe>
   </div>` : `
   <div class="section" style="text-align:center;padding:40px 36px;color:#6b7280">
-    <p style="font-size:13px">No contract PDF is currently active. Please contact support.</p>
+    <p style="font-size:13px">No contract template is currently active. Please contact support.</p>
   </div>`}
 
   <div class="footer">LinkedUp Cars Rentals · linkedupcarsrentals.com · Generated ${new Date().toISOString()}</div>
@@ -162,7 +162,7 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
               className="flex items-center gap-2 px-3 py-2 bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-black/80 transition-colors disabled:opacity-50"
             >
               <Printer size={14} />
-              <span className="hidden sm:inline">Save as PDF</span>
+              <span className="hidden sm:inline">Save Contract</span>
             </button>
             {pdfUrl && (
               <a
@@ -172,7 +172,7 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
                 className="flex items-center gap-1.5 px-3 py-2 bg-black/20 text-black rounded-xl text-xs font-bold hover:bg-black/30 transition-colors"
               >
                 <ExternalLink size={14} />
-                <span className="hidden sm:inline">Open PDF</span>
+                <span className="hidden sm:inline">Open Contract</span>
               </a>
             )}
             <button
@@ -234,7 +234,7 @@ export function ContractModal({ booking, onClose }: ContractModalProps) {
         {/* Footer note */}
         <div className="px-6 py-3 bg-card border-t border-border text-center shrink-0">
           <p className="text-[10px] text-muted-foreground">
-            Click <strong>Save as PDF</strong> to download your booking summary. Open the downloaded file in a browser and use <strong>Print → Save as PDF</strong> to get a PDF copy.
+            Click <strong>Save Contract</strong> to download your booking summary. Open the downloaded file in a browser and use <strong>Print → Save as PDF</strong> to get a PDF copy.
           </p>
         </div>
       </div>

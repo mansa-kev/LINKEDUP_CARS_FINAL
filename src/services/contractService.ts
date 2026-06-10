@@ -21,6 +21,6 @@ export const contractService = {
 
   generateContract: async (data: any) => {
     const masterContract = await contractService.getMasterContract();
-    return masterContract?.contract_url || 'https://example.com/contract.pdf';
+    return masterContract?.pdf_url || masterContract?.contract_url || masterContract?.template_url || '';
   }
 };
