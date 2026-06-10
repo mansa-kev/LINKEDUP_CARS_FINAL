@@ -33,7 +33,11 @@ const getCarStatus = (car: Car): 'available' | 'booked' | 'reserved' | 'unavaila
   return 'available';
 };
 
-export function CarShowroom() {
+interface CarShowroomProps {
+  isHome?: boolean;
+}
+
+export function CarShowroom({ isHome = false }: CarShowroomProps) {
   const [searchParamsURL] = useSearchParams();
   const [cars, setCars] = useState<Car[]>([]);
   const [filteredCars, setFilteredCars] = useState<Car[]>([]);
@@ -173,7 +177,7 @@ export function CarShowroom() {
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 lg:gap-5">
                 <AnimatePresence mode="popLayout">
-                  {filteredCars.map((car, i) => (
+                  {(isHome ? filteredCars.slice(0, 20) : filteredCars).map((car, i) => (
                     <motion.div
                       key={car.id}
                       layout
@@ -294,6 +298,18 @@ export function CarShowroom() {
                   ))}
                 </AnimatePresence>
                 <div ref={ref} className="h-10" />
+              </div>
+            )}
+
+            {isHome && filteredCars.length > 20 && (
+              <div className="mt-12 flex justify-center">
+                <Link
+                  to="/cars"
+                  className="bg-primary text-black px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm hover:scale-105 transition-transform flex items-center gap-3 shadow-xl shadow-primary/20"
+                >
+                  View All Cars
+                  <ArrowRight size={18} />
+                </Link>
               </div>
             )}
           </div>

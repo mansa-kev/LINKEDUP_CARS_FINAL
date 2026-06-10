@@ -76,7 +76,7 @@ serve(async (req) => {
     await supabaseAdmin.from('car_reservations').delete().or(`client_id.eq.${userId},fleet_owner_id.eq.${userId}`)
     await supabaseAdmin.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
     await supabaseAdmin.from('notifications').delete().eq('user_id', userId)
-    await supabaseAdmin.from('reviews').delete().eq('client_id', userId)
+    await supabaseAdmin.from('reviews').delete().eq('user_id', userId)
     await supabaseAdmin.from('driver_profiles').delete().eq('id', userId)
     await supabaseAdmin.from('fleet_owner_settings').delete().eq('id', userId)
     await supabaseAdmin.from('client_glovebox').delete().eq('client_id', userId)

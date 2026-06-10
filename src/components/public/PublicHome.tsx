@@ -74,7 +74,7 @@ export function PublicHome() {
       {/* Promo Banner - between hero and cars */}
       <PromoBanner />
 
-      <CarShowroom />
+      <CarShowroom isHome={true} />
 
       {/* ── Rotating Reviews ─────────────────────────────────── */}
       {approvedReviews.length > 0 && (
