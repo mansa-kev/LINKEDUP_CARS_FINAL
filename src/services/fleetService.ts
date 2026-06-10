@@ -1,17 +1,22 @@
 import { supabase, handleSupabaseErrorWrapper as handleSupabaseError } from '../lib/supabase';
 import { logger } from '../utils/logger';
 import { Car } from '../types';
+import { getOrSetCache, invalidateCachePrefix } from '../utils/queryCache';
+
+const FLEET_CACHE_TTL_MS = 60_000;
 
 export const fleetService = {
   // --- Public Fleet ---
   getAllCars: async () => {
-    const { data, error } = await supabase
-      .from('cars')
-      .select('*')
-      .eq('status', 'available')
-      .order('created_at', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getAllCars');
-    return data;
+    return getOrSetCache('fleet:allCars', FLEET_CACHE_TTL_MS, async () => {
+      const { data, error } = await supabase
+        .from('cars')
+        .select('*')
+        .eq('status', 'available')
+        .order('created_at', { ascending: false });
+      if (error) return handleSupabaseError(error, 'getAllCars');
+      return data;
+    });
   },
 
   getAvailableCars: async (pickupDate: string, dropoffDate: string, location?: string) => {
@@ -50,37 +55,38 @@ export const fleetService = {
 
   // --- Dashboard ---
   getDashboardStats: async (fleetOwnerId: string) => {
-    try {
-      // Fetch cars
-      const { data: cars, error: cError } = await supabase
-        .from('cars')
-        .select('id, make, model, status, daily_rate')
-        .eq('fleet_owner_id', fleetOwnerId);
-      if (cError) throw cError;
-
-      // Fetch bookings
-      const { data: bookings, error: bError } = await supabase
-        .from('bookings')
-        .select('id, car_id, status, total_amount, start_date, end_date, created_at')
-        .eq('fleet_owner_id', fleetOwnerId);
-      if (bError) throw bError;
-
-      // Fetch payouts (handle gracefully if table doesn't exist yet)
-      let payouts: any[] = [];
+    return getOrSetCache(`fleet:dashboard:${fleetOwnerId}`, FLEET_CACHE_TTL_MS, async () => {
       try {
-        const { data: pData, error: pError } = await supabase
-          .from('payouts')
-          .select('amount, status, created_at')
+        // Fetch cars
+        const { data: cars, error: cError } = await supabase
+          .from('cars')
+          .select('id, make, model, status, daily_rate')
           .eq('fleet_owner_id', fleetOwnerId);
-        if (pError) throw pError;
-        payouts = pData || [];
-      } catch (e) {
-        logger.warn("Could not fetch payouts. Table might not exist yet.", e);
-      }
+        if (cError) throw cError;
 
-      const totalCars = cars.length;
-      const activeBookings = bookings.filter(b => b.status === 'confirmed' || b.status === 'in_progress').length;
-      const maintenanceCars = cars.filter(c => c.status === 'maintenance').length;
+        // Fetch bookings
+        const { data: bookings, error: bError } = await supabase
+          .from('bookings')
+          .select('id, car_id, status, total_amount, start_date, end_date, created_at')
+          .eq('fleet_owner_id', fleetOwnerId);
+        if (bError) throw bError;
+
+        // Fetch payouts (handle gracefully if table doesn't exist yet)
+        let payouts: any[] = [];
+        try {
+          const { data: pData, error: pError } = await supabase
+            .from('payouts')
+            .select('amount, status, created_at')
+            .eq('fleet_owner_id', fleetOwnerId);
+          if (pError) throw pError;
+          payouts = pData || [];
+        } catch (e) {
+          logger.warn("Could not fetch payouts. Table might not exist yet.", e);
+        }
+
+        const totalCars = cars.length;
+        const activeBookings = bookings.filter(b => b.status === 'confirmed' || b.status === 'in_progress').length;
+        const maintenanceCars = cars.filter(c => c.status === 'maintenance').length;
       
       // Utilization Rate (simplified: active bookings / total cars)
       const utilizationRate = totalCars > 0 ? Math.round((activeBookings / totalCars) * 100) : 0;
@@ -181,34 +187,37 @@ export const fleetService = {
         };
       }
 
-      return {
-        totalCars,
-        activeBookings,
-        maintenanceCars,
-        utilizationRate,
-        totalEarnings,
-        netPayouts,
-        pendingPayouts,
-        totalBookings30Days,
-        avgBookingDuration,
-        monthlyEarningsTrend,
-        bookingsByDay,
-        topCar,
-        underperformingCar
-      };
-    } catch (error) {
-      return handleSupabaseError(error, 'getDashboardStats');
-    }
+        return {
+          totalCars,
+          activeBookings,
+          maintenanceCars,
+          utilizationRate,
+          totalEarnings,
+          netPayouts,
+          pendingPayouts,
+          totalBookings30Days,
+          avgBookingDuration,
+          monthlyEarningsTrend,
+          bookingsByDay,
+          topCar,
+          underperformingCar
+        };
+      } catch (error) {
+        return handleSupabaseError(error, 'getDashboardStats');
+      }
+    });
   },
 
   // --- Fleet Management ---
   getMyCars: async (fleetOwnerId: string) => {
-    const { data, error } = await supabase
-      .from('cars')
-      .select('*')
-      .eq('fleet_owner_id', fleetOwnerId);
-    if (error) return handleSupabaseError(error, 'getMyCars');
-    return data;
+    return getOrSetCache(`fleet:cars:${fleetOwnerId}`, FLEET_CACHE_TTL_MS, async () => {
+      const { data, error } = await supabase
+        .from('cars')
+        .select('*')
+        .eq('fleet_owner_id', fleetOwnerId);
+      if (error) return handleSupabaseError(error, 'getMyCars');
+      return data;
+    });
   },
 
   getCarDetails: async (carId: string) => {
@@ -258,6 +267,9 @@ export const fleetService = {
       .insert([processedCar])
       .select();
     if (error) return handleSupabaseError(error, 'addCar');
+    invalidateCachePrefix('fleet:allCars');
+    invalidateCachePrefix('fleet:cars:');
+    invalidateCachePrefix('fleet:dashboard:');
     return data;
   },
 
@@ -268,6 +280,9 @@ export const fleetService = {
       .eq('id', id)
       .select();
     if (error) return handleSupabaseError(error, 'updateCar');
+    invalidateCachePrefix('fleet:allCars');
+    invalidateCachePrefix('fleet:cars:');
+    invalidateCachePrefix('fleet:dashboard:');
     return data;
   },
 

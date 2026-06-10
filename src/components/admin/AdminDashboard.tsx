@@ -36,6 +36,25 @@ import {
 
 // --- Components ---
 
+const scheduleIdle = (cb: () => void) => {
+  if (typeof window === 'undefined') {
+    cb();
+    return () => {};
+  }
+
+  if ('requestIdleCallback' in window) {
+    const idleId = window.requestIdleCallback(() => cb(), { timeout: 700 });
+    return () => window.cancelIdleCallback(idleId);
+  }
+
+  const timeoutId = window.setTimeout(cb, 150);
+  return () => window.clearTimeout(timeoutId);
+};
+
+const ChartPlaceholder = ({ height = 'h-[300px]' }: { height?: string }) => (
+  <div className={`${height} w-full rounded-2xl bg-muted/60 animate-pulse`} />
+);
+
 const StatCard = ({
   title,
   value,
@@ -43,7 +62,8 @@ const StatCard = ({
   trendValue,
   icon: Icon,
   color,
-  sparklineData
+  sparklineData,
+  showSparkline = true
 }: {
   title: string;
   value: string;
@@ -52,6 +72,7 @@ const StatCard = ({
   icon: React.ElementType;
   color: string;
   sparklineData?: number[];
+  showSparkline?: boolean;
 }) => (
   <div className="bg-card p-6 rounded-2xl border border-border shadow-sm hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
     <div className="flex justify-between items-start mb-4">
@@ -67,7 +88,7 @@ const StatCard = ({
     </div>
     <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-wider mb-1">{title}</h3>
     <p className="text-2xl font-bold text-foreground mb-2">{value}</p>
-    {sparklineData && sparklineData.length > 0 && (
+    {showSparkline && sparklineData && sparklineData.length > 0 && (
       <div className="h-10 w-full">
         <ResponsiveContainer width="100%" height={40}>
           <AreaChart data={sparklineData.map((val, i) => ({ value: val }))}>
@@ -99,6 +120,7 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '3m' | '6m' | '1y'>('7d');
   const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [showHeavyVisuals, setShowHeavyVisuals] = useState(false);
 
   // Greeting based on time of day
   const getGreeting = () => {
@@ -111,6 +133,7 @@ export function AdminDashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       setLoading(true);
+      setShowHeavyVisuals(false);
       try {
         const data = await adminService.getDashboardStats(timeRange);
         setStats(data);
@@ -132,6 +155,11 @@ export function AdminDashboard() {
     };
     fetchStats();
   }, [timeRange]);
+
+  useEffect(() => {
+    if (!stats) return;
+    return scheduleIdle(() => setShowHeavyVisuals(true));
+  }, [stats, timeRange]);
 
   if (loading && !stats) {
     return (
@@ -205,6 +233,7 @@ export function AdminDashboard() {
           icon={DollarSign}
           color="bg-blue-500"
           sparklineData={revenueSparkline}
+          showSparkline={showHeavyVisuals}
         />
         <StatCard
           title="Net Commission"
@@ -213,6 +242,7 @@ export function AdminDashboard() {
           icon={TrendingUp}
           color="bg-primary"
           sparklineData={commissionSparkline}
+          showSparkline={showHeavyVisuals}
         />
         <StatCard 
           title="Client Churn Rate" 
@@ -351,7 +381,7 @@ export function AdminDashboard() {
             </div>
           </div>
           <div className="h-[300px] w-full">
-            {revenueData && revenueData.length > 0 ? (
+            {showHeavyVisuals && revenueData && revenueData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
                 <LineChart data={revenueData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
@@ -392,10 +422,12 @@ export function AdminDashboard() {
                 />
               </LineChart>
             </ResponsiveContainer>
-            ) : (
+            ) : showHeavyVisuals ? (
               <div className="h-[300px] flex items-center justify-center text-muted-foreground">
                 No revenue data available
               </div>
+            ) : (
+              <ChartPlaceholder />
             )}
           </div>
         </div>
@@ -404,24 +436,28 @@ export function AdminDashboard() {
         <div className="bg-card p-8 rounded-2xl border border-border shadow-sm">
           <h3 className="font-bold text-lg mb-8">Booking Status</h3>
           <div className="h-[240px] w-full relative">
-            <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
-              <PieChart>
-                <Pie
-                  data={bookingStatusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={8}
-                  dataKey="value"
-                >
-                  {bookingStatusData.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            {showHeavyVisuals ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
+                <PieChart>
+                  <Pie
+                    data={bookingStatusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={8}
+                    dataKey="value"
+                  >
+                    {bookingStatusData.map((entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <ChartPlaceholder height="h-[240px]" />
+            )}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-2xl font-bold">{totalBookings}</span>
               <span className="text-[10px] uppercase font-bold text-muted-foreground">Total</span>
@@ -446,30 +482,34 @@ export function AdminDashboard() {
         <div className="bg-card p-8 rounded-2xl border border-border shadow-sm">
           <h3 className="font-bold text-lg mb-8">Top 5 Most Booked Cars</h3>
           <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
-              <BarChart data={stats?.topCars || []} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="var(--border)" />
-                <XAxis type="number" hide />
-                <YAxis 
-                  dataKey="name" 
-                  type="category" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} 
-                  width={150}
-                />
-                <Tooltip 
-                  cursor={{ fill: 'var(--muted)' }}
-                  contentStyle={{ 
-                    backgroundColor: 'var(--card)', 
-                    borderColor: 'var(--border)',
-                    borderRadius: '12px',
-                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
-                  }} 
-                />
-                <Bar dataKey="count" fill="var(--primary)" radius={[0, 4, 4, 0]} barSize={32} />
-              </BarChart>
-            </ResponsiveContainer>
+            {showHeavyVisuals ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
+                <BarChart data={stats?.topCars || []} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="var(--border)" />
+                  <XAxis type="number" hide />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} 
+                    width={150}
+                  />
+                  <Tooltip 
+                    cursor={{ fill: 'var(--muted)' }}
+                    contentStyle={{ 
+                      backgroundColor: 'var(--card)', 
+                      borderColor: 'var(--border)',
+                      borderRadius: '12px',
+                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
+                    }} 
+                  />
+                  <Bar dataKey="count" fill="var(--primary)" radius={[0, 4, 4, 0]} barSize={32} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <ChartPlaceholder />
+            )}
           </div>
         </div>
       </div>
@@ -484,7 +524,7 @@ export function AdminDashboard() {
           <p className="text-sm text-muted-foreground">Which days drive the most bookings</p>
         </div>
         <div className="h-[300px] w-full mt-6">
-          {bookingsByDay && bookingsByDay.length > 0 ? (
+          {showHeavyVisuals && bookingsByDay && bookingsByDay.length > 0 ? (
             <ResponsiveContainer width="100%" height={300} minWidth={300} minHeight={200}>
               <BarChart data={bookingsByDay}>
               <defs>
@@ -529,10 +569,12 @@ export function AdminDashboard() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-          ) : (
+          ) : showHeavyVisuals ? (
             <div className="h-[300px] flex items-center justify-center text-muted-foreground">
               No booking data available
             </div>
+          ) : (
+            <ChartPlaceholder />
           )}
         </div>
       </div>

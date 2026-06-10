@@ -40,35 +40,103 @@ import { PortalHeader } from './PortalHeader';
 import { Logo } from './shared/Logo';
 import { LogoLoader } from './shared/LogoLoader';
 
-// Lazy load admin components
-const AdminDashboard = React.lazy(() => import('./admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
-const AdminBookings = React.lazy(() => import('./admin/AdminBookings').then(m => ({ default: m.AdminBookings })));
-const AdminBookingCommandCenter = React.lazy(() => import('./admin/AdminBookingCommandCenter').then(m => ({ default: m.AdminBookingCommandCenter })));
-const AdminCars = React.lazy(() => import('./admin/AdminCars').then(m => ({ default: m.AdminCars })));
-const AdminUsers = React.lazy(() => import('./admin/AdminUsers').then(m => ({ default: m.AdminUsers })));
-const AdminDrivers = React.lazy(() => import('./admin/AdminDrivers').then(m => ({ default: m.AdminDrivers })));
-const AdminFleetOwners = React.lazy(() => import('./admin/AdminFleetOwners').then(m => ({ default: m.AdminFleetOwners })));
-const AdminVerification = React.lazy(() => import('./admin/AdminVerification').then(m => ({ default: m.AdminVerification })));
-const AdminFinancials = React.lazy(() => import('./admin/AdminFinancials').then(m => ({ default: m.AdminFinancials })));
-const AdminTaxes = React.lazy(() => import('./admin/AdminTaxes').then(m => ({ default: m.AdminTaxes })));
-const AdminExpenses = React.lazy(() => import('./admin/AdminExpenses').then(m => ({ default: m.AdminExpenses })));
-const AdminCarEarnings = React.lazy(() => import('./admin/AdminCarEarnings').then(m => ({ default: m.AdminCarEarnings })));
-const AdminPricing = React.lazy(() => import('./admin/AdminPricing').then(m => ({ default: m.AdminPricing })));
-const AdminReports = React.lazy(() => import('./admin/AdminReports').then(m => ({ default: m.AdminReports })));
-const AdminInbox = React.lazy(() => import('./admin/AdminInbox').then(m => ({ default: m.AdminInbox })));
-const AdminReviews = React.lazy(() => import('./admin/AdminReviews').then(m => ({ default: m.AdminReviews })));
-const AdminGrowthTools = React.lazy(() => import('./admin/AdminGrowthTools').then(m => ({ default: m.AdminGrowthTools })));
-const AdminIncidentCommand = React.lazy(() => import('./admin/AdminIncidentCommand').then(m => ({ default: m.AdminIncidentCommand })));
-const AdminHeroContent = React.lazy(() => import('./admin/AdminHeroContent').then(m => ({ default: m.AdminHeroContent })));
-const AdminContractManager = React.lazy(() => import('./admin/AdminContractManager').then(m => ({ default: m.AdminContractManager })));
-const AdminSystemHealth = React.lazy(() => import('./admin/AdminSystemHealth').then(m => ({ default: m.AdminSystemHealth })));
-const AdminSettings = React.lazy(() => import('./admin/AdminSettings').then(m => ({ default: m.AdminSettings })));
-const AdminLogout = React.lazy(() => import('./admin/AdminLogout').then(m => ({ default: m.AdminLogout })));
-const AdminOutsourcedCars = React.lazy(() => import('./admin/AdminOutsourcedCars').then(m => ({ default: m.AdminOutsourcedCars })));
-const AdminPromotions = React.lazy(() => import('./admin/AdminPromotions').then(m => ({ default: m.AdminPromotions })));
-const AdminReservations = React.lazy(() => import('./admin/AdminReservations').then(m => ({ default: m.AdminReservations })));
-const AdminBlog = React.lazy(() => import('./admin/AdminBlog').then(m => ({ default: m.AdminBlog })));
-const AdminConciergeBooking = React.lazy(() => import('./admin/AdminConciergeBooking').then(m => ({ default: m.AdminConciergeBooking })));
+const importAdminDashboard = () => import('./admin/AdminDashboard');
+const importAdminBookings = () => import('./admin/AdminBookings');
+const importAdminBookingCommandCenter = () => import('./admin/AdminBookingCommandCenter');
+const importAdminCars = () => import('./admin/AdminCars');
+const importAdminUsers = () => import('./admin/AdminUsers');
+const importAdminDrivers = () => import('./admin/AdminDrivers');
+const importAdminFleetOwners = () => import('./admin/AdminFleetOwners');
+const importAdminVerification = () => import('./admin/AdminVerification');
+const importAdminFinancials = () => import('./admin/AdminFinancials');
+const importAdminTaxes = () => import('./admin/AdminTaxes');
+const importAdminExpenses = () => import('./admin/AdminExpenses');
+const importAdminCarEarnings = () => import('./admin/AdminCarEarnings');
+const importAdminPricing = () => import('./admin/AdminPricing');
+const importAdminReports = () => import('./admin/AdminReports');
+const importAdminInbox = () => import('./admin/AdminInbox');
+const importAdminReviews = () => import('./admin/AdminReviews');
+const importAdminGrowthTools = () => import('./admin/AdminGrowthTools');
+const importAdminIncidentCommand = () => import('./admin/AdminIncidentCommand');
+const importAdminHeroContent = () => import('./admin/AdminHeroContent');
+const importAdminContractManager = () => import('./admin/AdminContractManager');
+const importAdminSystemHealth = () => import('./admin/AdminSystemHealth');
+const importAdminSettings = () => import('./admin/AdminSettings');
+const importAdminLogout = () => import('./admin/AdminLogout');
+const importAdminOutsourcedCars = () => import('./admin/AdminOutsourcedCars');
+const importAdminPromotions = () => import('./admin/AdminPromotions');
+const importAdminReservations = () => import('./admin/AdminReservations');
+const importAdminBlog = () => import('./admin/AdminBlog');
+const importAdminConciergeBooking = () => import('./admin/AdminConciergeBooking');
+
+const AdminDashboard = React.lazy(() => importAdminDashboard().then(m => ({ default: m.AdminDashboard })));
+const AdminBookings = React.lazy(() => importAdminBookings().then(m => ({ default: m.AdminBookings })));
+const AdminBookingCommandCenter = React.lazy(() => importAdminBookingCommandCenter().then(m => ({ default: m.AdminBookingCommandCenter })));
+const AdminCars = React.lazy(() => importAdminCars().then(m => ({ default: m.AdminCars })));
+const AdminUsers = React.lazy(() => importAdminUsers().then(m => ({ default: m.AdminUsers })));
+const AdminDrivers = React.lazy(() => importAdminDrivers().then(m => ({ default: m.AdminDrivers })));
+const AdminFleetOwners = React.lazy(() => importAdminFleetOwners().then(m => ({ default: m.AdminFleetOwners })));
+const AdminVerification = React.lazy(() => importAdminVerification().then(m => ({ default: m.AdminVerification })));
+const AdminFinancials = React.lazy(() => importAdminFinancials().then(m => ({ default: m.AdminFinancials })));
+const AdminTaxes = React.lazy(() => importAdminTaxes().then(m => ({ default: m.AdminTaxes })));
+const AdminExpenses = React.lazy(() => importAdminExpenses().then(m => ({ default: m.AdminExpenses })));
+const AdminCarEarnings = React.lazy(() => importAdminCarEarnings().then(m => ({ default: m.AdminCarEarnings })));
+const AdminPricing = React.lazy(() => importAdminPricing().then(m => ({ default: m.AdminPricing })));
+const AdminReports = React.lazy(() => importAdminReports().then(m => ({ default: m.AdminReports })));
+const AdminInbox = React.lazy(() => importAdminInbox().then(m => ({ default: m.AdminInbox })));
+const AdminReviews = React.lazy(() => importAdminReviews().then(m => ({ default: m.AdminReviews })));
+const AdminGrowthTools = React.lazy(() => importAdminGrowthTools().then(m => ({ default: m.AdminGrowthTools })));
+const AdminIncidentCommand = React.lazy(() => importAdminIncidentCommand().then(m => ({ default: m.AdminIncidentCommand })));
+const AdminHeroContent = React.lazy(() => importAdminHeroContent().then(m => ({ default: m.AdminHeroContent })));
+const AdminContractManager = React.lazy(() => importAdminContractManager().then(m => ({ default: m.AdminContractManager })));
+const AdminSystemHealth = React.lazy(() => importAdminSystemHealth().then(m => ({ default: m.AdminSystemHealth })));
+const AdminSettings = React.lazy(() => importAdminSettings().then(m => ({ default: m.AdminSettings })));
+const AdminLogout = React.lazy(() => importAdminLogout().then(m => ({ default: m.AdminLogout })));
+const AdminOutsourcedCars = React.lazy(() => importAdminOutsourcedCars().then(m => ({ default: m.AdminOutsourcedCars })));
+const AdminPromotions = React.lazy(() => importAdminPromotions().then(m => ({ default: m.AdminPromotions })));
+const AdminReservations = React.lazy(() => importAdminReservations().then(m => ({ default: m.AdminReservations })));
+const AdminBlog = React.lazy(() => importAdminBlog().then(m => ({ default: m.AdminBlog })));
+const AdminConciergeBooking = React.lazy(() => importAdminConciergeBooking().then(m => ({ default: m.AdminConciergeBooking })));
+
+const ADMIN_MODULE_PRELOADERS: Record<string, () => Promise<unknown>> = {
+  dashboard: importAdminDashboard,
+  bookings: importAdminBookings,
+  'bookings-detail': importAdminBookingCommandCenter,
+  'concierge-booking': importAdminConciergeBooking,
+  reservations: importAdminReservations,
+  cars: importAdminCars,
+  outsourced: importAdminOutsourcedCars,
+  users: importAdminUsers,
+  drivers: importAdminDrivers,
+  'fleet-owners': importAdminFleetOwners,
+  verification: importAdminVerification,
+  financials: importAdminFinancials,
+  taxes: importAdminTaxes,
+  expenses: importAdminExpenses,
+  'car-earnings': importAdminCarEarnings,
+  pricing: importAdminPromotions,
+  reports: importAdminReports,
+  inbox: importAdminInbox,
+  reviews: importAdminReviews,
+  blog: importAdminBlog,
+  growth: importAdminGrowthTools,
+  incident: importAdminIncidentCommand,
+  hero: importAdminHeroContent,
+  contracts: importAdminContractManager,
+  'system-health': importAdminSystemHealth,
+  settings: importAdminSettings,
+  logout: importAdminLogout,
+};
+
+const scheduleIdle = (cb: () => void) => {
+  if (typeof window === 'undefined') return () => {};
+  if ('requestIdleCallback' in window) {
+    const id = window.requestIdleCallback(cb, { timeout: 1200 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(cb, 250);
+  return () => window.clearTimeout(id);
+};
 
 type ModuleCategory = {
   title: string;
@@ -173,6 +241,19 @@ export function AdminPortal() {
 
   const activeModule = location.pathname.split('/')[2] || 'dashboard';
 
+  useEffect(() => {
+    const preloadActive = ADMIN_MODULE_PRELOADERS[activeModule];
+    preloadActive?.();
+
+    return scheduleIdle(() => {
+      ['dashboard', 'bookings', 'cars', 'users', 'financials', 'reservations'].forEach((moduleId) => {
+        if (moduleId !== activeModule) {
+          ADMIN_MODULE_PRELOADERS[moduleId]?.();
+        }
+      });
+    });
+  }, [activeModule]);
+
   const sidebarContent = (
     <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
       {MODULE_CATEGORIES.map((category) => {
@@ -207,6 +288,9 @@ export function AdminPortal() {
                         <Link
                           key={item.id}
                           to={item.id === 'dashboard' ? '/admin' : `/admin/${item.id}`}
+                          onMouseEnter={() => ADMIN_MODULE_PRELOADERS[item.id]?.()}
+                          onFocus={() => ADMIN_MODULE_PRELOADERS[item.id]?.()}
+                          onTouchStart={() => ADMIN_MODULE_PRELOADERS[item.id]?.()}
                           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all relative group ${
                             isActive
                               ? 'bg-primary/10 text-primary'

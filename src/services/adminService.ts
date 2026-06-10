@@ -1,11 +1,14 @@
 import { supabase, handleSupabaseErrorWrapper } from '../lib/supabase';
 import { logger } from '../utils/logger';
 import { Car } from '../types';
+import { getOrSetCache, invalidateCachePrefix } from '../utils/queryCache';
 const handleSupabaseError = handleSupabaseErrorWrapper;
+const ADMIN_CACHE_TTL_MS = 60_000;
 
 export const adminService = {
   // --- Dashboard ---
   getDashboardStats: async (timeRange: '7d' | '30d' | '3m' | '6m' | '1y' = '7d') => {
+    return getOrSetCache(`admin:dashboard:${timeRange}`, ADMIN_CACHE_TTL_MS, async () => {
     try {
       const now = new Date();
       let startDate = new Date();
@@ -193,10 +196,12 @@ export const adminService = {
         ]
       };
     }
+    });
   },
 
   // --- Reservations ---
   getReservationStats: async () => {
+    return getOrSetCache('admin:reservationStats', ADMIN_CACHE_TTL_MS, async () => {
     try {
       const { data, error } = await supabase
         .from('car_reservations')
@@ -220,26 +225,66 @@ export const adminService = {
     } catch (error) {
       return handleSupabaseErrorWrapper(error, 'getReservationStats');
     }
+    });
   },
 
   // --- Bookings ---
   getBookings: async (page: number = 1, pageSize: number = 20) => {
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
+    return getOrSetCache(`admin:bookings:${page}:${pageSize}`, 30_000, async () => {
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
 
-    const { data, error, count } = await supabase
-      .from('bookings')
-      .select(`
-        *,
-        cars (*),
-        client:user_profiles!bookings_client_id_fkey (*),
-        fleet_owner:user_profiles!bookings_fleet_owner_id_fkey (*)
-      `, { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to);
+      const { data, error, count } = await supabase
+        .from('bookings')
+        .select(`
+          id,
+          client_id,
+          car_id,
+          driver_id,
+          fleet_owner_id,
+          start_date,
+          end_date,
+          total_amount,
+          platform_commission,
+          status,
+          payment_status,
+          document_status,
+          admin_notes,
+          is_flagged,
+          flag_reason,
+          sub_status,
+          pickup_confirmed_at,
+          return_confirmed_at,
+          return_condition,
+          overtime_hours,
+          overtime_charge,
+          created_at,
+          metadata,
+          cars (
+            id,
+            make,
+            model,
+            images,
+            image_url
+          ),
+          client:user_profiles!bookings_client_id_fkey (
+            id,
+            full_name,
+            email,
+            phone_number
+          ),
+          fleet_owner:user_profiles!bookings_fleet_owner_id_fkey (
+            id,
+            full_name,
+            email
+          )
+        `, { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
-    if (error) return handleSupabaseErrorWrapper(error, 'getBookings');
-    return { data, count };
+      if (error) return handleSupabaseErrorWrapper(error, 'getBookings');
+      return { data, count };
+    });
   },
 
   createConciergeBooking: async (bookingData: any) => {
@@ -291,6 +336,8 @@ export const adminService = {
         .select();
 
       if (error) throw error;
+      invalidateCachePrefix('admin:bookings:');
+      invalidateCachePrefix('admin:dashboard:');
       return data;
     } catch (error) {
       return handleSupabaseErrorWrapper(error, 'confirmBankTransferPayment');
@@ -304,47 +351,50 @@ export const adminService = {
       .eq('id', id)
       .select();
     if (error) return handleSupabaseErrorWrapper(error, 'updateBookingStatus');
+    invalidateCachePrefix('admin:bookings:');
+    invalidateCachePrefix('admin:dashboard:');
     return data;
   },
 
   // --- Cars ---
   getCars: async (page: number = 1, pageSize: number = 20) => {
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
+    return getOrSetCache(`admin:cars:${page}:${pageSize}`, ADMIN_CACHE_TTL_MS, async () => {
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
 
-    const { data, error, count } = await supabase
-      .from('cars')
-      .select(`
-        *,
-        fleet_owner:user_profiles (
+      const { data, error, count } = await supabase
+        .from('cars')
+        .select(`
           *,
-          fleet_owner_settings (*)
-        )
-      `, { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to);
+          fleet_owner:user_profiles (
+            *,
+            fleet_owner_settings (*)
+          )
+        `, { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
-    if (error) return handleSupabaseErrorWrapper(error, 'getCars');
+      if (error) return handleSupabaseErrorWrapper(error, 'getCars');
 
-    // Normalize fleet_owner_settings to an array to match UI assumptions
-    const normalizedData = (data || []).map((car: any) => {
-      if (car.fleet_owner) {
-        const settings = car.fleet_owner.fleet_owner_settings;
-        const settingsArray = settings
-          ? (Array.isArray(settings) ? settings : [settings])
-          : [];
-        return {
-          ...car,
-          fleet_owner: {
-            ...car.fleet_owner,
-            fleet_owner_settings: settingsArray
-          }
-        };
-      }
-      return car;
+      const normalizedData = (data || []).map((car: any) => {
+        if (car.fleet_owner) {
+          const settings = car.fleet_owner.fleet_owner_settings;
+          const settingsArray = settings
+            ? (Array.isArray(settings) ? settings : [settings])
+            : [];
+          return {
+            ...car,
+            fleet_owner: {
+              ...car.fleet_owner,
+              fleet_owner_settings: settingsArray
+            }
+          };
+        }
+        return car;
+      });
+
+      return { data: normalizedData, count };
     });
-
-    return { data: normalizedData, count };
   },
 
   uploadCarImage: async (file: File): Promise<string> => {
@@ -391,6 +441,8 @@ export const adminService = {
       .insert([processedCar])
       .select();
     if (error) return handleSupabaseErrorWrapper(error, 'addCar');
+    invalidateCachePrefix('admin:cars:');
+    invalidateCachePrefix('admin:dashboard:');
     return data;
   },
 
@@ -412,6 +464,8 @@ export const adminService = {
       .eq('id', id)
       .select();
     if (error) return handleSupabaseErrorWrapper(error, 'updateCar');
+    invalidateCachePrefix('admin:cars:');
+    invalidateCachePrefix('admin:dashboard:');
     return data;
   },
 
@@ -421,16 +475,20 @@ export const adminService = {
       .delete()
       .eq('id', id);
     if (error) return handleSupabaseErrorWrapper(error, 'deleteCar');
+    invalidateCachePrefix('admin:cars:');
+    invalidateCachePrefix('admin:dashboard:');
   },
 
   // --- Users ---
   getUsers: async () => {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) return handleSupabaseErrorWrapper(error, 'getUsers');
-    return data;
+    return getOrSetCache('admin:users', ADMIN_CACHE_TTL_MS, async () => {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, email, phone_number, role, status, created_at, last_login, avatar_url')
+        .order('created_at', { ascending: false });
+      if (error) return handleSupabaseErrorWrapper(error, 'getUsers');
+      return data;
+    });
   },
 
   updateUserRole: async (id: string, role: string) => {
@@ -440,6 +498,8 @@ export const adminService = {
       .eq('id', id)
       .select();
     if (error) return handleSupabaseErrorWrapper(error, 'updateUserRole');
+    invalidateCachePrefix('admin:users');
+    invalidateCachePrefix('admin:dashboard:');
     return data;
   },
 
@@ -450,6 +510,7 @@ export const adminService = {
       .eq('id', id)
       .select();
     if (error) return handleSupabaseErrorWrapper(error, 'updateUserStatus');
+    invalidateCachePrefix('admin:users');
     return data;
   },
 
@@ -467,6 +528,9 @@ export const adminService = {
       console.error('Delete user API error:', data.error);
       throw new Error(data.error || 'Failed to delete user');
     }
+
+    invalidateCachePrefix('admin:users');
+    invalidateCachePrefix('admin:dashboard:');
 
     return true;
   },
@@ -601,28 +665,37 @@ export const adminService = {
   },
 
   getFleetOwners: async () => {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select(`
-        *,
-        fleet_owner_settings (*)
-      `)
-      .eq('role', 'fleet_owner');
-    if (error) return handleSupabaseErrorWrapper(error, 'getFleetOwners');
+    return getOrSetCache('admin:fleetOwners', ADMIN_CACHE_TTL_MS, async () => {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select(`
+          id,
+          full_name,
+          email,
+          phone_number,
+          role,
+          status,
+          fleet_owner_settings (
+            company_name,
+            commission_rate
+          )
+        `)
+        .eq('role', 'fleet_owner');
+      if (error) return handleSupabaseErrorWrapper(error, 'getFleetOwners');
 
-    // Normalize fleet_owner_settings to an array to match UI assumptions
-    const normalizedData = (data || []).map((owner: any) => {
-      const settings = owner.fleet_owner_settings;
-      const settingsArray = settings
-        ? (Array.isArray(settings) ? settings : [settings])
-        : [];
-      return {
-        ...owner,
-        fleet_owner_settings: settingsArray
-      };
+      const normalizedData = (data || []).map((owner: any) => {
+        const settings = owner.fleet_owner_settings;
+        const settingsArray = settings
+          ? (Array.isArray(settings) ? settings : [settings])
+          : [];
+        return {
+          ...owner,
+          fleet_owner_settings: settingsArray
+        };
+      });
+
+      return normalizedData;
     });
-
-    return normalizedData;
   },
 
   createFleetOwnerAccount: async (data: any) => {
@@ -670,6 +743,10 @@ export const adminService = {
       });
     }
 
+    invalidateCachePrefix('admin:fleetOwners');
+    invalidateCachePrefix('admin:users');
+    invalidateCachePrefix('admin:dashboard:');
+
     return { id: userId, email: data.email };
   },
 
@@ -688,6 +765,9 @@ export const adminService = {
       .upsert({ id: owner.id, ...owner.settings });
     if (settingsError) throw settingsError;
 
+    invalidateCachePrefix('admin:fleetOwners');
+    invalidateCachePrefix('admin:users');
+
     return data;
   },
 
@@ -697,6 +777,8 @@ export const adminService = {
       .update(updates)
       .eq('id', id);
     if (error) throw error;
+    invalidateCachePrefix('admin:fleetOwners');
+    invalidateCachePrefix('admin:dashboard:');
   },
 
   deleteFleetOwner: async (id: string) => {
@@ -712,6 +794,8 @@ export const adminService = {
       .update({ role: 'client' })
       .eq('id', id);
     if (error) throw error;
+    invalidateCachePrefix('admin:fleetOwners');
+    invalidateCachePrefix('admin:users');
 
     // Hard-delete from Supabase Auth if service role key is available
     if (serviceRoleKey) {
@@ -747,6 +831,10 @@ export const adminService = {
         .update({ status: 'suspended' })
         .eq('id', id);
     }
+
+    invalidateCachePrefix('admin:fleetOwners');
+    invalidateCachePrefix('admin:users');
+    invalidateCachePrefix('admin:dashboard:');
 
     return data;
   },

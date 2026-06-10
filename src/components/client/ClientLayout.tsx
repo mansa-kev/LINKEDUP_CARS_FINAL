@@ -20,15 +20,44 @@ import { Logo } from '../shared/Logo';
 import { LogoLoader } from '../shared/LogoLoader';
 import { PortalHeader } from '../PortalHeader';
 
-// Lazy load client components
-const Dashboard = React.lazy(() => import('./Dashboard').then(m => ({ default: m.Dashboard })));
-const DigitalGlovebox = React.lazy(() => import('./DigitalGlovebox').then(m => ({ default: m.DigitalGlovebox })));
-const MyInbox = React.lazy(() => import('./MyInbox').then(m => ({ default: m.MyInbox })));
-const MyBookings = React.lazy(() => import('./MyBookings').then(m => ({ default: m.MyBookings })));
-const MyProfile = React.lazy(() => import('./MyProfile').then(m => ({ default: m.MyProfile })));
-const Settings = React.lazy(() => import('./Settings').then(m => ({ default: m.Settings })));
-const LoyaltyRewards = React.lazy(() => import('./LoyaltyRewards').then(m => ({ default: m.LoyaltyRewards })));
-const BrowseAndBook = React.lazy(() => import('./BrowseAndBook').then(m => ({ default: m.BrowseAndBook })));
+const importDashboard = () => import('./Dashboard');
+const importDigitalGlovebox = () => import('./DigitalGlovebox');
+const importMyInbox = () => import('./MyInbox');
+const importMyBookings = () => import('./MyBookings');
+const importMyProfile = () => import('./MyProfile');
+const importSettings = () => import('./Settings');
+const importLoyaltyRewards = () => import('./LoyaltyRewards');
+const importBrowseAndBook = () => import('./BrowseAndBook');
+
+const Dashboard = React.lazy(() => importDashboard().then(m => ({ default: m.Dashboard })));
+const DigitalGlovebox = React.lazy(() => importDigitalGlovebox().then(m => ({ default: m.DigitalGlovebox })));
+const MyInbox = React.lazy(() => importMyInbox().then(m => ({ default: m.MyInbox })));
+const MyBookings = React.lazy(() => importMyBookings().then(m => ({ default: m.MyBookings })));
+const MyProfile = React.lazy(() => importMyProfile().then(m => ({ default: m.MyProfile })));
+const Settings = React.lazy(() => importSettings().then(m => ({ default: m.Settings })));
+const LoyaltyRewards = React.lazy(() => importLoyaltyRewards().then(m => ({ default: m.LoyaltyRewards })));
+const BrowseAndBook = React.lazy(() => importBrowseAndBook().then(m => ({ default: m.BrowseAndBook })));
+
+const CLIENT_MODULE_PRELOADERS: Record<string, () => Promise<unknown>> = {
+  '/client': importDashboard,
+  '/client/browse': importBrowseAndBook,
+  '/client/bookings': importMyBookings,
+  '/client/profile': importMyProfile,
+  '/client/glovebox': importDigitalGlovebox,
+  '/client/rewards': importLoyaltyRewards,
+  '/client/inbox': importMyInbox,
+  '/client/settings': importSettings,
+};
+
+const scheduleIdle = (cb: () => void) => {
+  if (typeof window === 'undefined') return () => {};
+  if ('requestIdleCallback' in window) {
+    const id = window.requestIdleCallback(cb, { timeout: 1200 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(cb, 250);
+  return () => window.clearTimeout(id);
+};
 
 const navGroups = [
   {
@@ -93,6 +122,18 @@ export function ClientLayout() {
     });
   }, [isMobile]);
 
+  useEffect(() => {
+    CLIENT_MODULE_PRELOADERS[location.pathname]?.();
+
+    return scheduleIdle(() => {
+      ['/client', '/client/browse', '/client/bookings', '/client/glovebox'].forEach((path) => {
+        if (path !== location.pathname) {
+          CLIENT_MODULE_PRELOADERS[path]?.();
+        }
+      });
+    });
+  }, [location.pathname]);
+
   const sidebarContent = (
     <nav className="flex-1 px-4 space-y-2 overflow-y-auto pb-4 pt-2">
       {navGroups.map((group) => {
@@ -129,6 +170,9 @@ export function ClientLayout() {
                         <Link
                           key={item.name}
                           to={item.path}
+                          onMouseEnter={() => CLIENT_MODULE_PRELOADERS[item.path]?.()}
+                          onFocus={() => CLIENT_MODULE_PRELOADERS[item.path]?.()}
+                          onTouchStart={() => CLIENT_MODULE_PRELOADERS[item.path]?.()}
                           className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
                             isActive
                               ? 'bg-primary text-white shadow-lg shadow-primary/20'

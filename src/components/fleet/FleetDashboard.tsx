@@ -5,9 +5,29 @@ import { Car, Calendar, Wrench, TrendingUp, DollarSign, CreditCard, Clock, Activ
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 
+const scheduleIdle = (cb: () => void) => {
+  if (typeof window === 'undefined') {
+    cb();
+    return () => {};
+  }
+
+  if ('requestIdleCallback' in window) {
+    const idleId = window.requestIdleCallback(() => cb(), { timeout: 700 });
+    return () => window.cancelIdleCallback(idleId);
+  }
+
+  const timeoutId = window.setTimeout(cb, 150);
+  return () => window.clearTimeout(timeoutId);
+};
+
+const ChartPlaceholder = ({ height = 'h-72' }: { height?: string }) => (
+  <div className={`${height} w-full rounded-2xl bg-muted/60 animate-pulse`} />
+);
+
 export function FleetDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showHeavyVisuals, setShowHeavyVisuals] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -20,6 +40,7 @@ export function FleetDashboard() {
       };
 
       try {
+        setShowHeavyVisuals(false);
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const data = await fleetService.getDashboardStats(user.id);
@@ -38,6 +59,11 @@ export function FleetDashboard() {
     };
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!stats) return;
+    return scheduleIdle(() => setShowHeavyVisuals(true));
+  }, [stats]);
 
   if (loading) return <div className="p-8 animate-pulse">Loading dashboard...</div>;
   if (!stats) return <div className="p-8">No data available.</div>;
@@ -102,19 +128,23 @@ export function FleetDashboard() {
         <div className="bg-card p-6 rounded-2xl border border-border shadow-sm">
           <h3 className="text-muted-foreground text-sm font-bold uppercase tracking-wider mb-6">Monthly Earnings Trend</h3>
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%" minWidth={300}>
-              <LineChart data={stats.monthlyEarningsTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="month" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `Ksh ${value}`} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: '8px' }}
-                  itemStyle={{ color: 'var(--foreground)' }}
-                  formatter={(value) => [`Ksh ${Number(value).toLocaleString()}`, 'Earnings']}
-                />
-                <Line type="monotone" dataKey="earnings" stroke="var(--primary)" strokeWidth={3} dot={{ r: 4, fill: 'var(--primary)' }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            {showHeavyVisuals ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={300}>
+                <LineChart data={stats.monthlyEarningsTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="month" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `Ksh ${value}`} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: '8px' }}
+                    itemStyle={{ color: 'var(--foreground)' }}
+                    formatter={(value) => [`Ksh ${Number(value).toLocaleString()}`, 'Earnings']}
+                  />
+                  <Line type="monotone" dataKey="earnings" stroke="var(--primary)" strokeWidth={3} dot={{ r: 4, fill: 'var(--primary)' }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <ChartPlaceholder />
+            )}
           </div>
         </div>
       </section>
@@ -137,18 +167,22 @@ export function FleetDashboard() {
           <div className="bg-card p-6 rounded-2xl border border-border shadow-sm">
             <h3 className="text-muted-foreground text-sm font-bold uppercase tracking-wider mb-6">Days with Most Bookings</h3>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%" minWidth={300}>
-                <BarChart data={stats.bookingsByDay}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="day" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip 
-                    cursor={{ fill: 'var(--muted)' }}
-                    contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: '8px' }}
-                  />
-                  <Bar dataKey="bookings" fill="var(--primary)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {showHeavyVisuals ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={300}>
+                  <BarChart data={stats.bookingsByDay}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="day" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip 
+                      cursor={{ fill: 'var(--muted)' }}
+                      contentStyle={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', borderRadius: '8px' }}
+                    />
+                    <Bar dataKey="bookings" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <ChartPlaceholder height="h-64" />
+              )}
             </div>
           </div>
         </section>

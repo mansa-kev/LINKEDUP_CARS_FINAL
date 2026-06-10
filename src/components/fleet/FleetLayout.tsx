@@ -24,19 +24,56 @@ import {
 import { Logo } from '../shared/Logo';
 import { PortalHeader } from '../PortalHeader';
 
-// Lazy load fleet components
-const FleetDashboard = React.lazy(() => import('./FleetDashboard').then(m => ({ default: m.FleetDashboard })));
-const MyCars = React.lazy(() => import('./MyCars').then(m => ({ default: m.MyCars })));
-const MyInbox = React.lazy(() => import('./MyInbox').then(m => ({ default: m.MyInbox })));
-const ExpenseTracker = React.lazy(() => import('./ExpenseTracker').then(m => ({ default: m.ExpenseTracker })));
-const BookingRequests = React.lazy(() => import('./BookingRequests').then(m => ({ default: m.BookingRequests })));
-const DigitalVault = React.lazy(() => import('./DigitalVault').then(m => ({ default: m.DigitalVault })));
-const GrowthAndInsights = React.lazy(() => import('./GrowthAndInsights').then(m => ({ default: m.GrowthAndInsights })));
-const MaintenanceLogs = React.lazy(() => import('./MaintenanceLogs').then(m => ({ default: m.default })));
-const DamageReports = React.lazy(() => import('./DamageReports').then(m => ({ default: m.default })));
-const FinancialCenter = React.lazy(() => import('./FinancialCenter').then(m => ({ default: m.FinancialCenter })));
-const FleetSettings = React.lazy(() => import('./FleetSettings').then(m => ({ default: m.FleetSettings })));
-const FleetConciergeBooking = React.lazy(() => import('./FleetConciergeBooking').then(m => ({ default: m.FleetConciergeBooking })));
+const importFleetDashboard = () => import('./FleetDashboard');
+const importMyCars = () => import('./MyCars');
+const importMyInbox = () => import('./MyInbox');
+const importExpenseTracker = () => import('./ExpenseTracker');
+const importBookingRequests = () => import('./BookingRequests');
+const importDigitalVault = () => import('./DigitalVault');
+const importGrowthAndInsights = () => import('./GrowthAndInsights');
+const importMaintenanceLogs = () => import('./MaintenanceLogs');
+const importDamageReports = () => import('./DamageReports');
+const importFinancialCenter = () => import('./FinancialCenter');
+const importFleetSettings = () => import('./FleetSettings');
+const importFleetConciergeBooking = () => import('./FleetConciergeBooking');
+
+const FleetDashboard = React.lazy(() => importFleetDashboard().then(m => ({ default: m.FleetDashboard })));
+const MyCars = React.lazy(() => importMyCars().then(m => ({ default: m.MyCars })));
+const MyInbox = React.lazy(() => importMyInbox().then(m => ({ default: m.MyInbox })));
+const ExpenseTracker = React.lazy(() => importExpenseTracker().then(m => ({ default: m.ExpenseTracker })));
+const BookingRequests = React.lazy(() => importBookingRequests().then(m => ({ default: m.BookingRequests })));
+const DigitalVault = React.lazy(() => importDigitalVault().then(m => ({ default: m.DigitalVault })));
+const GrowthAndInsights = React.lazy(() => importGrowthAndInsights().then(m => ({ default: m.GrowthAndInsights })));
+const MaintenanceLogs = React.lazy(() => importMaintenanceLogs().then(m => ({ default: m.default })));
+const DamageReports = React.lazy(() => importDamageReports().then(m => ({ default: m.default })));
+const FinancialCenter = React.lazy(() => importFinancialCenter().then(m => ({ default: m.FinancialCenter })));
+const FleetSettings = React.lazy(() => importFleetSettings().then(m => ({ default: m.FleetSettings })));
+const FleetConciergeBooking = React.lazy(() => importFleetConciergeBooking().then(m => ({ default: m.FleetConciergeBooking })));
+
+const FLEET_MODULE_PRELOADERS: Record<string, () => Promise<unknown>> = {
+  '/fleet': importFleetDashboard,
+  '/fleet/cars': importMyCars,
+  '/fleet/maintenance': importMaintenanceLogs,
+  '/fleet/damage': importDamageReports,
+  '/fleet/financials': importFinancialCenter,
+  '/fleet/expenses': importExpenseTracker,
+  '/fleet/inbox': importMyInbox,
+  '/fleet/booking-requests': importBookingRequests,
+  '/fleet/concierge-booking': importFleetConciergeBooking,
+  '/fleet/vault': importDigitalVault,
+  '/fleet/growth': importGrowthAndInsights,
+  '/fleet/settings': importFleetSettings,
+};
+
+const scheduleIdle = (cb: () => void) => {
+  if (typeof window === 'undefined') return () => {};
+  if ('requestIdleCallback' in window) {
+    const id = window.requestIdleCallback(cb, { timeout: 1200 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(cb, 250);
+  return () => window.clearTimeout(id);
+};
 
 const navGroups = [
   {
@@ -116,6 +153,18 @@ export function FleetLayout() {
     setExpandedGroup(prev => prev === category ? null : category);
   }, []);
 
+  useEffect(() => {
+    FLEET_MODULE_PRELOADERS[location.pathname]?.();
+
+    return scheduleIdle(() => {
+      ['/fleet', '/fleet/cars', '/fleet/financials', '/fleet/booking-requests', '/fleet/inbox'].forEach((path) => {
+        if (path !== location.pathname) {
+          FLEET_MODULE_PRELOADERS[path]?.();
+        }
+      });
+    });
+  }, [location.pathname]);
+
   const sidebarContent = (
     <nav className="flex-1 px-4 space-y-2 overflow-y-auto pb-4 pt-2">
       {navGroups.map((group) => {
@@ -152,6 +201,9 @@ export function FleetLayout() {
                         <Link
                           key={item.name}
                           to={item.path}
+                          onMouseEnter={() => FLEET_MODULE_PRELOADERS[item.path]?.()}
+                          onFocus={() => FLEET_MODULE_PRELOADERS[item.path]?.()}
+                          onTouchStart={() => FLEET_MODULE_PRELOADERS[item.path]?.()}
                           className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
                             isActive
                               ? 'bg-primary text-white shadow-lg shadow-primary/20'

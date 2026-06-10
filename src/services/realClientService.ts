@@ -1,7 +1,11 @@
 import { supabase, handleSupabaseErrorWrapper as handleSupabaseError } from '../lib/supabase';
+import { getOrSetCache, invalidateCachePrefix } from '../utils/queryCache';
+
+const CLIENT_CACHE_TTL_MS = 60_000;
 
 export const clientService = {
   getDashboardData: async (clientId: string) => {
+    return getOrSetCache(`client:dashboard:${clientId}`, CLIENT_CACHE_TTL_MS, async () => {
     try {
       // Fetch active rental
       const { data: activeBooking, error: aError } = await supabase
@@ -88,6 +92,7 @@ export const clientService = {
     } catch (error) {
       return handleSupabaseError(error, 'getDashboardData');
     }
+    });
   },
 
   getClientDocuments: async (clientId: string) => {
@@ -104,60 +109,60 @@ export const clientService = {
   },
 
   getGloveboxData: async (clientId: string) => {
-    const [bookingsRes, paymentsRes, profileRes] = await Promise.all([
-      supabase
-        .from('bookings')
-        .select('id, document_status, admin_notes, metadata, start_date, end_date, cars(make, model)')
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('transactions')
-        .select('*, bookings(id, start_date, end_date, cars(make, model))')
-        .eq('user_id', clientId)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', clientId)
-        .maybeSingle()
-    ]);
+    return getOrSetCache(`client:glovebox:${clientId}`, CLIENT_CACHE_TTL_MS, async () => {
+      const [bookingsRes, paymentsRes, profileRes] = await Promise.all([
+        supabase
+          .from('bookings')
+          .select('id, document_status, admin_notes, metadata, start_date, end_date, cars(make, model)')
+          .eq('client_id', clientId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('transactions')
+          .select('*, bookings(id, start_date, end_date, cars(make, model))')
+          .eq('user_id', clientId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', clientId)
+          .maybeSingle()
+      ]);
 
-    const bookings = bookingsRes.data || [];
-    const payments = paymentsRes.data || [];
-    const profile = profileRes.data || {};
+      const bookings = bookingsRes.data || [];
+      const payments = paymentsRes.data || [];
+      const profile = profileRes.data || {};
 
-    // Most recent booking that has documents
-    const docBooking = bookings.find((b: any) => b.metadata?.documents);
-    const docs = docBooking?.metadata?.documents || {};
-    const idNumber = profile.id_number || docBooking?.metadata?.guest_info?.id_number || docBooking?.metadata?.guest_info?.idNumber || docBooking?.metadata?.idNumber || null;
+      const docBooking = bookings.find((b: any) => b.metadata?.documents);
+      const docs = docBooking?.metadata?.documents || {};
+      const idNumber = profile.id_number || docBooking?.metadata?.guest_info?.id_number || docBooking?.metadata?.guest_info?.idNumber || docBooking?.metadata?.idNumber || null;
 
-    // Contracts vault: bookings that have a contract or signature URL
-    const contracts = bookings
-      .filter((b: any) => b.metadata?.contract_url || b.metadata?.signature_url)
-      .map((b: any) => ({
-        id: b.id,
-        car: b.cars ? `${b.cars.make} ${b.cars.model}` : 'Unknown Car',
-        start_date: b.start_date,
-        end_date: b.end_date,
-        contract_url: b.metadata?.contract_url || null,
-        signature_url: b.metadata?.signature_url || null,
-      }));
+      const contracts = bookings
+        .filter((b: any) => b.metadata?.contract_url || b.metadata?.signature_url)
+        .map((b: any) => ({
+          id: b.id,
+          car: b.cars ? `${b.cars.make} ${b.cars.model}` : 'Unknown Car',
+          start_date: b.start_date,
+          end_date: b.end_date,
+          contract_url: b.metadata?.contract_url || null,
+          signature_url: b.metadata?.signature_url || null,
+        }));
 
-    return {
-      docBooking,
-      documents: {
-        facePhotoUrl:    profile.face_photo_url    || docs.facePhotoUrl    || null,
-        licenseFrontUrl: profile.license_front_url || docs.licenseFrontUrl || null,
-        licenseBackUrl:  profile.license_back_url  || docs.licenseBackUrl  || null,
-        idFrontUrl:      profile.id_front_url      || docs.idFrontUrl      || null,
-        idBackUrl:       profile.id_back_url       || docs.idBackUrl       || null,
-        idNumber,
-        status:     docBooking?.document_status || null,
-        bookingId:  docBooking?.id || null,
-      },
-      contracts,
-      payments,
-    };
+      return {
+        docBooking,
+        documents: {
+          facePhotoUrl: profile.face_photo_url || docs.facePhotoUrl || null,
+          licenseFrontUrl: profile.license_front_url || docs.licenseFrontUrl || null,
+          licenseBackUrl: profile.license_back_url || docs.licenseBackUrl || null,
+          idFrontUrl: profile.id_front_url || docs.idFrontUrl || null,
+          idBackUrl: profile.id_back_url || docs.idBackUrl || null,
+          idNumber,
+          status: docBooking?.document_status || null,
+          bookingId: docBooking?.id || null,
+        },
+        contracts,
+        payments,
+      };
+    });
   },
 
   getSignedContracts: async (clientId: string) => {
@@ -181,13 +186,15 @@ export const clientService = {
   },
 
   getAllBookings: async (clientId: string) => {
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('*, cars(*)')
-      .eq('client_id', clientId)
-      .order('start_date', { ascending: false });
-    if (error) return handleSupabaseError(error, 'getAllBookings');
-    return data;
+    return getOrSetCache(`client:bookings:${clientId}`, CLIENT_CACHE_TTL_MS, async () => {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*, cars(*)')
+        .eq('client_id', clientId)
+        .order('start_date', { ascending: false });
+      if (error) return handleSupabaseError(error, 'getAllBookings');
+      return data;
+    });
   },
 
   updateProfile: async (clientId: string, updates: any) => {
@@ -196,6 +203,8 @@ export const clientService = {
       .update(updates)
       .eq('id', clientId);
     if (error) return handleSupabaseError(error, 'updateProfile');
+    invalidateCachePrefix(`client:dashboard:${clientId}`);
+    invalidateCachePrefix(`client:glovebox:${clientId}`);
     return data;
   },
 
@@ -231,6 +240,7 @@ export const clientService = {
       .from('wishlist')
       .insert({ client_id: clientId, car_id: carId });
     if (error) return handleSupabaseError(error, 'addToWishlist');
+    invalidateCachePrefix(`client:dashboard:${clientId}`);
     return data;
   },
 
@@ -241,6 +251,7 @@ export const clientService = {
       .eq('client_id', clientId)
       .eq('car_id', carId);
     if (error) return handleSupabaseError(error, 'removeFromWishlist');
+    invalidateCachePrefix(`client:dashboard:${clientId}`);
     return data;
   },
 
