@@ -30,7 +30,7 @@ type PortalType = 'admin' | 'fleet' | 'client' | 'driver' | 'www';
 function detectPortal(subdomain: string, pathname: string): PortalType {
   if (subdomain === 'admin' || pathname.startsWith('/admin')) return 'admin';
   if (subdomain === 'fleet' || pathname.startsWith('/fleet')) return 'fleet';
-  if (pathname.includes('/driver')) return 'driver';
+  if (subdomain === 'drivers' || pathname.includes('/driver')) return 'driver';
   if (subdomain === 'app' || pathname.startsWith('/client')) return 'client';
   return 'www';
 }
@@ -113,11 +113,12 @@ export function Login() {
   // ---------------------------------------------------------------------------
   // Domain helpers
   // ---------------------------------------------------------------------------
-  const getPortalUrl = (portalKey: 'app' | 'fleet' | 'admin') => {
+  const getPortalUrl = (portalKey: 'app' | 'fleet' | 'admin' | 'drivers') => {
     const urls: Record<string, string> = {
       app: import.meta.env.VITE_APP_URL || 'https://app.linkedupcarsrentals.com',
       fleet: import.meta.env.VITE_FLEET_URL || 'https://fleet.linkedupcarsrentals.com',
       admin: import.meta.env.VITE_ADMIN_URL || 'https://admin.linkedupcarsrentals.com',
+      drivers: import.meta.env.VITE_DRIVERS_URL || 'https://drivers.linkedupcarsrentals.com',
     };
     return urls[portalKey];
   };
@@ -133,20 +134,21 @@ export function Login() {
   const redirectAfterLogin = (userRole: string) => {
     const targetSubdomain = portal === 'admin' ? 'admin'
       : portal === 'fleet' ? 'fleet'
-      : portal === 'driver' ? 'app'
+      : portal === 'driver' ? 'drivers'
       : userRole === 'admin' ? 'admin'
       : userRole === 'fleet_owner' ? 'fleet'
+      : userRole === 'driver' ? 'drivers'
       : 'app';
 
     if (isDev) {
-      setPreviewSubdomain(targetSubdomain);
+      setPreviewSubdomain(targetSubdomain as any);
       if (targetSubdomain === 'admin') navigate('/admin');
       else if (targetSubdomain === 'fleet') navigate('/fleet');
-      else if (userRole === 'driver') navigate('/driver');
+      else if (targetSubdomain === 'drivers') navigate('/');
       else navigate('/client');
     } else {
-      const portalUrl = getPortalUrl(targetSubdomain as 'app' | 'fleet' | 'admin');
-      const path = targetSubdomain === 'app' ? (userRole === 'driver' ? '/driver' : '/client') : `/${targetSubdomain}`;
+      const portalUrl = getPortalUrl(targetSubdomain as 'app' | 'fleet' | 'admin' | 'drivers');
+      const path = targetSubdomain === 'app' ? '/client' : (targetSubdomain === 'drivers' ? '/' : `/${targetSubdomain}`);
       window.location.href = `${portalUrl}${path}`;
     }
   };
