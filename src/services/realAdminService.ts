@@ -221,7 +221,26 @@ export const adminService = {
       .range(from, to);
 
     if (error) return handleSupabaseError(error, 'getCars');
-    return { data, count };
+
+    // Normalize fleet_owner_settings to an array to match UI assumptions
+    const normalizedData = (data || []).map((car: any) => {
+      if (car.fleet_owner) {
+        const settings = car.fleet_owner.fleet_owner_settings;
+        const settingsArray = settings
+          ? (Array.isArray(settings) ? settings : [settings])
+          : [];
+        return {
+          ...car,
+          fleet_owner: {
+            ...car.fleet_owner,
+            fleet_owner_settings: settingsArray
+          }
+        };
+      }
+      return car;
+    });
+
+    return { data: normalizedData, count };
   },
 
   uploadCarImage: async (file: File): Promise<string> => {
@@ -390,12 +409,24 @@ export const adminService = {
       
     if (error) return handleSupabaseError(error, 'getFleetOwnersWithStats');
     
+    // Normalize fleet_owner_settings to an array to match UI assumptions
+    const normalizedOwners = (owners || []).map((owner: any) => {
+      const settings = owner.fleet_owner_settings;
+      const settingsArray = settings
+        ? (Array.isArray(settings) ? settings : [settings])
+        : [];
+      return {
+        ...owner,
+        fleet_owner_settings: settingsArray
+      };
+    });
+
     const { data: transactions } = await supabase
       .from('transactions')
       .select('*')
       .in('type', ['payout_out']);
       
-    return (owners || []).map(owner => {
+    return normalizedOwners.map(owner => {
       const ownerTx = transactions?.filter(t => t.user_id === owner.id) || [];
       const totalEarnings = owner.bookings?.filter((b: any) => b.status === 'completed' || b.status === 'confirmed')
         .reduce((sum: number, b: any) => sum + Number(b.total_amount), 0) || 0;
@@ -426,7 +457,20 @@ export const adminService = {
       `)
       .eq('role', 'fleet_owner');
     if (error) return handleSupabaseError(error, 'getFleetOwners');
-    return data;
+
+    // Normalize fleet_owner_settings to an array to match UI assumptions
+    const normalizedData = (data || []).map((owner: any) => {
+      const settings = owner.fleet_owner_settings;
+      const settingsArray = settings
+        ? (Array.isArray(settings) ? settings : [settings])
+        : [];
+      return {
+        ...owner,
+        fleet_owner_settings: settingsArray
+      };
+    });
+
+    return normalizedData;
   },
 
   createFleetOwnerAccount: async (data: any) => {
