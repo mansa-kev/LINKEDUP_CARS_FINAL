@@ -182,7 +182,7 @@ export function AdminDashboard() {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-150">
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
@@ -247,7 +247,7 @@ export function AdminDashboard() {
           <p className="text-2xl font-bold text-foreground mb-2">{utilizationRate}%</p>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-success transition-all duration-1000"
+              className="h-full bg-success transition-all duration-300"
               style={{ width: `${utilizationRate}%` }}
             />
           </div>
@@ -555,7 +555,7 @@ export function AdminDashboard() {
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-success transition-all duration-1000" 
+                  className="h-full bg-success transition-all duration-300" 
                   style={{ width: `${stats?.totalCars > 0 ? Math.min(100, Math.round((stats?.activeBookings / stats?.totalCars) * 100)) : 0}%` }} 
                 />
               </div>

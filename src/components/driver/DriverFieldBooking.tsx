@@ -702,7 +702,7 @@ export function DriverFieldBooking({ onBack }: DriverFieldBookingProps) {
         )}
 
         {currentStep === 'success' && (
-          <div className="py-8 flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-500">
+          <div className="py-8 flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-150">
              <div className="w-16 h-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mb-4">
                <CheckCircle2 size={32} />
              </div>

@@ -15,17 +15,32 @@ export function FinancialCenter() {
         const { data: { user } } = await supabase.auth.getUser();
         console.log("User:", user);
         if (user) {
+          // Fetch each independently to prevent one missing table (like payouts) from breaking the whole page
+          const payoutsPromise = fleetService.getPayouts(user.id).catch(e => {
+            console.warn("Failed to fetch payouts:", e);
+            return [];
+          });
+          const bookingsPromise = fleetService.getBookingsForEarnings(user.id).catch(e => {
+            console.warn("Failed to fetch bookings:", e);
+            return [];
+          });
+          const expensesPromise = fleetService.getExpenses(user.id).catch(e => {
+            console.warn("Failed to fetch expenses:", e);
+            return [];
+          });
+
           const [payouts, bookings, expenses] = await Promise.all([
-            fleetService.getPayouts(user.id),
-            fleetService.getBookingsForEarnings(user.id),
-            fleetService.getExpenses(user.id)
+            payoutsPromise,
+            bookingsPromise,
+            expensesPromise
           ]);
+          
           console.log("Fetched data:", { payouts, bookings, expenses });
           
           setData({ 
-            payouts: payouts || [], 
-            bookings: bookings || [], 
-            expenses: expenses || [] 
+            payouts: Array.isArray(payouts) ? payouts : [], 
+            bookings: Array.isArray(bookings) ? bookings : [], 
+            expenses: Array.isArray(expenses) ? expenses : [] 
           });
         } else {
           console.log("No user found");

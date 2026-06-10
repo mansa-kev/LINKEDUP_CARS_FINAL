@@ -64,7 +64,7 @@ export function DigitalGlovebox() {
   const docStatus = documents.status;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-150">
       <div>
         <h2 className="text-2xl font-bold">Digital Glovebox</h2>
         <p className="text-muted-foreground text-sm mt-1">Your documents, contracts and payment history — all in one place.</p>

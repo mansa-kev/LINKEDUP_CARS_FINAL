@@ -111,7 +111,7 @@ export function MyCars() {
   if (loading) return <div className="p-8 animate-pulse">Loading cars...</div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-150">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold">My Cars</h2>

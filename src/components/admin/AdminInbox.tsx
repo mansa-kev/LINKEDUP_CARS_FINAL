@@ -154,7 +154,7 @@ export function AdminInbox() {
   }
 
   return (
-    <div className="h-[calc(100vh-12rem)] bg-card rounded-2xl border border-border shadow-sm overflow-hidden flex animate-in fade-in duration-500">
+    <div className="h-[calc(100vh-12rem)] bg-card rounded-2xl border border-border shadow-sm overflow-hidden flex animate-in fade-in duration-150">
       {/* Sidebar: Message List */}
       <div className="w-96 border-r border-border flex flex-col">
         <div className="p-4 border-b border-border">

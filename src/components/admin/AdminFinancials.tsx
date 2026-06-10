@@ -105,7 +105,7 @@ export function AdminFinancials() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-150">
       {/* Main Navigation Tabs */}
       <div className="flex items-center gap-4 border-b border-border pb-4">
         {[

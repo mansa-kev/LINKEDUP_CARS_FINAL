@@ -542,9 +542,15 @@ export const adminService = {
   updateFleetOwner: async (id: string, updates: any) => {
     const { error } = await supabase
       .from('fleet_owner_settings')
-      .update(updates)
-      .eq('id', id);
+      .upsert({ id, ...updates });
     if (error) throw error;
+
+    if (updates.status) {
+      await supabase
+        .from('user_profiles')
+        .update({ status: updates.status })
+        .eq('id', id);
+    }
   },
 
   deleteFleetOwner: async (id: string) => {
@@ -862,7 +868,7 @@ export const adminService = {
         .from('reports')
         .update({ status: 'ready', file_url: 'https://example.com/report.pdf' })
         .eq('id', data[0].id);
-    }, 5000);
+    }, 100);
 
     return data;
   },

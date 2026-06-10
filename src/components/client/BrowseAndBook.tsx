@@ -200,7 +200,7 @@ export function BrowseAndBook() {
                 <img
                   src={car.primary_image_url || car.photos?.[0] || `https://picsum.photos/seed/${car.id}/400/250`}
                   alt={`${car.make} ${car.model}`}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-150"
                   referrerPolicy="no-referrer"
                   onError={(e) => { e.currentTarget.src = `https://picsum.photos/seed/c-${car.id}/400/250`; }}
                 />

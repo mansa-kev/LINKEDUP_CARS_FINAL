@@ -444,7 +444,7 @@ export function AdminBookingCommandCenter() {
         className="w-full h-32 rounded-xl overflow-hidden border border-border bg-muted/30 flex items-center justify-center hover:border-primary/50 transition-all disabled:cursor-default cursor-zoom-in group"
       >
         {url
-          ? <img src={url} alt={label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          ? <img src={url} alt={label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-150" />
           : <FileText size={24} className="text-muted-foreground opacity-50" />}
       </button>
       <p className="text-xs text-muted-foreground mt-2 text-center font-medium">
@@ -474,7 +474,7 @@ export function AdminBookingCommandCenter() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto pb-20">
+    <div className="space-y-6 animate-in fade-in duration-150 max-w-6xl mx-auto pb-20">
       {/* Top Nav */}
       <div className="flex items-center justify-between">
         <button 

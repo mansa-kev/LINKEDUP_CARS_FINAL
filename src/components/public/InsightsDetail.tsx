@@ -284,7 +284,7 @@ export function InsightsDetail() {
                     >
                       {rel.featured_image && (
                         <div className="h-36 overflow-hidden">
-                          <img src={rel.featured_image} alt={rel.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          <img src={rel.featured_image} alt={rel.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-150" />
                         </div>
                       )}
                       <div className="p-5">

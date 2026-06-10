@@ -126,7 +126,7 @@ export function AdminPricing() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-150">
       {/* Tabs */}
       <div className="flex border-b border-border">
         {['base', 'dynamic', 'commission'].map((tab) => (

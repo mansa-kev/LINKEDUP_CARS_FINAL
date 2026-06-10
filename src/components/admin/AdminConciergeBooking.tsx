@@ -357,7 +357,7 @@ export function AdminConciergeBooking() {
   const selectedCar = cars.find(c => c.id === bookingData.carId);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-150">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-black">Concierge Booking</h1>
@@ -773,7 +773,7 @@ export function AdminConciergeBooking() {
         )}
 
         {currentStep === 'success' && (
-          <div className="py-12 flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-500">
+          <div className="py-12 flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-150">
              <div className="w-24 h-24 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mb-6">
                <CheckCircle2 size={48} />
              </div>

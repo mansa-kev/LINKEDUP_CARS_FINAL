@@ -1054,7 +1054,7 @@ export const adminService = {
         .from('reports')
         .update({ status: 'ready', file_url: 'https://example.com/report.pdf' })
         .eq('id', data[0].id);
-    }, 5000);
+    }, 100);
 
     return data;
   },

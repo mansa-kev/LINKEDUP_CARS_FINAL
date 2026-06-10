@@ -28,7 +28,7 @@ export function BookingForm({ car }: BookingFormProps) {
     
     // Simulate booking process
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Removed simulated delay for instant feel
       toast.success('Booking request sent successfully! Our team will contact you shortly.');
     } catch (error) {
       toast.error('Failed to send booking request. Please try again.');

@@ -139,7 +139,7 @@ export function AdminContractManager() {
     setUploading(true);
     const promise = (async () => {
       // 1. Upload HTML as a file to storage
-      const fileName = `contract-v${formData.version || Date.now()}.html`;
+      const fileName = `contract-v${formData.version || Date.now()}-${Date.now()}.html`;
       const filePath = `contracts/${fileName}`;
       const file = new Blob([htmlContent], { type: 'text/html' });
 
@@ -233,7 +233,7 @@ export function AdminContractManager() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-150">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold">Contract Manager</h2>

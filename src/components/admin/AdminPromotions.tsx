@@ -186,7 +186,7 @@ export function AdminPromotions() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-150">
       {/* Tabs */}
       <div className="flex border-b border-border">
         {(['promotions', 'base', 'commission'] as const).map((tab) => (

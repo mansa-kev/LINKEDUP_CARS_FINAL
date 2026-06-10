@@ -219,8 +219,8 @@ export function AdminTaxes() {
     }
     setTransmitting(record.id);
     try {
-      // Simulate network delay (KRA API call)
-      await new Promise(r => setTimeout(r, 1800));
+      // Removed simulated delay
+
 
       const receiptNumber = generateETIMSReceiptNumber();
       const signature = generateSignature();
@@ -343,7 +343,7 @@ export function AdminTaxes() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-150">
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

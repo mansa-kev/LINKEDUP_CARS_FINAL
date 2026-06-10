@@ -21,7 +21,7 @@ export function AdminLogout() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center h-[60vh] text-center animate-in fade-in duration-500">
+    <div className="flex flex-col items-center justify-center h-[60vh] text-center animate-in fade-in duration-150">
       <div className="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-6 relative">
         <LogOut size={40} />
         <div className="absolute -bottom-2 -right-2 bg-card p-1 rounded-full border border-border">

@@ -179,7 +179,7 @@ export function InsightsHome() {
                       >
                         {post.featured_image && (
                           <div className="h-44 overflow-hidden">
-                            <img src={post.featured_image} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                            <img src={post.featured_image} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-150" />
                           </div>
                         )}
                         <div className="p-6">

@@ -100,7 +100,7 @@ export function AdminSettings() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8 animate-in fade-in duration-500">
+    <div className="flex flex-col lg:flex-row gap-8 animate-in fade-in duration-150">
       {/* Sidebar Navigation */}
       <div className="w-full lg:w-64 space-y-2">
         <button

@@ -145,7 +145,7 @@ export function AdminPendingPayments() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-150">
       {/* Header & Search */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
         <div className="flex items-center gap-1 md:gap-2 overflow-x-auto pb-2 md:pb-0">

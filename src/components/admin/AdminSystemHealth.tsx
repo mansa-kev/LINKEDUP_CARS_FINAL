@@ -90,7 +90,7 @@ export function AdminSystemHealth() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-150">
       {/* Overall Status Banner */}
       <div className="bg-success/10 border border-success/20 p-6 rounded-2xl flex items-center justify-between">
         <div className="flex items-center gap-4">

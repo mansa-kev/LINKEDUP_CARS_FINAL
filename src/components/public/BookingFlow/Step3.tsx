@@ -132,8 +132,6 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
 
       toast.success('Contract accepted successfully');
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
       onNext({
         contractSigned: true,
         contractAccepted: true,
