@@ -123,7 +123,7 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
             </span>
             {" "}between:
           </div>
-          <div className="bg-black/10 rounded-xl p-4 mt-3 max-w-3xl mx-auto border border-black/10">
+          <div className="bg-black/10 rounded-xl p-4 mt-3 border border-black/10 w-full">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div className="text-left">
                 <div className="font-black text-black">LinkedUp Cars Rentals</div>
