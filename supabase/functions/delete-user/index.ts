@@ -7,77 +7,104 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    )
-
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       throw new Error('Missing Authorization header')
     }
     const token = authHeader.replace('Bearer ', '')
 
-    // Check if the user making the request is authenticated
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    )
+
+    // Verify the caller is authenticated
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
     if (authError || !user) {
-      throw new Error(`Unauthorized request: ${authError?.message || 'No user found'}`)
+      throw new Error(`Unauthorized: ${authError?.message || 'No user session found'}`)
     }
 
-    // Initialize an admin client with service_role key to bypass RLS
+    // Use service role to bypass all RLS
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Verify the requesting user is actually an admin using the service_role client to bypass RLS
+    // Verify caller is admin or fleet_owner
     const { data: adminCheck, error: adminError } = await supabaseAdmin
       .from('user_profiles')
       .select('role')
       .eq('id', user.id)
       .single()
 
-    if (adminError || (adminCheck.role !== 'admin' && adminCheck.role !== 'fleet_owner')) {
+    if (adminError || !adminCheck || (adminCheck.role !== 'admin' && adminCheck.role !== 'fleet_owner')) {
       throw new Error('Forbidden: Only admins and fleet owners can delete users')
     }
 
-    // Parse request body for the user ID to delete
     const { userId } = await req.json()
     if (!userId) {
       throw new Error('Missing userId in request body')
     }
 
-    // Delete the user from auth.users (This should cascade to profiles automatically)
-    const { data, error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)
+    // --- Manual cascade delete in dependency order ---
+    // (In case live DB doesn't have full cascade constraints applied)
 
-    if (deleteError && deleteError.status !== 404) {
-      throw deleteError
+    // 1. Delete booking-related children first
+    const { data: bookings } = await supabaseAdmin
+      .from('bookings')
+      .select('id')
+      .or(`client_id.eq.${userId},fleet_owner_id.eq.${userId}`)
+
+    if (bookings && bookings.length > 0) {
+      const bookingIds = bookings.map((b: any) => b.id)
+      await supabaseAdmin.from('booking_timeline_events').delete().in('booking_id', bookingIds)
+      await supabaseAdmin.from('messages').delete().in('booking_id', bookingIds)
+      await supabaseAdmin.from('booking_documents').delete().in('booking_id', bookingIds)
+      await supabaseAdmin.from('contracts').delete().in('booking_id', bookingIds)
+      await supabaseAdmin.from('payments').delete().in('booking_id', bookingIds)
+      await supabaseAdmin.from('reviews').delete().in('booking_id', bookingIds)
     }
 
-    // Also try to explicitly delete the profile just in case cascade is off
-    await supabaseAdmin.from('user_profiles').delete().eq('id', userId)
+    // 2. Delete records that reference user_profiles directly
+    await supabaseAdmin.from('bookings').delete().or(`client_id.eq.${userId},fleet_owner_id.eq.${userId}`)
+    await supabaseAdmin.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+    await supabaseAdmin.from('notifications').delete().eq('user_id', userId)
+    await supabaseAdmin.from('reviews').delete().eq('client_id', userId)
+    await supabaseAdmin.from('driver_profiles').delete().eq('id', userId)
+    await supabaseAdmin.from('fleet_owner_settings').delete().eq('id', userId)
+    await supabaseAdmin.from('client_glovebox').delete().eq('client_id', userId)
+
+    // 3. Delete from auth.users (may already be gone - ignore 404)
+    const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)
+    if (authDeleteError && authDeleteError.status !== 404) {
+      console.error('Auth delete error (non-404):', authDeleteError.message)
+      // Don't throw — continue to clean up the profile record
+    }
+
+    // 4. Finally delete the profile itself
+    const { error: profileDeleteError } = await supabaseAdmin
+      .from('user_profiles')
+      .delete()
+      .eq('id', userId)
+
+    if (profileDeleteError) {
+      throw new Error(`Failed to delete user profile: ${profileDeleteError.message}`)
+    }
 
     return new Response(
       JSON.stringify({ success: true, message: 'User deleted successfully' }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   }
 })

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
+import { supabase } from '../../lib/supabase';
 import { 
   Search, 
   User, 
@@ -79,6 +81,7 @@ const StatusBadge = ({ status }: { status: UserStatus }) => {
 };
 
 export function AdminUsers() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -170,6 +173,31 @@ export function AdminUsers() {
   const openProfile = (user: UserItem) => {
     setSelectedUser(user);
     setIsProfileModalOpen(true);
+  };
+
+  const handleResetPassword = async (email: string) => {
+    const promise = (async () => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+      if (error) throw error;
+    })();
+    toast.promise(promise, {
+      loading: 'Sending password reset email...',
+      success: `Reset link sent to ${email}`,
+      error: 'Failed to send reset email'
+    });
+  };
+
+  const handleViewProfile = (user: UserItem) => {
+    setIsProfileModalOpen(false);
+    if (user.role === 'client') {
+      navigate(`/admin/clients?userId=${user.id}`);
+    } else if (user.role === 'fleet_owner') {
+      navigate(`/admin/fleet-owners?userId=${user.id}`);
+    } else if (user.role === 'driver') {
+      navigate(`/admin/drivers?userId=${user.id}`);
+    }
   };
 
   const filteredUsers = users.filter(u => {
@@ -540,7 +568,10 @@ export function AdminUsers() {
                         <p className="font-medium">Fleet Owner Profile</p>
                         <p className="text-sm text-muted-foreground">Manage company details, payout settings, and fleet.</p>
                       </div>
-                      <button className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl text-sm font-bold transition-colors">
+                      <button
+                        onClick={() => handleViewProfile(selectedUser)}
+                        className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl text-sm font-bold transition-colors"
+                      >
                         View Fleet Profile
                       </button>
                     </div>
@@ -550,7 +581,10 @@ export function AdminUsers() {
                         <p className="font-medium">Client Profile</p>
                         <p className="text-sm text-muted-foreground">View booking history, saved payment methods, and preferences.</p>
                       </div>
-                      <button className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl text-sm font-bold transition-colors">
+                      <button
+                        onClick={() => handleViewProfile(selectedUser)}
+                        className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl text-sm font-bold transition-colors"
+                      >
                         View Client Profile
                       </button>
                     </div>
@@ -598,7 +632,10 @@ export function AdminUsers() {
             {/* Modal Footer (Action Buttons) */}
             <div className="sticky bottom-0 z-10 bg-card/80 backdrop-blur-md border-t border-border px-6 py-4 flex flex-wrap items-center justify-between gap-4 rounded-b-3xl">
               <div className="flex gap-2">
-                <button className="flex items-center gap-2 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-xl text-sm font-bold transition-colors">
+                <button
+                  onClick={() => handleResetPassword(selectedUser.email)}
+                  className="flex items-center gap-2 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-xl text-sm font-bold transition-colors"
+                >
                   <KeyRound size={16} /> Reset Password
                 </button>
               </div>
