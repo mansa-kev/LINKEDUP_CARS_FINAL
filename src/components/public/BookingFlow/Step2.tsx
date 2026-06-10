@@ -11,6 +11,7 @@ import { InternationalPhoneInput } from '../../ui/InternationalPhoneInput';
 import { toast } from 'sonner';
 import { validateFile } from '../../../utils/fileValidation';
 import { CameraCapture } from './CameraCapture';
+import { compressImage } from '../../../utils/imageCompression';
 
 interface Step2Props {
   car: Car;
@@ -201,7 +202,14 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
         toast.error(`File validation failed: ${validation.error}`);
         return;
       }
-      const url = await bookingService.uploadDocument(file, type, `temp_${Date.now()}`);
+      
+      let finalFile = file;
+      // Compress only if it's an image (exclude PDFs)
+      if (file.type.startsWith('image/')) {
+        finalFile = await compressImage(file, 1200, 1200, 0.7);
+      }
+      
+      const url = await bookingService.uploadDocument(finalFile, type, `temp_${Date.now()}`);
       setFormData(prev => ({ ...prev, [`${type}Url`]: url }));
       toast.success(`${DOC_LABELS[type]} uploaded successfully`);
     } catch (error) {

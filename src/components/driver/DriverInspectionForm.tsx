@@ -14,6 +14,7 @@ import {
   Info
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { compressImage } from '../../utils/imageCompression';
 
 interface DriverInspectionFormProps {
   booking: any;
@@ -147,13 +148,15 @@ export function DriverInspectionForm({ booking, type, onBack }: DriverInspection
 
     setUploading(target);
     try {
-      const fileExt = file.name.split('.').pop();
+      const compressedFile = await compressImage(file, 1200, 1200, 0.7);
+      
+      const fileExt = compressedFile.name.split('.').pop() || 'jpg';
       const fileName = `${booking.id}_${target}_${Date.now()}.${fileExt}`;
       const filePath = `${target}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('booking_inspections')
-        .upload(filePath, file);
+        .upload(filePath, compressedFile);
 
       if (uploadError) throw uploadError;
 
