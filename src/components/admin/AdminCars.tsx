@@ -24,8 +24,10 @@ import {
   Wrench,
   ChevronRight,
   ArrowUpDown,
-  ChevronDown
-} from 'lucide-react';
+  ChevronDown,
+  Palette,
+  Hash,
+  UserCog
 import { toast } from 'sonner';
 
 // --- Types ---
@@ -138,6 +140,14 @@ export function AdminCars() {
     transmission: 'Automatic', fuel_type: 'Petrol', seats: 5, features: [],
     fleet_owner: '', maintenance_status: 'ok', next_service_date: ''
   });
+
+  // Quick Edit State
+  type QuickEditType = 'color' | 'plate' | 'owner' | null;
+  const [quickEditState, setQuickEditState] = useState<{
+    type: QuickEditType;
+    car: CarItem | null;
+    value: string;
+  }>({ type: null, car: null, value: '' });
 
   const fetchData = async () => {
     setLoading(true);
@@ -266,7 +276,7 @@ export function AdminCars() {
       daily_rate: 0, overtime_rate: 0, security_deposit: 0, status: 'available',
       primary_image_url: '', photos: [], video_url: '',
       transmission: 'Automatic', fuel_type: 'Petrol', seats: 5, features: [],
-      fleet_owner: fleetOwners[0]?.id || '', maintenance_status: 'ok', next_service_date: ''
+      fleet_owner: '', maintenance_status: 'ok', next_service_date: ''
     });
     setIsFormModalOpen(true);
   };
@@ -334,6 +344,28 @@ export function AdminCars() {
       success: 'Maintenance status updated successfully',
       error: 'Failed to update maintenance status'
     });
+  };
+
+  const handleQuickSave = async () => {
+    if (!quickEditState.car || !quickEditState.type) return;
+    
+    const updateData: Partial<CarItem> = {};
+    if (quickEditState.type === 'color') updateData.color = quickEditState.value;
+    if (quickEditState.type === 'plate') updateData.license_plate = quickEditState.value;
+    if (quickEditState.type === 'owner') updateData.fleet_owner = quickEditState.value === '' ? null as any : quickEditState.value;
+
+    const promise = (async () => {
+      await adminService.updateCar(quickEditState.car!.id, updateData);
+      fetchData();
+    })();
+
+    toast.promise(promise, {
+      loading: 'Updating...',
+      success: 'Updated successfully',
+      error: 'Failed to update'
+    });
+
+    setQuickEditState({ type: null, car: null, value: '' });
   };
 
   const filteredCars = cars.filter(c => {
@@ -522,6 +554,28 @@ export function AdminCars() {
                     <td className="px-3 md:px-6 py-2 md:py-4 text-right">
                       <div className="flex items-center justify-end gap-1 md:gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
+                          onClick={() => setQuickEditState({ type: 'color', car, value: car.color || '' })}
+                          className="p-1.5 md:p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" 
+                          title="Quick Edit Color"
+                        >
+                          <Palette size={14} />
+                        </button>
+                        <button 
+                          onClick={() => setQuickEditState({ type: 'plate', car, value: car.license_plate || '' })}
+                          className="p-1.5 md:p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" 
+                          title="Quick Edit Plate"
+                        >
+                          <Hash size={14} />
+                        </button>
+                        <button 
+                          onClick={() => setQuickEditState({ type: 'owner', car, value: car.fleet_owner?.full_name ? car.fleet_owner : '' })}
+                          className="p-1.5 md:p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" 
+                          title="Reassign Owner"
+                        >
+                          <UserCog size={14} />
+                        </button>
+                        <div className="w-px h-4 bg-border mx-1"></div>
+                        <button 
                           onClick={() => openDetailModal(car)}
                           className="p-1.5 md:p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-colors" 
                           title="View Details"
@@ -694,25 +748,40 @@ export function AdminCars() {
                   {/* Action Buttons */}
                   <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
                     <button 
+                      onClick={() => setQuickEditState({ type: 'color', car, value: car.color || '' })}
+                      className="px-3 py-1.5 bg-muted text-muted-foreground rounded-lg text-xs font-bold hover:bg-muted/80 transition-colors flex items-center gap-2"
+                    >
+                      <Palette size={12} /> Color
+                    </button>
+                    <button 
+                      onClick={() => setQuickEditState({ type: 'plate', car, value: car.license_plate || '' })}
+                      className="px-3 py-1.5 bg-muted text-muted-foreground rounded-lg text-xs font-bold hover:bg-muted/80 transition-colors flex items-center gap-2"
+                    >
+                      <Hash size={12} /> Plate
+                    </button>
+                    <button 
+                      onClick={() => setQuickEditState({ type: 'owner', car, value: car.fleet_owner?.full_name ? car.fleet_owner : '' })}
+                      className="px-3 py-1.5 bg-muted text-muted-foreground rounded-lg text-xs font-bold hover:bg-muted/80 transition-colors flex items-center gap-2"
+                    >
+                      <UserCog size={12} /> Owner
+                    </button>
+                    <button 
                       onClick={() => openDetailModal(car)}
                       className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-2"
                     >
-                      <Eye size={12} />
-                      View Details
+                      <Eye size={12} /> Details
                     </button>
                     <button 
                       onClick={() => openEditModal(car)}
                       className="px-3 py-1.5 bg-muted text-muted-foreground rounded-lg text-xs font-bold hover:bg-muted/80 transition-colors flex items-center gap-2"
                     >
-                      <Edit3 size={12} />
-                      Edit
+                      <Edit3 size={12} /> Edit
                     </button>
                     <button 
                       onClick={() => handleDeleteCar(car.id)}
                       className="px-3 py-1.5 bg-error text-white rounded-lg text-xs font-bold hover:bg-error/90 transition-colors flex items-center gap-2"
                     >
-                      <Trash2 size={12} />
-                      Delete
+                      <Trash2 size={12} /> Delete
                     </button>
                   </div>
                 </div>
@@ -1340,6 +1409,114 @@ export function AdminCars() {
                   <Save size={18} /> {selectedCar ? 'Update Car' : 'Save Car'}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Edit Modal */}
+      {quickEditState.type && quickEditState.car && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                {quickEditState.type === 'color' && <><Palette size={20} className="text-primary" /> Update Color</>}
+                {quickEditState.type === 'plate' && <><Hash size={20} className="text-primary" /> Update Plate</>}
+                {quickEditState.type === 'owner' && <><UserCog size={20} className="text-primary" /> Reassign Owner</>}
+              </h3>
+              <button onClick={() => setQuickEditState({ type: null, car: null, value: '' })} className="p-1 hover:bg-muted rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-sm text-muted-foreground mb-4">
+                Updating {quickEditState.car.make} {quickEditState.car.model} ({quickEditState.car.license_plate})
+              </p>
+
+              {quickEditState.type === 'color' && (
+                <div className="space-y-4">
+                  <select 
+                    value={quickEditState.value} 
+                    onChange={(e) => setQuickEditState({ ...quickEditState, value: e.target.value })}
+                    className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50"
+                  >
+                    <option value="" disabled>Select a color</option>
+                    <option value="White">White</option>
+                    <option value="Black">Black</option>
+                    <option value="Silver">Silver</option>
+                    <option value="Grey">Grey</option>
+                    <option value="Blue">Blue</option>
+                    <option value="Red">Red</option>
+                    <option value="Pearl">Pearl</option>
+                    <option value="Metallic">Metallic</option>
+                  </select>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-border" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">Or type custom</span>
+                    </div>
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="Custom color..."
+                    value={quickEditState.value} 
+                    onChange={(e) => setQuickEditState({ ...quickEditState, value: e.target.value })}
+                    className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50"
+                  />
+                </div>
+              )}
+
+              {quickEditState.type === 'plate' && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">License Plate</label>
+                  <input 
+                    type="text" 
+                    value={quickEditState.value} 
+                    onChange={(e) => setQuickEditState({ ...quickEditState, value: e.target.value.toUpperCase() })}
+                    className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50 uppercase"
+                    placeholder="e.g. KDC 123A"
+                  />
+                </div>
+              )}
+
+              {quickEditState.type === 'owner' && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Select Fleet Owner</label>
+                  <select 
+                    value={quickEditState.value} 
+                    onChange={(e) => setQuickEditState({ ...quickEditState, value: e.target.value })}
+                    className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/50"
+                  >
+                    <option value="">Platform Owned (Company's Fleet)</option>
+                    {fleetOwners.map(owner => {
+                      const settings = owner.fleet_owner_settings?.[0] || {};
+                      return (
+                        <option key={owner.id} value={owner.id}>
+                          {owner.full_name} ({settings.company_name || 'Individual'})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setQuickEditState({ type: null, car: null, value: '' })}
+                className="px-4 py-2 rounded-lg font-bold border border-border hover:bg-muted transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleQuickSave}
+                className="px-4 py-2 rounded-lg font-bold bg-primary text-white hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 text-sm"
+              >
+                Save Changes
+              </button>
             </div>
           </div>
         </div>
