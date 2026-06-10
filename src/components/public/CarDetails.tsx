@@ -90,12 +90,37 @@ export function CarDetails() {
     fetchCar();
   }, [id]);
 
-  // Check for booking parameter to open booking flow automatically
+  // Check for booking/reservation parameter to open flow automatically
   useEffect(() => {
     if (searchParams.get('booking') === 'true' && car && (availabilityStatus === 'available' || Boolean(reservationToken))) {
       setShowBooking(true);
     }
+    if (searchParams.get('reservation') === 'true' && car && !reservationToken) {
+      setShowReservation(true);
+    }
   }, [searchParams, car, availabilityStatus, reservationToken]);
+
+  const toggleBooking = () => {
+    const nextState = !showBooking;
+    setShowBooking(nextState);
+    if (nextState) {
+      searchParams.set('booking', 'true');
+    } else {
+      searchParams.delete('booking');
+    }
+    navigate(`?${searchParams.toString()}`, { replace: true });
+  };
+
+  const toggleReservation = () => {
+    const nextState = !showReservation;
+    setShowReservation(nextState);
+    if (nextState) {
+      searchParams.set('reservation', 'true');
+    } else {
+      searchParams.delete('reservation');
+    }
+    navigate(`?${searchParams.toString()}`, { replace: true });
+  };
 
   if (loading || !car) return <LogoLoader fullScreen message="Loading vehicle details..." />;
 
@@ -308,7 +333,7 @@ export function CarDetails() {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setShowBooking(!showBooking)}
+                      onClick={toggleBooking}
                       className="flex-1 py-3.5 sm:py-5 bg-primary rounded-[14px] sm:rounded-[24px] text-black font-black uppercase tracking-[0.15em] text-xs sm:text-sm shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all"
                     >
                       {showBooking ? 'Close' : reservationToken ? 'Continue Booking' : 'Book Now'} <ArrowRight className="inline ml-2" size={18} />
@@ -317,7 +342,7 @@ export function CarDetails() {
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={() => setShowReservation(!showReservation)}
+                        onClick={toggleReservation}
                         className="flex-1 py-3.5 sm:py-5 bg-white/5 border border-white/10 rounded-[14px] sm:rounded-[24px] text-white font-black uppercase tracking-[0.15em] text-xs sm:text-sm hover:bg-white/10 transition-all"
                       >
                         {showReservation ? 'Close' : 'Reserve'} <Clock className="inline ml-2" size={18} />
@@ -423,7 +448,7 @@ export function CarDetails() {
                 <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-orange-500/10 to-primary/20 rounded-[16px] sm:rounded-[32px] md:rounded-[48px] blur-2xl" />
                 <div className="relative p-2 sm:p-5 md:p-10 bg-card/50 backdrop-blur-xl rounded-[16px] sm:rounded-[32px] md:rounded-[48px] border border-primary/20">
                   <button
-                    onClick={() => setShowBooking(false)}
+                    onClick={toggleBooking}
                     className="absolute top-3 right-3 md:top-6 md:right-6 p-2 hover:bg-white/10 rounded-full transition-all z-10"
                   >
                     <X size={24} className="text-white" />
@@ -446,7 +471,7 @@ export function CarDetails() {
                 <div className="absolute -inset-1 bg-gradient-to-r from-warning/20 via-orange-500/10 to-warning/20 rounded-[16px] sm:rounded-[32px] md:rounded-[48px] blur-2xl" />
                 <div className="relative p-2 sm:p-5 md:p-10 bg-card/50 backdrop-blur-xl rounded-[16px] sm:rounded-[32px] md:rounded-[48px] border border-warning/20">
                   <button
-                    onClick={() => setShowReservation(false)}
+                    onClick={toggleReservation}
                     className="absolute top-3 right-3 md:top-6 md:right-6 p-2 hover:bg-white/10 rounded-full transition-all z-10"
                   >
                     <X size={24} className="text-white" />
