@@ -43,11 +43,12 @@ interface DocumentSlotProps {
   type: DocType;
   uploadedUrl: string;
   isUploading: boolean;
+  disablePicker: boolean;
   onUploadFile: (file: File, type: DocType) => void;
   onOpenCamera: (type: DocType) => void;
 }
 
-function DocumentSlot({ type, uploadedUrl, isUploading, onUploadFile, onOpenCamera }: DocumentSlotProps) {
+function DocumentSlot({ type, uploadedUrl, isUploading, disablePicker, onUploadFile, onOpenCamera }: DocumentSlotProps) {
   return (
     <div className="space-y-2">
       <p className="text-[9px] font-black uppercase tracking-widest text-white/50 text-center">{DOC_LABELS[type]}</p>
@@ -75,20 +76,23 @@ function DocumentSlot({ type, uploadedUrl, isUploading, onUploadFile, onOpenCame
                   type="button"
                   onClick={(e) => {
                     e.preventDefault();
+                    if (disablePicker) return;
                     onOpenCamera(type);
                   }}
+                  disabled={disablePicker}
                   className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 rounded-xl text-primary hover:bg-primary/20 transition-colors"
                 >
                   <Camera size={14} />
                   <span className="text-[9px] font-bold uppercase tracking-wider">Camera</span>
                 </button>
-                <label className="flex items-center gap-1.5 px-3 py-2 bg-white/5 rounded-xl text-white/50 hover:bg-white/10 transition-colors cursor-pointer">
+                <label className={`flex items-center gap-1.5 px-3 py-2 bg-white/5 rounded-xl text-white/50 hover:bg-white/10 transition-colors ${disablePicker ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                   <Image size={14} />
                   <span className="text-[9px] font-bold uppercase tracking-wider">File</span>
                   <input
                     type="file"
                     accept="image/*,.pdf"
                     className="hidden"
+                    disabled={disablePicker}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) onUploadFile(file, type);
@@ -195,6 +199,8 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
   }, [initialData]);
 
   const uploadFile = useCallback(async (file: File, type: DocType) => {
+    if (uploading) return;
+
     setUploading(type);
     try {
       const validation = await validateFile(file);
@@ -206,6 +212,9 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
       let finalFile = file;
       // Compress only if it's an image (exclude PDFs)
       if (file.type.startsWith('image/')) {
+        // Yield one frame so mobile browsers can fully close the file picker
+        // before expensive image processing begins.
+        await new Promise(resolve => requestAnimationFrame(() => resolve(undefined)));
         finalFile = await compressImage(file, 1200, 1200, 0.7);
       }
       
@@ -217,7 +226,7 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
     } finally {
       setUploading(null);
     }
-  }, []);
+  }, [uploading]);
 
   const handleCameraCapture = (file: File) => {
     if (showCamera) {
@@ -320,7 +329,7 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
           <div>
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-3 block">Face Photo / Passport Photo</label>
             <div className="max-w-xs mx-auto">
-              <DocumentSlot type="facePhoto" uploadedUrl={formData.facePhotoUrl} isUploading={uploading === 'facePhoto'} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
+              <DocumentSlot type="facePhoto" uploadedUrl={formData.facePhotoUrl} isUploading={uploading === 'facePhoto'} disablePicker={Boolean(uploading)} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
             </div>
           </div>
 
@@ -328,8 +337,8 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
           <div>
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-3 block">Driver's License</label>
             <div className="grid grid-cols-2 gap-3 md:gap-4">
-              <DocumentSlot type="licenseFront" uploadedUrl={formData.licenseFrontUrl} isUploading={uploading === 'licenseFront'} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
-              <DocumentSlot type="licenseBack" uploadedUrl={formData.licenseBackUrl} isUploading={uploading === 'licenseBack'} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
+              <DocumentSlot type="licenseFront" uploadedUrl={formData.licenseFrontUrl} isUploading={uploading === 'licenseFront'} disablePicker={Boolean(uploading)} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
+              <DocumentSlot type="licenseBack" uploadedUrl={formData.licenseBackUrl} isUploading={uploading === 'licenseBack'} disablePicker={Boolean(uploading)} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
             </div>
           </div>
 
@@ -337,8 +346,8 @@ export function Step2({ car, onNext, onPrev, initialData }: Step2Props) {
           <div>
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-3 block">National ID / Passport</label>
             <div className="grid grid-cols-2 gap-3 md:gap-4">
-              <DocumentSlot type="idFront" uploadedUrl={formData.idFrontUrl} isUploading={uploading === 'idFront'} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
-              <DocumentSlot type="idBack" uploadedUrl={formData.idBackUrl} isUploading={uploading === 'idBack'} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
+              <DocumentSlot type="idFront" uploadedUrl={formData.idFrontUrl} isUploading={uploading === 'idFront'} disablePicker={Boolean(uploading)} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
+              <DocumentSlot type="idBack" uploadedUrl={formData.idBackUrl} isUploading={uploading === 'idBack'} disablePicker={Boolean(uploading)} onUploadFile={uploadFile} onOpenCamera={setShowCamera} />
             </div>
           </div>
         </div>

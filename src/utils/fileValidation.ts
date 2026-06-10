@@ -86,18 +86,7 @@ export const validateFile = async (file: File): Promise<FileValidationResult> =>
       return result;
     }
 
-    // 5. Additional image validation
-    if (result.fileInfo.isImage) {
-      // For images, we can also check if they're valid by creating an ImageBitmap
-      try {
-        await createImageBitmap(file);
-      } catch (imageError) {
-        result.error = 'Invalid image file. The file appears to be corrupted.';
-        return result;
-      }
-    }
-
-    // 6. Check for suspicious file names
+    // 5. Check for suspicious file names
     const suspiciousPatterns = [
       /\.exe$/i, /\.bat$/i, /\.cmd$/i, /\.scr$/i,
       /\.php$/i, /\.asp$/i, /\.jsp$/i, /\.sh$/i,
@@ -109,7 +98,8 @@ export const validateFile = async (file: File): Promise<FileValidationResult> =>
       return result;
     }
 
-    // All validations passed
+    // All validations passed. Image decoding is intentionally deferred to the
+    // compression/upload pipeline to avoid decoding the same mobile photo twice.
     result.isValid = true;
     return result;
 
