@@ -899,6 +899,7 @@ export const adminService = {
     const { data: resData, error: invokeError } = await supabase.functions.invoke('create-user', {
       body: {
         email: driver.email,
+        password: driver.password || 'Driver123!',
         role: 'driver',
         fullName: driver.full_name,
         phoneNumber: driver.phone_number,
