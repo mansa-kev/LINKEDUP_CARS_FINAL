@@ -63,7 +63,7 @@ export function DriverPortal() {
           .select(`
             *,
             cars (*),
-            client:user_profiles (*),
+            client:user_profiles!bookings_client_id_fkey (*),
             booking_inspections (*)
           `)
           .eq('driver_id', user.id)
