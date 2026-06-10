@@ -89,7 +89,7 @@ export function AdminContractManager() {
 
       const { error: uploadError } = await supabase.storage
         .from('public_assets')
-        .upload(filePath, file);
+        .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
@@ -145,7 +145,7 @@ export function AdminContractManager() {
 
       const { error: uploadError } = await supabase.storage
         .from('public_assets')
-        .upload(filePath, file);
+        .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
