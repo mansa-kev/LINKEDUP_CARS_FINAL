@@ -28,8 +28,8 @@ import {
   Palette,
   Hash,
   UserCog
+} from 'lucide-react';
 import { toast } from 'sonner';
-
 // --- Types ---
 
 type CarStatus = 'available' | 'rented' | 'maintenance' | 'unavailable';

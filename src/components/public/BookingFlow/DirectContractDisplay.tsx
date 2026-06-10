@@ -87,10 +87,19 @@ export function DirectContractDisplay({ contract, bookingData, car }: DirectCont
         replaced = replaced.replace(/\{\{dailyRate\}\}/g, car?.daily_rate?.toLocaleString() || '');
         
         // Inject company settings
-        replaced = replaced.replace(/\{\{companyPoBox\}\}/g, settings['company_po_box'] || '_____________');
+        replaced = replaced.replace(/\{\{companyPoBox\}\}/g, settings['company_po_box'] || '2345');
         const companySig = settings['company_signature_url'] || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
         replaced = replaced.replace(/\{\{companySignatureUrl\}\}/g, companySig);
+        replaced = replaced.replace(/\{\{companySignature\}\}/g, `<img src="${companySig}" alt="Company Signature" style="max-height: 80px;" />`);
         replaced = replaced.replace(/\{\{logoUrl\}\}/g, 'https://edroffvtzrowpsooszqh.supabase.co/storage/v1/object/public/public_assets/logo.png');
+        
+        // Client Signature
+        const clientSig = bookingData?.signatureData || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        replaced = replaced.replace(/\{\{clientSignatureUrl\}\}/g, clientSig);
+        replaced = replaced.replace(/\{\{clientSignature\}\}/g, `<img src="${clientSig}" alt="Client Signature" style="max-height: 80px;" />`);
+
+        // Fix wording for mileage if present
+        replaced = replaced.replace(/\(as confirmed at the pickup\)/gi, '(as confirmed during pickup)');
         
         setHtmlContent(replaced);
       })

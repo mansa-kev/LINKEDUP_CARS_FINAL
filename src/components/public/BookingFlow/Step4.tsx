@@ -71,8 +71,9 @@ export function Step4({ car, bookingData, onPrev, onComplete }: Step4Props) {
     if (bookingId) return bookingId;
 
     setPhase('creating_booking');
+    const { contractPdfBase64, signatureData, ...bookingPayload } = bookingData;
     const booking = await bookingService.createBooking({
-      ...bookingData,
+      ...bookingPayload,
       totalAmount: editableAmount,
       carId: car.id,
       paymentMethod: 'ncba_stk',
