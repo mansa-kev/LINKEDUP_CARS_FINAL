@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Mail, Lock, Loader2, AlertCircle, ArrowRight, Clock, UserPlus, Eye, EyeOff, X, CheckCircle2, User } from 'lucide-react';
-import { PasswordField } from './PasswordField';
 import { InternationalPhoneInput } from '../ui/InternationalPhoneInput';
 import { Logo } from '../shared/Logo';
 import { motion, AnimatePresence } from 'motion/react';

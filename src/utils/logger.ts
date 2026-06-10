@@ -4,7 +4,11 @@
  */
 
 const viteEnv = typeof import.meta !== 'undefined' ? import.meta.env : undefined;
-const isDev = Boolean(viteEnv?.DEV || process.env.NODE_ENV !== 'production');
+const nodeEnv =
+  typeof process !== 'undefined' && process.env
+    ? process.env.NODE_ENV
+    : undefined;
+const isDev = Boolean(viteEnv?.DEV || nodeEnv !== 'production');
 
 export const logger = {
   log: (...args: any[]) => {

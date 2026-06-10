@@ -161,42 +161,33 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
         <p className="text-muted-foreground text-xs sm:text-sm">Review your rental agreement and provide your digital signature.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
-        {/* Left Column: Contract */}
-        <div className="lg:col-span-7 space-y-4 sm:space-y-6">
+      <div className="space-y-6 md:space-y-8">
+        <div className="p-3 sm:p-4 md:p-6 bg-card/50 border border-border rounded-[16px] sm:rounded-[24px] md:rounded-[32px] grid grid-cols-2 gap-3 sm:gap-4 md:gap-6">
+          <div className="space-y-0.5">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Vehicle</p>
+            <p className="text-xs sm:text-sm font-bold text-foreground">{car.make} {car.model}</p>
+          </div>
+          <div className="space-y-0.5 text-right">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Duration</p>
+            <p className="text-xs sm:text-sm font-bold text-foreground">{bookingData.days} Days</p>
+          </div>
+          <div className="space-y-0.5">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Dates</p>
+            <p className="text-[10px] sm:text-xs font-bold text-muted-foreground">{bookingData.startDate} to {bookingData.endDate}</p>
+          </div>
+          <div className="space-y-0.5 text-right">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Total Amount</p>
+            {bookingData.discount > 0 ? (
+              <div>
+                <p className="text-[10px] sm:text-xs text-muted-foreground/60 line-through">KES {bookingData.originalAmount?.toLocaleString()}</p>
+                <p className="text-sm sm:text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
+              </div>
+            ) : (
+              <p className="text-sm sm:text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
+            )}
+          </div>
         </div>
 
-        {/* Right Column: Actions */}
-        <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
-          <div className="space-y-4 sm:space-y-6">
-            {/* Summary Card */}
-            <div className="p-3 sm:p-4 md:p-6 bg-card/50 border border-border rounded-[16px] sm:rounded-[24px] md:rounded-[32px] grid grid-cols-2 gap-3 sm:gap-4 md:gap-6">
-              <div className="space-y-0.5">
-                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Vehicle</p>
-                <p className="text-xs sm:text-sm font-bold text-foreground">{car.make} {car.model}</p>
-              </div>
-              <div className="space-y-0.5 text-right">
-                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Duration</p>
-                <p className="text-xs sm:text-sm font-bold text-foreground">{bookingData.days} Days</p>
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Dates</p>
-                <p className="text-[10px] sm:text-xs font-bold text-muted-foreground">{bookingData.startDate} to {bookingData.endDate}</p>
-              </div>
-              <div className="space-y-0.5 text-right">
-                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60">Total Amount</p>
-                {bookingData.discount > 0 ? (
-                  <div>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground/60 line-through">KES {bookingData.originalAmount?.toLocaleString()}</p>
-                    <p className="text-sm sm:text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
-                  </div>
-                ) : (
-                  <p className="text-sm sm:text-lg font-black text-primary">KES {bookingData.totalAmount?.toLocaleString()}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Signature Area */}
         {loadingContract ? (
           <div className="p-4 sm:p-8 bg-white/5 rounded-[16px] sm:rounded-[24px] border border-white/10 text-center flex items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="animate-spin text-primary" size={20} />
@@ -232,7 +223,6 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
             </div>
           </motion.div>
         )}
-
 
         <div className="space-y-4">
           <div className="flex justify-between items-center">
@@ -285,33 +275,31 @@ export function Step3({ car, bookingData, onNext, onPrev }: Step3Props) {
             </p>
           </div>
         </div>
-          </div>
 
-          <div className="flex gap-2 sm:gap-4 mt-auto pt-4">
-            <button
-              type="button" onClick={onPrev}
-              className="w-1/5 sm:w-1/4 py-3.5 sm:py-5 bg-card/50 rounded-[14px] sm:rounded-[24px] text-foreground font-black uppercase tracking-widest hover:bg-card/70 transition-all flex items-center justify-center border border-border"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <button
-              type="submit"
-              disabled={signingContract || !agreed}
-              className="flex-1 py-3.5 sm:py-5 bg-primary rounded-[14px] sm:rounded-[24px] text-black font-black uppercase tracking-[0.15em] text-[11px] sm:text-sm flex items-center justify-center gap-2 sm:gap-4 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group disabled:opacity-50"
-            >
-              {signingContract ? (
-                <>
-                  <Loader2 className="animate-spin" size={20} />
-                  <span>Signing Contract...</span>
-                </>
-              ) : (
-                <>
-                  <span>Accept & Continue</span>
-                  <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                </>
-              )}
-            </button>
-          </div>
+        <div className="flex gap-2 sm:gap-4 pt-2">
+          <button
+            type="button" onClick={onPrev}
+            className="w-1/5 sm:w-1/4 py-3.5 sm:py-5 bg-card/50 rounded-[14px] sm:rounded-[24px] text-foreground font-black uppercase tracking-widest hover:bg-card/70 transition-all flex items-center justify-center border border-border"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <button
+            type="submit"
+            disabled={signingContract || !agreed}
+            className="flex-1 py-3.5 sm:py-5 bg-primary rounded-[14px] sm:rounded-[24px] text-black font-black uppercase tracking-[0.15em] text-[11px] sm:text-sm flex items-center justify-center gap-2 sm:gap-4 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group disabled:opacity-50"
+          >
+            {signingContract ? (
+              <>
+                <Loader2 className="animate-spin" size={20} />
+                <span>Signing Contract...</span>
+              </>
+            ) : (
+              <>
+                <span>Accept & Continue</span>
+                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
+          </button>
         </div>
       </div>
     </form>

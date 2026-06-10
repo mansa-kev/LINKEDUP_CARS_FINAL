@@ -16,6 +16,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseKey = supabaseServiceRoleKey || process.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
+const ncbaAccountNo = process.env.NCBA_ACCOUNT_NO?.trim() || '';
 
 async function startServer() {
   const app = express();
@@ -870,7 +871,11 @@ async function startServer() {
       const pushAmount = requestedAmount ? Number(requestedAmount) : Number(booking.total_amount);
 
       const publicConfig = ncbaService.getPublicConfig();
-      const accountNo = `BKG-${booking.id.slice(0, 8).toUpperCase()}`;
+      const accountNo = ncbaAccountNo;
+
+      if (!accountNo) {
+        return res.status(500).json({ success: false, error: 'NCBA account number is not configured' });
+      }
 
       const result = await ncbaService.initiateSTKPush({
         phone,
@@ -1044,7 +1049,11 @@ async function startServer() {
       const amount = Number(reservation.reservation_fee);
       
       const publicConfig = ncbaService.getPublicConfig();
-      const accountNo = `RSV-${reservation.id.slice(0, 8).toUpperCase()}`;
+      const accountNo = ncbaAccountNo;
+
+      if (!accountNo) {
+        return res.status(500).json({ success: false, error: 'NCBA account number is not configured' });
+      }
 
       const result = await ncbaService.initiateSTKPush({
         phone,
